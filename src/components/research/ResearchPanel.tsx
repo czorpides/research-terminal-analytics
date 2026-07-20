@@ -10,6 +10,13 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldQuestion,
+  Cpu,
+  Cloud,
+  Sparkles,
+  User,
+  CircleDashed,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -35,7 +42,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SOURCE_TIER_META, type SourceTier } from "@/lib/reliability/tiers";
-import type { PanelData, Evidence, Metric, Point } from "@/lib/panels/contract";
+import type {
+  PanelData,
+  Evidence,
+  Metric,
+  Point,
+  VerifyCheck,
+} from "@/lib/panels/contract";
 
 function ToneClass(tone?: Metric["tone"]) {
   switch (tone) {
@@ -165,6 +178,61 @@ function PointList({ points, kind }: { points: Point[]; kind: "positive" | "dedu
   );
 }
 
+const VERIFIER_META: Record<
+  VerifyCheck["verifier"],
+  { label: string; icon: typeof Cpu }
+> = {
+  algo:   { label: "Algorithm",  icon: Cpu },
+  api:    { label: "External API", icon: Cloud },
+  ai:     { label: "AI check",   icon: Sparkles },
+  manual: { label: "Manual",     icon: User },
+};
+
+function StatusIcon({ status }: { status: VerifyCheck["status"] }) {
+  const cls = "mt-0.5 h-3.5 w-3.5 shrink-0";
+  switch (status) {
+    case "pass":        return <CheckCircle2 className={cn(cls, "text-[var(--positive)]")} />;
+    case "fail":        return <XCircle className={cn(cls, "text-[var(--negative)]")} />;
+    case "stale":       return <AlertTriangle className={cn(cls, "text-[var(--warning)]")} />;
+    case "unavailable": return <CircleDashed className={cn(cls, "text-muted-foreground")} />;
+    case "pending":
+    default:            return <CircleDashed className={cn(cls, "text-muted-foreground")} />;
+  }
+}
+
+function VerifyRow({ v, dense = false }: { v: VerifyCheck; dense?: boolean }) {
+  const meta = VERIFIER_META[v.verifier];
+  const VIcon = meta.icon;
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <li className={cn("flex items-start gap-1.5", dense ? "text-[11px]" : "text-sm")}>
+            <StatusIcon status={v.status} />
+            <span className="min-w-0 flex-1 leading-snug">{v.label}</span>
+            <Badge
+              variant="outline"
+              className="shrink-0 gap-1 px-1.5 py-0 font-mono text-[9px] uppercase tracking-wider"
+            >
+              <VIcon className="h-2.5 w-2.5" />
+              {v.verifier}
+            </Badge>
+          </li>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="max-w-xs">
+          <div className="text-xs font-medium">{meta.label} · {v.status}</div>
+          {v.detail && <div className="mt-0.5 text-xs text-muted-foreground">{v.detail}</div>}
+          {v.checkedAt && (
+            <div className="mt-0.5 text-[10px] font-mono text-muted-foreground">
+              checked {new Date(v.checkedAt).toLocaleString()}
+            </div>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function ResearchPanel({ data }: { data: PanelData }) {
   const [showCalc, setShowCalc] = useState(false);
 
@@ -211,12 +279,7 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                 </div>
                 <Section title="Verify next">
                   <ul className="space-y-1 text-sm">
-                    {data.verifyNext.map((v, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span>{v}</span>
-                      </li>
-                    ))}
+                    {data.verifyNext.map((v) => <VerifyRow key={v.id} v={v} />)}
                   </ul>
                 </Section>
                 {data.calculation && (
@@ -292,12 +355,7 @@ export function ResearchPanel({ data }: { data: PanelData }) {
         <div className="border-t border-border/60 pt-2">
           <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Verify next</div>
           <ul className="space-y-0.5 text-[11px]">
-            {data.verifyNext.slice(0, 3).map((v, i) => (
-              <li key={i} className="flex items-start gap-1.5">
-                <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-                <span>{v}</span>
-              </li>
-            ))}
+            {data.verifyNext.slice(0, 3).map((v) => <VerifyRow key={v.id} v={v} dense />)}
           </ul>
         </div>
       )}
