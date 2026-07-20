@@ -326,7 +326,12 @@ export function ResearchPanel({ data }: { data: PanelData }) {
 function MetricGrid({ metrics, large = false }: { metrics: Metric[]; large?: boolean }) {
   if (metrics.length === 0) return null;
   return (
-    <div className={cn("grid gap-2", metrics.length >= 3 ? "grid-cols-3" : `grid-cols-${metrics.length}`)}>
+    <div
+      className={cn(
+        "grid gap-2",
+        metrics.length >= 3 ? "grid-cols-3" : metrics.length === 2 ? "grid-cols-2" : "grid-cols-1",
+      )}
+    >
       {metrics.map((m, i) => (
         <div key={i} className="rounded-md border border-border/60 bg-background/40 px-2 py-1.5">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{m.label}</div>
