@@ -9,8 +9,50 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ScreenersRouteImport } from './routes/screeners'
+import { Route as RadarRouteImport } from './routes/radar'
+import { Route as MacroRouteImport } from './routes/macro'
+import { Route as HistoryRouteImport } from './routes/history'
+import { Route as DataHealthRouteImport } from './routes/data-health'
+import { Route as AltDataRouteImport } from './routes/alt-data'
+import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ScreenersRoute = ScreenersRouteImport.update({
+  id: '/screeners',
+  path: '/screeners',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RadarRoute = RadarRouteImport.update({
+  id: '/radar',
+  path: '/radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MacroRoute = MacroRouteImport.update({
+  id: '/macro',
+  path: '/macro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DataHealthRoute = DataHealthRouteImport.update({
+  id: '/data-health',
+  path: '/data-health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AltDataRoute = AltDataRouteImport.update({
+  id: '/alt-data',
+  path: '/alt-data',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlertsRoute = AlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +61,130 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/alerts': typeof AlertsRoute
+  '/alt-data': typeof AltDataRoute
+  '/data-health': typeof DataHealthRoute
+  '/history': typeof HistoryRoute
+  '/macro': typeof MacroRoute
+  '/radar': typeof RadarRoute
+  '/screeners': typeof ScreenersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/alerts': typeof AlertsRoute
+  '/alt-data': typeof AltDataRoute
+  '/data-health': typeof DataHealthRoute
+  '/history': typeof HistoryRoute
+  '/macro': typeof MacroRoute
+  '/radar': typeof RadarRoute
+  '/screeners': typeof ScreenersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/alerts': typeof AlertsRoute
+  '/alt-data': typeof AltDataRoute
+  '/data-health': typeof DataHealthRoute
+  '/history': typeof HistoryRoute
+  '/macro': typeof MacroRoute
+  '/radar': typeof RadarRoute
+  '/screeners': typeof ScreenersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/alerts'
+    | '/alt-data'
+    | '/data-health'
+    | '/history'
+    | '/macro'
+    | '/radar'
+    | '/screeners'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/alerts'
+    | '/alt-data'
+    | '/data-health'
+    | '/history'
+    | '/macro'
+    | '/radar'
+    | '/screeners'
+  id:
+    | '__root__'
+    | '/'
+    | '/alerts'
+    | '/alt-data'
+    | '/data-health'
+    | '/history'
+    | '/macro'
+    | '/radar'
+    | '/screeners'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AlertsRoute: typeof AlertsRoute
+  AltDataRoute: typeof AltDataRoute
+  DataHealthRoute: typeof DataHealthRoute
+  HistoryRoute: typeof HistoryRoute
+  MacroRoute: typeof MacroRoute
+  RadarRoute: typeof RadarRoute
+  ScreenersRoute: typeof ScreenersRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/screeners': {
+      id: '/screeners'
+      path: '/screeners'
+      fullPath: '/screeners'
+      preLoaderRoute: typeof ScreenersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/radar': {
+      id: '/radar'
+      path: '/radar'
+      fullPath: '/radar'
+      preLoaderRoute: typeof RadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/macro': {
+      id: '/macro'
+      path: '/macro'
+      fullPath: '/macro'
+      preLoaderRoute: typeof MacroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/data-health': {
+      id: '/data-health'
+      path: '/data-health'
+      fullPath: '/data-health'
+      preLoaderRoute: typeof DataHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/alt-data': {
+      id: '/alt-data'
+      path: '/alt-data'
+      fullPath: '/alt-data'
+      preLoaderRoute: typeof AltDataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/alerts': {
+      id: '/alerts'
+      path: '/alerts'
+      fullPath: '/alerts'
+      preLoaderRoute: typeof AlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,6 +197,13 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AlertsRoute: AlertsRoute,
+  AltDataRoute: AltDataRoute,
+  DataHealthRoute: DataHealthRoute,
+  HistoryRoute: HistoryRoute,
+  MacroRoute: MacroRoute,
+  RadarRoute: RadarRoute,
+  ScreenersRoute: ScreenersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
