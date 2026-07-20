@@ -30,7 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-border/70 bg-sidebar">
         <div className="flex h-12 items-center gap-2 border-b border-border/70 px-3">
-          <div className="h-2 w-2 rounded-full bg-[oklch(var(--primary))] shadow-[0_0_8px_oklch(var(--primary))]" />
+          <div className="h-2 w-2 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)]" />
           <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             Research Terminal
           </div>
@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <span className={cn(
                   "font-mono text-[9px] tracking-wider",
-                  active ? "text-[oklch(var(--primary))]" : "text-muted-foreground/60",
+                  active ? "text-[var(--primary)]" : "text-muted-foreground/60",
                 )}>
                   {item.code}
                 </span>
@@ -64,7 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="border-t border-border/70 p-2 font-mono text-[10px] text-muted-foreground">
           <div>Phase 1 · Foundation</div>
-          <div className="text-[oklch(var(--warning))]">No live data wired</div>
+          <div className="text-[var(--warning)]">No live data wired</div>
         </div>
       </aside>
 
@@ -75,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               Research Terminal
             </div>
             <div className="hidden md:flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[oklch(var(--positive))]" />
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--positive)]" />
               <span>system online</span>
               <span>·</span>
               <span>calc v0.1</span>
@@ -103,7 +103,7 @@ function MobileNav({ pathname }: { pathname: string }) {
             to={item.to}
             className={cn(
               "shrink-0 px-3 py-2 font-mono text-[10px] uppercase tracking-wider",
-              active ? "border-b border-[oklch(var(--primary))] text-foreground" : "text-muted-foreground",
+              active ? "border-b border-[var(--primary)] text-foreground" : "text-muted-foreground",
             )}
           >
             {item.code}

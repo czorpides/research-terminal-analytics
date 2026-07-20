@@ -14,7 +14,7 @@ export function SectionHeader({
   return (
     <header className="mb-4 flex items-end justify-between gap-4 border-b border-border/70 pb-3">
       <div className="min-w-0">
-        <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-[oklch(var(--primary))]">
+        <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--primary)]">
           {code}
         </div>
         <h1 className="mt-0.5 text-lg font-semibold tracking-tight">{title}</h1>

@@ -39,18 +39,18 @@ import type { PanelData, Evidence, Metric, Point } from "@/lib/panels/contract";
 
 function ToneClass(tone?: Metric["tone"]) {
   switch (tone) {
-    case "positive": return "text-[oklch(var(--positive))]";
-    case "negative": return "text-[oklch(var(--negative))]";
-    case "warning":  return "text-[oklch(var(--warning))]";
+    case "positive": return "text-[var(--positive)]";
+    case "negative": return "text-[var(--negative)]";
+    case "warning":  return "text-[var(--warning)]";
     default: return "text-foreground";
   }
 }
 
 function FreshnessDot({ state }: { state: Evidence["freshness"] }) {
   const color =
-    state === "fresh" ? "bg-[oklch(var(--positive))]" :
-    state === "warn"  ? "bg-[oklch(var(--warning))]"  :
-                        "bg-[oklch(var(--negative))]";
+    state === "fresh" ? "bg-[var(--positive)]" :
+    state === "warn"  ? "bg-[var(--warning)]"  :
+                        "bg-[var(--negative)]";
   return <span className={cn("inline-block h-1.5 w-1.5 rounded-full", color)} />;
 }
 
@@ -81,9 +81,9 @@ function ConfidenceMeter({ value, penalties }: PanelData["confidence"]) {
     value >= 40 ? <ShieldQuestion className="h-3.5 w-3.5" /> :
                   <ShieldAlert className="h-3.5 w-3.5" />;
   const tone =
-    value >= 75 ? "text-[oklch(var(--positive))]" :
-    value >= 40 ? "text-[oklch(var(--warning))]" :
-                  "text-[oklch(var(--negative))]";
+    value >= 75 ? "text-[var(--positive)]" :
+    value >= 40 ? "text-[var(--warning)]" :
+                  "text-[var(--negative)]";
   return (
     <TooltipProvider delayDuration={100}>
       <Tooltip>
@@ -104,7 +104,7 @@ function ConfidenceMeter({ value, penalties }: PanelData["confidence"]) {
             <ul className="space-y-1 text-xs">
               {penalties.map((p) => (
                 <li key={p.code} className="flex gap-2">
-                  <span className="font-mono text-[oklch(var(--negative))] tabular-nums">−{p.points}</span>
+                  <span className="font-mono text-[var(--negative)] tabular-nums">−{p.points}</span>
                   <span className="text-muted-foreground">{p.reason}</span>
                 </li>
               ))}
@@ -137,7 +137,7 @@ function EvidenceRow({ e }: { e: Evidence }) {
           <span className="font-mono">{new Date(e.asOf).toLocaleString()}</span>
         </div>
       </div>
-      <span className={cn("mt-1 shrink-0 text-[10px] font-mono uppercase", e.agrees ? "text-[oklch(var(--positive))]" : "text-[oklch(var(--negative))]")}>
+      <span className={cn("mt-1 shrink-0 text-[10px] font-mono uppercase", e.agrees ? "text-[var(--positive)]" : "text-[var(--negative)]")}>
         {e.agrees ? "agrees" : "disagrees"}
       </span>
     </div>
@@ -146,7 +146,7 @@ function EvidenceRow({ e }: { e: Evidence }) {
 
 function PointList({ points, kind }: { points: Point[]; kind: "positive" | "deduction" }) {
   const Icon = kind === "positive" ? Plus : Minus;
-  const tone = kind === "positive" ? "text-[oklch(var(--positive))]" : "text-[oklch(var(--negative))]";
+  const tone = kind === "positive" ? "text-[var(--positive)]" : "text-[var(--negative)]";
   if (points.length === 0) {
     return <div className="text-xs text-muted-foreground">— none —</div>;
   }
@@ -222,7 +222,7 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                 {data.calculation && (
                   <Section title="Calculation">
                     <div className="rounded-md border border-border bg-muted/30 p-2 text-xs font-mono">
-                      <div className="text-[oklch(var(--primary))]">{data.calculation.formula}</div>
+                      <div className="text-[var(--primary)]">{data.calculation.formula}</div>
                       <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-muted-foreground">
                         {Object.entries(data.calculation.inputs).map(([k, v]) => (
                           <div key={k} className="flex justify-between">
@@ -311,7 +311,7 @@ export function ResearchPanel({ data }: { data: PanelData }) {
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-2">
             <div className="rounded-md border border-border bg-muted/30 p-2 text-[11px] font-mono">
-              <div className="text-[oklch(var(--primary))]">{data.calculation.formula}</div>
+              <div className="text-[var(--primary)]">{data.calculation.formula}</div>
               <div className="mt-1.5 text-[10px] text-muted-foreground">
                 v{data.calculation.calcVersion} · {new Date(data.calculation.computedAt).toLocaleString()}
               </div>
