@@ -1,6 +1,6 @@
 import { computeConfidence } from "@/lib/reliability/confidence";
 import { stampCalculation } from "@/lib/reliability/version";
-import type { PanelData } from "./contract";
+import type { PanelData, VerifyCheck } from "./contract";
 
 type Section =
   | "command"
@@ -52,9 +52,27 @@ export function getPanelsForSection(section: Section): PanelData[] {
             { id: "d1", label: "News API stale (>6h)", weight: -2, detail: "Confidence penalised for news freshness." },
           ],
           verifyNext: [
-            "Confirm move survives next US CPI print",
-            "Check MOVE index for corroborating vol regime",
-            "Compare against real-yield decomposition (10Y − 10Y TIPS)",
+            {
+              id: "v1",
+              label: "Confirm move survives next US CPI print",
+              verifier: "api",
+              status: "pending",
+              detail: "Will re-evaluate on next FRED CPIAUCSL release.",
+            },
+            {
+              id: "v2",
+              label: "Check MOVE index for corroborating vol regime",
+              verifier: "algo",
+              status: "pending",
+              detail: "Deterministic cross-check once MOVE series is wired.",
+            },
+            {
+              id: "v3",
+              label: "Compare against real-yield decomposition (10Y − 10Y TIPS)",
+              verifier: "ai",
+              status: "unavailable",
+              detail: "AI commentary layer arrives in a later phase.",
+            },
           ],
           confidence: conf("tier1_official", "macro_release", 60 * 60 * 8, { crossSourceAgreement: 0.9 }),
           calculation: {
@@ -162,7 +180,14 @@ function panelStub(id: string, title: string, purpose: string, metrics: PanelDat
     deductions: [
       { id: `${id}-mock`, label: "Panel is a scaffold (no provider)", weight: -100, detail: "Confidence is pinned to 0 until a source is wired." },
     ],
-    verifyNext: ["Wire the data source for this panel in a later phase."],
+    verifyNext: [
+      {
+        id: `${id}-v0`,
+        label: "Wire the data source for this panel in a later phase.",
+        verifier: "manual",
+        status: "pending",
+      },
+    ],
     confidence: { value: 0, penalties: [{ code: "no_source", points: 100, reason: "No provider wired for this panel yet." }] },
   };
 }

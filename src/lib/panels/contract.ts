@@ -39,6 +39,24 @@ export interface Metric {
   tone?: "positive" | "negative" | "neutral" | "warning";
 }
 
+/**
+ * A verify-next check is a machine-checkable follow-up. `verifier` says who
+ * runs it (deterministic algorithm, external API, LLM, or the user), and
+ * `status` is the last result. Phase 1 pre-fills these; live phases wire
+ * real checkers that update `status`, `checkedAt`, and `detail`.
+ */
+export type VerifyVerifier = "algo" | "api" | "ai" | "manual";
+export type VerifyStatus = "pending" | "pass" | "fail" | "stale" | "unavailable";
+
+export interface VerifyCheck {
+  id: string;
+  label: string;
+  verifier: VerifyVerifier;
+  status: VerifyStatus;
+  detail?: string;
+  checkedAt?: string; // ISO
+}
+
 export interface PanelData {
   id: string;
   title: string;
@@ -49,7 +67,7 @@ export interface PanelData {
   evidence: Evidence[];
   positives: Point[];
   deductions: Point[];
-  verifyNext: string[];
+  verifyNext: VerifyCheck[];
   confidence: {
     value: number;
     penalties: ConfidencePenalty[];
