@@ -1,24 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AppShell } from "@/components/layout/AppShell";
+import { SectionHeader } from "@/components/layout/SectionHeader";
+import { PanelGrid } from "@/components/research/PanelGrid";
+import { getPanelsForSection } from "@/lib/panels/mocks";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  component: CommandCentre,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function CommandCentre() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
+    <AppShell>
+      <SectionHeader
+        code="CC · Command Centre"
+        title="Where should I research next?"
+        purpose="Highest-priority observations, upcoming catalysts and the current regime — every score auditable, every deduction visible."
       />
-    </div>
+      <PanelGrid panels={getPanelsForSection("command")} />
+    </AppShell>
   );
 }
