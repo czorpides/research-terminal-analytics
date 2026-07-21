@@ -4,6 +4,7 @@ import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck } from "./contract";
 import { riskScore } from "@/lib/scoring/composite";
+import { detectCatalystsForIndustry } from "@/lib/catalysts/detect.server";
 
 interface LatestScore {
   asset_id: string; score_type: string; value: number; confidence: number;
@@ -22,6 +23,15 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
   const { data: assets } = await supabaseAdmin.from("assets").select("id, symbol, name").eq("active", true);
   if (!assets || assets.length === 0) return placeholder("No assets in universe yet.");
   const assetIds = assets.map((a) => a.id as string);
+  const { data: assetsWithInd } = await supabaseAdmin
+    .from("assets").select("id, industry_id").in("id", assetIds);
+  const indIdByAsset = new Map<string, string | null>();
+  for (const a of assetsWithInd ?? []) indIdByAsset.set(a.id as string, (a.industry_id as string | null) ?? null);
+  const indIds = [...new Set([...indIdByAsset.values()].filter(Boolean) as string[])];
+  const { data: industries } = indIds.length
+    ? await supabaseAdmin.from("industries").select("id, code").in("id", indIds)
+    : { data: [] as Array<{ id: string; code: string }> };
+  const indCodeById = new Map((industries ?? []).map((i) => [i.id as string, i.code as string]));
 
   const { data: rawScores } = await supabaseAdmin
     .from("scores")
@@ -81,12 +91,16 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
     .sort((a, b) => b.risk - a.risk)
     .slice(0, 12);
 
-  return ranked.map(({ asset, bag, risk, components }) => {
+  return await Promise.all(ranked.map(async ({ asset, bag, risk, components }) => {
     const symbol = asset.symbol as string;
     const price = priceByAsset.get(asset.id as string);
     const asOf = price ? new Date(`${price.trade_date}T21:00:00Z`).toISOString() : new Date().toISOString();
     const ageSec = (Date.now() - new Date(asOf).getTime()) / 1000;
     const conf = computeConfidence({ tier: "tier2_regulated", category: "price_daily", ageSeconds: ageSec });
+
+    const indId = indIdByAsset.get(asset.id as string) ?? null;
+    const indCode = indId ? indCodeById.get(indId) ?? null : null;
+    const catalysts = await detectCatalystsForIndustry({ industryCode: indCode });
 
     const evidence: Evidence[] = [{
       id: `ev-price-${symbol}`,
@@ -162,6 +176,7 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
       whatChanged: price ? `Last close ${price.close.toFixed(2)} on ${price.trade_date}.` : "No price data yet.",
       whyItMatters: "Cross-factor risk score highlights names where the failure case is corroborated across momentum, trend and vol regime — a research prompt, never a short recommendation.",
       evidence, positives, deductions, verifyNext, confidence: conf,
+      catalysts,
       calculation: {
         formula: "risk = weighted average of (100 − score) over available components",
         ...stampCalculation("overvaluation.risk.v0.2", { symbol, components }),
@@ -175,7 +190,7 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
         },
       },
     };
-  });
+  }));
 });
 
 function placeholder(message: string): PanelData[] {

@@ -48,6 +48,7 @@ import type {
   Metric,
   Point,
   VerifyCheck,
+  Catalyst,
 } from "@/lib/panels/contract";
 
 function ToneClass(tone?: Metric["tone"]) {
@@ -277,11 +278,21 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                     <PointList points={data.deductions} kind="deduction" />
                   </Section>
                 </div>
-                <Section title="Verify next">
+                <Section title="Verified by platform">
                   <ul className="space-y-1 text-sm">
                     {data.verifyNext.map((v) => <VerifyRow key={v.id} v={v} />)}
                   </ul>
+                  <div className="mt-1 text-[10px] text-muted-foreground/70">
+                    Secondary checks. The metrics, evidence, positives and deductions above are the primary evidence.
+                  </div>
                 </Section>
+                {data.catalysts && data.catalysts.length > 0 && (
+                  <Section title={`External catalysts (${data.catalysts.length})`}>
+                    <div className="space-y-2">
+                      {data.catalysts.map((c) => <CatalystRow key={c.id} c={c} />)}
+                    </div>
+                  </Section>
+                )}
                 {data.calculation && (
                   <Section title="Calculation">
                     <div className="rounded-md border border-border bg-muted/30 p-2 text-xs font-mono">
@@ -353,10 +364,28 @@ export function ResearchPanel({ data }: { data: PanelData }) {
       {/* Verify next */}
       {data.verifyNext.length > 0 && (
         <div className="border-t border-border/60 pt-2">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Verify next</div>
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Verified by platform</div>
           <ul className="space-y-0.5 text-[11px]">
             {data.verifyNext.slice(0, 3).map((v) => <VerifyRow key={v.id} v={v} dense />)}
           </ul>
+          <div className="mt-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
+            Secondary — the core fundamental, technical & macro metrics above remain the primary evidence.
+          </div>
+        </div>
+      )}
+
+      {/* External catalysts */}
+      {data.catalysts && data.catalysts.length > 0 && (
+        <div className="border-t border-border/60 pt-2">
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              External catalysts · {data.catalysts.length}
+            </div>
+            <div className="text-[9px] font-mono text-muted-foreground/70">macro · commodity · alt-data</div>
+          </div>
+          <div className="space-y-1.5">
+            {data.catalysts.slice(0, 4).map((c) => <CatalystRow key={c.id} c={c} dense />)}
+          </div>
         </div>
       )}
 
@@ -413,5 +442,36 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </div>
       {children}
     </section>
+  );
+}
+
+function CatalystRow({ c, dense = false }: { c: Catalyst; dense?: boolean }) {
+  const tone = c.direction === "tailwind" ? "text-[var(--positive)]" : "text-[var(--negative)]";
+  const bg   = c.direction === "tailwind" ? "border-[color:var(--positive)]/30 bg-[color:var(--positive)]/5"
+                                          : "border-[color:var(--negative)]/30 bg-[color:var(--negative)]/5";
+  const kindLabel = c.kind === "alt_data" ? "alt-data" : c.kind;
+  const mag = "•".repeat(c.magnitude);
+  return (
+    <div className={cn("rounded-sm border p-1.5", bg)}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className={cn("flex items-center gap-1.5 text-[11px] font-medium leading-tight", tone)}>
+            <span className="font-mono text-[9px] uppercase tracking-wider">{kindLabel}</span>
+            <span className="font-mono text-[9px]">{mag}</span>
+            <span className="truncate">{c.headline}</span>
+          </div>
+          <div className={cn("mt-0.5 leading-snug text-muted-foreground", dense ? "text-[10px]" : "text-[11px]")}>
+            {c.reasoning}
+          </div>
+          {c.historicalNote && !dense && (
+            <div className="mt-0.5 text-[10px] italic text-muted-foreground/80">↳ {c.historicalNote}</div>
+          )}
+        </div>
+        <div className="shrink-0 text-right font-mono text-[9px] text-muted-foreground">
+          <div>{c.source}</div>
+          <div>{new Date(c.asOf).toLocaleDateString()}</div>
+        </div>
+      </div>
+    </div>
   );
 }

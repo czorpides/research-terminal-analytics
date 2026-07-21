@@ -4,6 +4,7 @@ import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck } from "./contract";
 import { compositeScore } from "@/lib/scoring/composite";
+import { detectCatalystsForIndustry } from "@/lib/catalysts/detect.server";
 
 interface LatestScore {
   asset_id: string; score_type: string; value: number; confidence: number;
@@ -14,7 +15,7 @@ export const getRadarPanels = createServerFn({ method: "GET" }).handler(async ()
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: assets } = await supabaseAdmin
-    .from("assets").select("id, symbol, name").eq("active", true);
+    .from("assets").select("id, symbol, name, industry_id").eq("active", true);
   if (!assets || assets.length === 0) return placeholder("No assets in universe yet.");
   const assetIds = assets.map((a) => a.id as string);
 
@@ -63,6 +64,12 @@ export const getRadarPanels = createServerFn({ method: "GET" }).handler(async ()
     if (!priceByAsset.has(id)) priceByAsset.set(id, { trade_date: p.trade_date as string, close: Number(p.close) });
   }
 
+  const industryIds = [...new Set(assets.map((a) => a.industry_id).filter(Boolean) as string[])];
+  const { data: industries } = industryIds.length
+    ? await supabaseAdmin.from("industries").select("id, code").in("id", industryIds)
+    : { data: [] as Array<{ id: string; code: string }> };
+  const indCodeById = new Map((industries ?? []).map((i) => [i.id as string, i.code as string]));
+
   const ranked = assets
     .map((a) => {
       const bag = byAsset.get(a.id as string) ?? {};
@@ -79,12 +86,15 @@ export const getRadarPanels = createServerFn({ method: "GET" }).handler(async ()
     .sort((a, b) => b.composite - a.composite)
     .slice(0, 12);
 
-  return ranked.map(({ asset, bag, composite, components }) => {
+  return await Promise.all(ranked.map(async ({ asset, bag, composite, components }) => {
     const symbol = asset.symbol as string;
     const price = priceByAsset.get(asset.id as string);
     const asOf = price ? new Date(`${price.trade_date}T21:00:00Z`).toISOString() : new Date().toISOString();
     const ageSec = (Date.now() - new Date(asOf).getTime()) / 1000;
     const conf = computeConfidence({ tier: "tier2_regulated", category: "price_daily", ageSeconds: ageSec });
+
+    const indCode = asset.industry_id ? indCodeById.get(asset.industry_id as string) ?? null : null;
+    const catalysts = await detectCatalystsForIndustry({ industryCode: indCode });
 
     const evidence: Evidence[] = [{
       id: `ev-price-${symbol}`,
@@ -157,6 +167,7 @@ export const getRadarPanels = createServerFn({ method: "GET" }).handler(async ()
       whatChanged: price ? `Last close ${price.close.toFixed(2)} on ${price.trade_date}.` : "No price data yet.",
       whyItMatters: "Cross-factor composite highlights names where price action, trend regime and vol backdrop all agree.",
       evidence, positives, deductions, verifyNext, confidence: conf,
+      catalysts,
       calculation: {
         formula: "composite = Σ(score × weight) / Σ(weight)  over available components",
         ...stampCalculation("radar.composite.v0.2", { symbol, components }),
@@ -170,7 +181,7 @@ export const getRadarPanels = createServerFn({ method: "GET" }).handler(async ()
         },
       },
     };
-  });
+  }));
 });
 
 function placeholder(message: string): PanelData[] {

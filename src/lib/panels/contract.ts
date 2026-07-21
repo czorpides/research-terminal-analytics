@@ -40,6 +40,27 @@ export interface Metric {
 }
 
 /**
+ * External catalyst — a macro, commodity or alt-data event that plausibly
+ * pressures or supports the asset. Deterministic detection; audit-visible
+ * reasoning line; optional historical analogue.
+ */
+export type CatalystDirection = "pressure" | "tailwind";
+export type CatalystKind = "macro" | "commodity" | "alt_data";
+
+export interface Catalyst {
+  id: string;
+  kind: CatalystKind;
+  direction: CatalystDirection;
+  magnitude: 1 | 2 | 3;
+  headline: string;
+  source: string;
+  asOf: string; // ISO
+  reasoning: string;
+  historicalNote?: string;
+  evidenceUrl?: string;
+}
+
+/**
  * A verify-next check is a machine-checkable follow-up. `verifier` says who
  * runs it (deterministic algorithm, external API, LLM, or the user), and
  * `status` is the last result. Phase 1 pre-fills these; live phases wire
@@ -68,6 +89,7 @@ export interface PanelData {
   positives: Point[];
   deductions: Point[];
   verifyNext: VerifyCheck[];
+  catalysts?: Catalyst[];
   confidence: {
     value: number;
     penalties: ConfidencePenalty[];

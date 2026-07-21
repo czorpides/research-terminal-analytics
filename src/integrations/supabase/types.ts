@@ -1256,6 +1256,50 @@ export type Database = {
           },
         ]
       }
+      undervaluation_watchlist: {
+        Row: {
+          added_at: string
+          asset_id: string
+          entry_score: number
+          exit_reason: string | null
+          id: string
+          last_confirmed_at: string
+          last_score: number
+          removed_at: string | null
+          weak_streak: number
+        }
+        Insert: {
+          added_at?: string
+          asset_id: string
+          entry_score: number
+          exit_reason?: string | null
+          id?: string
+          last_confirmed_at?: string
+          last_score: number
+          removed_at?: string | null
+          weak_streak?: number
+        }
+        Update: {
+          added_at?: string
+          asset_id?: string
+          entry_score?: number
+          exit_reason?: string | null
+          id?: string
+          last_confirmed_at?: string
+          last_score?: number
+          removed_at?: string | null
+          weak_streak?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "undervaluation_watchlist_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: true
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       verify_check_definitions: {
         Row: {
           active: boolean

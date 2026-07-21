@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UndervaluationRouteImport } from './routes/undervaluation'
 import { Route as ScreenersRouteImport } from './routes/screeners'
 import { Route as RadarRouteImport } from './routes/radar'
 import { Route as OvervaluationRouteImport } from './routes/overvaluation'
@@ -26,7 +27,14 @@ import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
 import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
+import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
+import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
+const UndervaluationRoute = UndervaluationRouteImport.update({
+  id: '/undervaluation',
+  path: '/undervaluation',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScreenersRoute = ScreenersRouteImport.update({
   id: '/screeners',
   path: '/screeners',
@@ -113,6 +121,18 @@ const ApiPublicIngestFredRoute = ApiPublicIngestFredRouteImport.update({
   path: '/api/public/ingest/fred',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIngestCommoditiesRoute =
+  ApiPublicIngestCommoditiesRouteImport.update({
+    id: '/api/public/ingest/commodities',
+    path: '/api/public/ingest/commodities',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicRadarsUndervaluationRefreshRoute =
+  ApiPublicRadarsUndervaluationRefreshRouteImport.update({
+    id: '/api/public/radars/undervaluation/refresh',
+    path: '/api/public/radars/undervaluation/refresh',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -124,14 +144,17 @@ export interface FileRoutesByFullPath {
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
+  '/undervaluation': typeof UndervaluationRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
+  '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
+  '/api/public/radars/undervaluation/refresh': typeof ApiPublicRadarsUndervaluationRefreshRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -143,14 +166,17 @@ export interface FileRoutesByTo {
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
+  '/undervaluation': typeof UndervaluationRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security': typeof SecurityIndexRoute
+  '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
+  '/api/public/radars/undervaluation/refresh': typeof ApiPublicRadarsUndervaluationRefreshRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -163,14 +189,17 @@ export interface FileRoutesById {
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
+  '/undervaluation': typeof UndervaluationRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
+  '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
+  '/api/public/radars/undervaluation/refresh': typeof ApiPublicRadarsUndervaluationRefreshRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -184,14 +213,17 @@ export interface FileRouteTypes {
     | '/overvaluation'
     | '/radar'
     | '/screeners'
+    | '/undervaluation'
     | '/security/$symbol'
     | '/security/'
+    | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
+    | '/api/public/radars/undervaluation/refresh'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -203,14 +235,17 @@ export interface FileRouteTypes {
     | '/overvaluation'
     | '/radar'
     | '/screeners'
+    | '/undervaluation'
     | '/security/$symbol'
     | '/security'
+    | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
+    | '/api/public/radars/undervaluation/refresh'
   id:
     | '__root__'
     | '/'
@@ -222,14 +257,17 @@ export interface FileRouteTypes {
     | '/overvaluation'
     | '/radar'
     | '/screeners'
+    | '/undervaluation'
     | '/security/$symbol'
     | '/security/'
+    | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
+    | '/api/public/radars/undervaluation/refresh'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -242,18 +280,28 @@ export interface RootRouteChildren {
   OvervaluationRoute: typeof OvervaluationRoute
   RadarRoute: typeof RadarRoute
   ScreenersRoute: typeof ScreenersRoute
+  UndervaluationRoute: typeof UndervaluationRoute
   SecuritySymbolRoute: typeof SecuritySymbolRoute
   SecurityIndexRoute: typeof SecurityIndexRoute
+  ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
   ApiPublicIngestFundamentalsRoute: typeof ApiPublicIngestFundamentalsRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
   ApiPublicProvidersPingRoute: typeof ApiPublicProvidersPingRoute
   ApiPublicScoresRunRoute: typeof ApiPublicScoresRunRoute
   ApiPublicVerifyRunRoute: typeof ApiPublicVerifyRunRoute
+  ApiPublicRadarsUndervaluationRefreshRoute: typeof ApiPublicRadarsUndervaluationRefreshRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/undervaluation': {
+      id: '/undervaluation'
+      path: '/undervaluation'
+      fullPath: '/undervaluation'
+      preLoaderRoute: typeof UndervaluationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/screeners': {
       id: '/screeners'
       path: '/screeners'
@@ -373,6 +421,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicIngestFredRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/commodities': {
+      id: '/api/public/ingest/commodities'
+      path: '/api/public/ingest/commodities'
+      fullPath: '/api/public/ingest/commodities'
+      preLoaderRoute: typeof ApiPublicIngestCommoditiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/radars/undervaluation/refresh': {
+      id: '/api/public/radars/undervaluation/refresh'
+      path: '/api/public/radars/undervaluation/refresh'
+      fullPath: '/api/public/radars/undervaluation/refresh'
+      preLoaderRoute: typeof ApiPublicRadarsUndervaluationRefreshRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -386,25 +448,19 @@ const rootRouteChildren: RootRouteChildren = {
   OvervaluationRoute: OvervaluationRoute,
   RadarRoute: RadarRoute,
   ScreenersRoute: ScreenersRoute,
+  UndervaluationRoute: UndervaluationRoute,
   SecuritySymbolRoute: SecuritySymbolRoute,
   SecurityIndexRoute: SecurityIndexRoute,
+  ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
   ApiPublicIngestFundamentalsRoute: ApiPublicIngestFundamentalsRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
   ApiPublicProvidersPingRoute: ApiPublicProvidersPingRoute,
   ApiPublicScoresRunRoute: ApiPublicScoresRunRoute,
   ApiPublicVerifyRunRoute: ApiPublicVerifyRunRoute,
+  ApiPublicRadarsUndervaluationRefreshRoute:
+    ApiPublicRadarsUndervaluationRefreshRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

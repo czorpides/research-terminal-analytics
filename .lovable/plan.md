@@ -1,54 +1,82 @@
-## Phase: Prompt 7 — Fundamentals, Valuation & Quality scoring
+# Plan: Undervaluation Radar, Catalyst pairing, Commodities, Label rename
 
-Next major area. Adds the first non-price signal layer so scores stop being pure technicals and Security Master gets real fundamentals to display.
+## 1. Rename "Verify next" → "Verified by platform"
 
-### 1. Fundamentals ingestion (FMP as Tier 2 primary)
+- Update `src/components/research/ResearchPanel.tsx` label only.
+- Reframe the section as **secondary corroboration** to the primary fundamental/technical/macro metrics shown above it. Add a one-line subhead: "Secondary corroboration for the metrics above."
+- No contract/field renames — `verifyNext` stays as the internal key to avoid breaking every panel builder.
 
-- New module `src/lib/ingestion/fundamentals/ingest.server.ts` pulling from FMP `/stable/`:
-  - `key-metrics-ttm` (P/E, P/B, P/S, EV/EBITDA, ROE, ROIC, debt/equity, current ratio, FCF yield)
-  - `ratios-ttm` (margins, turnover)
-  - `profile` (marketCap, beta, sector cross-check)
-- Persist into existing `data_points` keyed by `subject_id = asset.id` with `metric_code` per fundamental. Reuses reliability framework — no schema change.
-- Quality gates: reject negative-where-impossible, stale > 120d, missing marketCap. Failed rows counted in `ingestion_runs`.
-- Cross-verify marketCap against Tiingo/Twelve Data when available (secondary evidence).
-- Public endpoint `/api/public/ingest/fundamentals` + pg_cron daily.
+## 2. Catalyst engine (macro + alt-data → asset/industry)
 
-### 2. Valuation scoring
+The user's core ask: know *why* an asset is under- or overvalued before it happens. Deterministic, evidence-backed, no black-box AI required.
 
-- `src/lib/scoring/valuation.server.ts` — deterministic composite:
-  - Rank each asset within its industry on P/E, P/B, EV/EBITDA, FCF yield (percentile-based, lower multiple = better, higher FCF yield = better).
-  - Emit `scores.score_type = 'valuation'` with full input trace + calc version.
-- Confidence penalties for missing metrics, stale data, thin industry peer group (< 5 peers).
+**New module: `src/lib/catalysts/detect.server.ts`**
+- Detects recent macro/alt-data events that plausibly pressure or support each asset.
+- Sources already in the DB:
+  - `data_points` (FRED macro series: fed funds, CPI, unemployment, yield curve, USD index, etc.)
+  - `alt_data_signals` (existing table — we'll seed a handful of tariff/tax/regulatory event rows manually via a seed function so the pipeline has real data to render)
+  - `commodity_prices` (added below)
+- Detection rules (deterministic, tagged with reasoning):
+  - **Macro deltas**: month-over-month move > 1σ on a series that historically correlates with a sector (e.g. rising 10Y yields → pressure on Utilities/REITs; rising oil → pressure on Airlines, tailwind for Energy).
+  - **Commodity shocks**: >5% 4-week move in a commodity → pressure/tailwind mapped to industries (oil↑ → Energy+ / Airlines−; copper↓ → Materials−).
+  - **Alt-data events**: tariff / tax / regulatory rows tagged with target industry/country → pressure sign + magnitude.
+- Output shape (new type `Catalyst` in `src/lib/catalysts/types.ts`):
+  ```
+  { id, direction: "pressure"|"tailwind", magnitude: 1-3,
+    headline, source, asOf, evidenceUrl?,
+    reasoning: string,   // deterministic sentence template
+    historicalNote?: string  // "Similar 2018 tariff round preceded 12% Materials drawdown"
+  }
+  ```
+- Industry→series mapping table lives in `src/lib/catalysts/mappings.ts` (hand-curated, versioned).
 
-### 3. Quality scoring
+## 3. Commodities ingestion + panels
 
-- `src/lib/scoring/quality.server.ts`:
-  - ROE, ROIC, gross margin, net margin, debt/equity, current ratio → industry percentile composite.
-  - `scores.score_type = 'quality'`.
+- Ingest daily commodity spot/futures via FMP `/quote/{symbol}` for a curated basket: WTI, Brent, Natural Gas, Gold, Silver, Copper, Wheat, Corn, Soybeans.
+- New ingestor `src/lib/ingestion/commodities/ingest.server.ts` writing to existing `commodity_prices` table.
+- New endpoint `POST /api/public/ingest/commodities`.
+- Weekly cron.
+- Extend catalyst engine to read commodity 4-week moves.
+- Commodities appear as first-class rows on both radars (treated like assets with symbol/name; scoring uses momentum + trend + volatility only — no fundamentals).
 
-### 4. Wire into existing surfaces
+## 4. Undervaluation Radar (weekly stable list)
 
-- **Security detail** (`/security/$symbol`): add Valuation panel + Quality panel with metric tables, industry rank, positives/deductions, verify-next (algo peer-rank check, api freshness check, ai "explain the multiple" pending).
-- **Security universe** (`/security`): add Val + Qual score columns alongside composite; extend composite to weight technicals + valuation + quality.
-- **Opportunity Radar / Overvaluation Radar**: extend ranking to blend valuation (cheap = opportunity, expensive = risk) and quality (high quality = confidence bonus).
-- **Command Centre**: no new panels; existing Top Opportunities / Risks auto-reflect the richer composite.
+**Concept**: symmetric to Overvaluation Radar, but *stable* — the list only churns when a name meaningfully enters/exits the deep-value zone.
 
-### 5. Verify-next runners
+- New server fn `src/lib/panels/undervaluation.functions.ts`:
+  - Uses composite `opportunityScore` (already exists as the standard composite) inverted focus: rank by **low valuation percentile + non-broken quality**.
+  - Formula: `undervaluation = valuation_score × 0.5 + quality_score × 0.3 + (100 − trend_break_penalty) × 0.2` — cheap names that aren't falling knives.
+- **Stable weekly list** (the "don't churn" requirement):
+  - New table `undervaluation_watchlist` persisting the current list with `added_at`, `last_confirmed_at`, `entry_score`, `exit_score?`.
+  - Weekly cron `/api/public/radars/undervaluation/refresh`:
+    - Compute current scores.
+    - **Add**: candidate scoring ≥ 70 AND not already in list.
+    - **Remove**: existing entry scoring < 55 for 2 consecutive weekly runs (hysteresis prevents flip-flop).
+    - **Keep**: everything else — no reorder churn, no unnecessary rewrites.
+  - Panel reads from the persisted table, not from a fresh recompute, so the visible list only changes on the weekly cadence.
+- Route `src/routes/undervaluation.tsx` mirroring the overvaluation page.
 
-- Extend `src/lib/verify/runners.server.ts` with `checkPeerRankStable` (algo: valuation percentile within ±10 vs 30d ago) and `checkFundamentalsFresh` (api: last fundamentals point < 120d).
-- Seed `verify_check_definitions` rows for valuation + quality panels.
+## 5. Wire catalysts into both radars
 
-### Explicitly out of scope
+- `getOvervaluationPanels` and `getUndervaluationPanels` each call `getCatalystsForAsset(assetId, industryId, countryId)`.
+- Catalysts render as a new **"Catalysts & pressures"** block inside each panel (above Evidence), showing direction (pressure/tailwind), magnitude bar, source, deterministic reasoning line, and historical note when available.
+- Each catalyst also emits an `Evidence` entry so the confidence math and audit trail pick it up.
 
-- Catalyst / earnings-surprise scoring (later)
-- Multi-quarter fundamentals history (only TTM for now)
-- Non-US fundamentals
-- New AI narrative beyond existing pending-AI hooks
+## 6. Nav + Command Centre
 
-### Technical notes
+- Add "UV · Undervaluation Radar" to `AppShell` nav.
+- Command Centre "Top Opportunities" panel starts pulling from the persisted undervaluation watchlist instead of ad-hoc composite ranking.
 
-- FMP quota is the binding constraint (~250/day free). Backfill sequenced by market cap, ~65 assets = one endpoint call each = well within budget.
-- No new tables — all fundamentals ride `data_points`, all scores ride `scores`.
-- Composite weight defaults: momentum 25 / trend 20 / volatility 15 / valuation 25 / quality 15 (documented in calc version stamp).
+## Explicitly out of scope
 
-Ready to build on your go.
+- LLM-written catalyst narratives (deterministic templates only for now — AI layer arrives in the Prompt 11 phase).
+- Backtested historical impact modelling (we use a hand-curated `historicalNote` table for now).
+- Non-US macro catalysts beyond what FRED already provides.
+- Automated news scraping — alt-data events are seeded manually until a news ingester is built.
+
+## Technical notes
+
+- No breaking schema changes; two new tables (`undervaluation_watchlist`, minor extension to seed `alt_data_signals`).
+- Commodities re-use `commodity_prices` + `commodities` tables that already exist.
+- All catalyst detection is deterministic + versioned (`catalyst.detect.v0.1` stamp) so verifier audit trail keeps working.
+- Weekly cadence uses pg_cron `0 6 * * 1` (Monday 06:00 UTC).
