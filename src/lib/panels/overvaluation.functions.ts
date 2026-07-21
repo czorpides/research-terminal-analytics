@@ -3,6 +3,7 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck } from "./contract";
+import { riskScore } from "@/lib/scoring/composite";
 
 interface LatestScore {
   asset_id: string; score_type: string; value: number; confidence: number;
@@ -67,17 +68,20 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
   const ranked = assets
     .map((a) => {
       const bag = byAsset.get(a.id as string) ?? {};
-      const m = bag["momentum"]?.value ?? 50;
-      const t = bag["trend"]?.value ?? 50;
-      const v = bag["volatility"]?.value ?? 50;
-      const risk = ((100 - m) + (100 - t)) / 2 + (v - 50) * 0.1;
-      return { asset: a, bag, risk };
+      const r = riskScore({
+        momentum:   bag["momentum"]?.value   ?? null,
+        trend:      bag["trend"]?.value      ?? null,
+        volatility: bag["volatility"]?.value ?? null,
+        valuation:  bag["valuation"]?.value  ?? null,
+        quality:    bag["quality"]?.value    ?? null,
+      });
+      return { asset: a, bag, risk: r.value ?? -Infinity, components: r.components };
     })
     .filter((x) => Object.keys(x.bag).length > 0)
     .sort((a, b) => b.risk - a.risk)
     .slice(0, 12);
 
-  return ranked.map(({ asset, bag, risk }) => {
+  return ranked.map(({ asset, bag, risk, components }) => {
     const symbol = asset.symbol as string;
     const price = priceByAsset.get(asset.id as string);
     const asOf = price ? new Date(`${price.trade_date}T21:00:00Z`).toISOString() : new Date().toISOString();
@@ -98,7 +102,7 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
     // (kept as deductions of the risk case) and deductions become elevated risks.
     const positives: Point[] = [];
     const deductions: Point[] = [];
-    for (const t of ["momentum", "trend", "volatility"] as const) {
+    for (const t of ["momentum", "trend", "volatility", "valuation", "quality"] as const) {
       const s = bag[t];
       if (!s) continue;
       // deductions from underlying score = reasons the risk is high
@@ -152,17 +156,21 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
         { label: "Momentum", value: bag["momentum"] ? bag["momentum"].value.toFixed(0) : "—" },
         { label: "Trend", value: bag["trend"] ? bag["trend"].value.toFixed(0) : "—" },
         { label: "Vol regime", value: bag["volatility"] ? bag["volatility"].value.toFixed(0) : "—" },
+        { label: "Valuation", value: bag["valuation"] ? bag["valuation"].value.toFixed(0) : "—" },
+        { label: "Quality", value: bag["quality"] ? bag["quality"].value.toFixed(0) : "—" },
       ],
       whatChanged: price ? `Last close ${price.close.toFixed(2)} on ${price.trade_date}.` : "No price data yet.",
       whyItMatters: "Cross-factor risk score highlights names where the failure case is corroborated across momentum, trend and vol regime — a research prompt, never a short recommendation.",
       evidence, positives, deductions, verifyNext, confidence: conf,
       calculation: {
-        formula: "risk = ((100−momentum) + (100−trend))/2 + (volatility − 50) × 0.1",
-        ...stampCalculation("overvaluation.risk.v0.1", { symbol, m: bag["momentum"]?.value, t: bag["trend"]?.value, v: bag["volatility"]?.value }),
+        formula: "risk = weighted average of (100 − score) over available components",
+        ...stampCalculation("overvaluation.risk.v0.2", { symbol, components }),
         inputs: {
           momentum: bag["momentum"]?.value ?? null,
           trend: bag["trend"]?.value ?? null,
           volatility: bag["volatility"]?.value ?? null,
+          valuation: bag["valuation"]?.value ?? null,
+          quality: bag["quality"]?.value ?? null,
           risk,
         },
       },
