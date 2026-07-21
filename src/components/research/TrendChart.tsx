@@ -21,10 +21,11 @@ function fmt(v: number | null | undefined, f?: ChartFormat) {
 }
 
 const ZONE_FILL: Record<string, string> = {
-  good: "hsl(var(--positive) / 0.10)",
-  warn: "hsl(var(--warning) / 0.10)",
-  bad:  "hsl(var(--negative) / 0.10)",
+  good: "var(--positive)",
+  warn: "var(--warning)",
+  bad:  "var(--negative)",
 };
+const ZONE_OPACITY = 0.12;
 
 /**
  * Compact trend chart with optional coloured "goldilocks / warn / danger"
@@ -67,6 +68,7 @@ export function TrendChart({
               y1={z.from ?? yDomain[0]}
               y2={z.to   ?? yDomain[1]}
               fill={ZONE_FILL[z.kind]}
+              fillOpacity={ZONE_OPACITY}
               stroke="none"
               ifOverflow="extendDomain"
             />
@@ -75,7 +77,7 @@ export function TrendChart({
           <XAxis
             dataKey="t"
             hide={compact}
-            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
             tickFormatter={(v) => {
               const d = new Date(v);
               return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
@@ -87,17 +89,17 @@ export function TrendChart({
           <YAxis
             hide={compact}
             domain={yDomain}
-            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
             tickFormatter={(v) => fmt(Number(v), series.format)}
             axisLine={false}
             tickLine={false}
             width={44}
           />
           <Tooltip
-            cursor={{ stroke: "hsl(var(--muted-foreground))", strokeDasharray: "3 3" }}
+            cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }}
             contentStyle={{
-              background: "hsl(var(--popover))",
-              border: "1px solid hsl(var(--border))",
+              background: "var(--popover)",
+              border: "1px solid var(--border)",
               borderRadius: 6,
               fontSize: 11,
               padding: "6px 8px",
@@ -112,7 +114,7 @@ export function TrendChart({
           <Area
             type="monotone"
             dataKey="v"
-            stroke="hsl(var(--primary))"
+            stroke="var(--primary)"
             strokeWidth={1.5}
             fill="url(#trend-fill)"
             isAnimationActive={false}
@@ -123,7 +125,7 @@ export function TrendChart({
               type="monotone"
               dataKey="v"
               data={projection}
-              stroke="hsl(var(--primary))"
+              stroke="var(--primary)"
               strokeWidth={1.5}
               strokeDasharray="4 3"
               dot={false}
@@ -135,7 +137,7 @@ export function TrendChart({
               type="monotone"
               dataKey="v"
               data={series.compare.points}
-              stroke="hsl(var(--muted-foreground))"
+              stroke="var(--muted-foreground)"
               strokeWidth={1}
               strokeDasharray="2 2"
               dot={false}
