@@ -43,7 +43,7 @@ export const FRED_SERIES: FredSeriesSpec[] = [
   { seriesCode: "LRHUTTTTEZM156S",    indicatorCode: "EZ_UNRATE", cadence: "monthly", region: "EZ", category: "labor",     label: "EA Unemployment" },
 
   // ── United Kingdom ──
-  { seriesCode: "IUDBEDR",         indicatorCode: "UK_BANK_RATE", cadence: "daily",   region: "UK", category: "rates",     label: "BoE Bank Rate" },
+  { seriesCode: "BOERUKA",         indicatorCode: "UK_BANK_RATE", cadence: "monthly", region: "UK", category: "rates",     label: "BoE Bank Rate" },
   { seriesCode: "IRLTLT01GBM156N", indicatorCode: "UK_10Y",       cadence: "monthly", region: "UK", category: "rates",     label: "UK 10Y Gilt" },
   { seriesCode: "CPALTT01GBM657N", indicatorCode: "UK_CPI",       cadence: "monthly", region: "UK", category: "inflation", label: "UK CPI YoY" },
   { seriesCode: "LRHUTTTTGBM156S", indicatorCode: "UK_UNRATE",    cadence: "monthly", region: "UK", category: "labor",     label: "UK Unemployment" },
