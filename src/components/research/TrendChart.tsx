@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -8,7 +9,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { TrendSeries, ChartFormat } from "@/lib/panels/contract";
+import type { TrendSeries, ChartFormat, ChartZone } from "@/lib/panels/contract";
+import { ZoneEditor, loadZoneOverride } from "./ZoneEditor";
 
 function fmt(v: number | null | undefined, f?: ChartFormat) {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
@@ -40,6 +42,19 @@ export function TrendChart({
   height?: number;
   compact?: boolean;
 }) {
+  const [zones, setZones] = useState<ChartZone[] | undefined>(series.zones);
+  useEffect(() => {
+    let cancelled = false;
+    if (series.overrideKey) {
+      loadZoneOverride(series.overrideKey).then((z) => {
+        if (!cancelled && z && z.length > 0) setZones(z);
+      }).catch(() => {});
+    } else {
+      setZones(series.zones);
+    }
+    return () => { cancelled = true; };
+  }, [series.overrideKey, series.zones]);
+
   const historical = series.points.map((p) => ({ t: p.t, v: p.v, kind: "hist" as const }));
   const projection = (series.projection ?? []).map((p) => ({ t: p.t, v: p.v, kind: "proj" as const }));
   const band = series.projectionBand;
@@ -64,7 +79,16 @@ export function TrendChart({
   const yDomain: [number, number] = [min - pad, max + pad];
 
   return (
-    <div className="w-full" style={{ height }}>
+    <div className="w-full relative" style={{ height }}>
+      {series.overrideKey && !compact && (
+        <div className="absolute right-0 top-0 z-10">
+          <ZoneEditor
+            overrideKey={series.overrideKey}
+            defaults={zones ?? []}
+            onChange={setZones}
+          />
+        </div>
+      )}
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 4, bottom: compact ? 0 : 14, left: 0 }}>
           <defs>
@@ -74,7 +98,7 @@ export function TrendChart({
             </linearGradient>
           </defs>
 
-          {series.zones?.map((z, i) => (
+          {zones?.map((z, i) => (
             <ReferenceArea
               key={`z-${i}`}
               y1={z.from ?? yDomain[0]}
