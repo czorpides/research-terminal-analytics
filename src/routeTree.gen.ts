@@ -19,6 +19,7 @@ import { Route as AltDataRouteImport } from './routes/alt-data'
 import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SecurityIndexRouteImport } from './routes/security.index'
+import { Route as SecuritySymbolRouteImport } from './routes/security.$symbol'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
@@ -75,6 +76,11 @@ const SecurityIndexRoute = SecurityIndexRouteImport.update({
   path: '/security/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecuritySymbolRoute = SecuritySymbolRouteImport.update({
+  id: '/security/$symbol',
+  path: '/security/$symbol',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
   id: '/api/public/verify/run',
   path: '/api/public/verify/run',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
+  '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
+  '/security/$symbol': typeof SecuritySymbolRoute
   '/security': typeof SecurityIndexRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
+  '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/overvaluation'
     | '/radar'
     | '/screeners'
+    | '/security/$symbol'
     | '/security/'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/stooq'
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/overvaluation'
     | '/radar'
     | '/screeners'
+    | '/security/$symbol'
     | '/security'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/stooq'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/overvaluation'
     | '/radar'
     | '/screeners'
+    | '/security/$symbol'
     | '/security/'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/stooq'
@@ -217,6 +229,7 @@ export interface RootRouteChildren {
   OvervaluationRoute: typeof OvervaluationRoute
   RadarRoute: typeof RadarRoute
   ScreenersRoute: typeof ScreenersRoute
+  SecuritySymbolRoute: typeof SecuritySymbolRoute
   SecurityIndexRoute: typeof SecurityIndexRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
@@ -297,6 +310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SecurityIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/security/$symbol': {
+      id: '/security/$symbol'
+      path: '/security/$symbol'
+      fullPath: '/security/$symbol'
+      preLoaderRoute: typeof SecuritySymbolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/verify/run': {
       id: '/api/public/verify/run'
       path: '/api/public/verify/run'
@@ -345,6 +365,7 @@ const rootRouteChildren: RootRouteChildren = {
   OvervaluationRoute: OvervaluationRoute,
   RadarRoute: RadarRoute,
   ScreenersRoute: ScreenersRoute,
+  SecuritySymbolRoute: SecuritySymbolRoute,
   SecurityIndexRoute: SecurityIndexRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
