@@ -1,113 +1,57 @@
 
-# Phase 1 — Foundation
+# Phase 2 — First live data source: FRED (US macro)
 
-Per the spec: build the database and data-reliability framework before scoring, historical event analysis, or AI. This phase is Prompts 1–3 only. No live data providers, no auth, no scoring yet — those come in later phases we'll do one by one.
+Auth is deferred as agreed. Phase 2 wires the **first real data provider** — the St. Louis Fed's FRED — through the Phase 1 reliability framework and lights up the Macro section with live, auditable numbers. This proves the whole pipeline end-to-end (source → ingestion → `data_points` → panel contract → confidence) on the cheapest, most reliable dataset we can get.
 
-## What this phase delivers
+Also picks up the small change you just asked for: **"Verify next" is now a first-class typed check** with a verifier (algo / api / ai / manual) and a status (pending / pass / fail / stale / unavailable). Every future check plugs into the same shape.
 
-1. Lovable Cloud enabled (Postgres + storage + future auth).
-2. Complete database schema for the whole app (so later phases just fill tables, not migrate them).
-3. Deterministic **data-reliability framework** in code (source hierarchy, freshness rules, confidence penalties) — usable by every future ingester.
-4. App shell with the eight navigation sections (empty placeholders following the universal panel contract).
-5. One reference implementation of the **universal panel contract** — a reusable `<ResearchPanel>` React component that every future panel plugs into.
-6. Seed data so the shell renders something inspectable (mock rows, mock sources) — clearly labeled as mock.
+## What Phase 2 delivers
 
-Auth (email + password + Google), live data ingestion, scoring, event studies, alerts, watchlists, notes/theses, and AI commentary are explicitly **out of scope for Phase 1**.
+1. **FRED integration** — a Tier 1 provider registered in `data_sources`, with an `INGEST_FRED_API_KEY` secret and a resilient fetch client (retries, rate-limit handling, structured errors).
+2. **Ingestion server functions** for a curated starter set of ~12 series (10Y, 2Y, real 10Y, DGS3MO, CPIAUCSL, CPILFESL, UNRATE, PAYEMS, INDPRO, UMCSENT, DFF, T10Y2Y). Each ingestion writes to `economic_releases` + append-only `data_points` with source_id, `as_of`, `ingested_at`, and per-row confidence via `computeConfidence(...)`.
+3. **Ingestion runs logged** in `ingestion_runs` (started/finished/status/rows/error) so Data Health shows real activity.
+4. **Cron scheduling** — a public `POST /api/public/ingest/fred` route (HMAC-signed) plus pg_cron entries kicking each series on its natural cadence (daily for yields, monthly for CPI/UNRATE, etc.).
+5. **Live Macro panels** — Growth pulse, Inflation pulse, Yield-curve monitor, and Release surprise monitor now read `data_points` and populate metrics, evidence rows, positives/deductions, and calculation traces. Confidence is real, not mocked.
+6. **First real verify-next checks** — deterministic algo checks (e.g. "10Y > 60-day MA", "yield-curve inversion holds") and API checks ("next scheduled release within 24h") run against `data_points` and stamp `status` + `checkedAt` on each panel load.
+7. **Data Health section** goes live — Sources table shows FRED with last successful run, freshness, error rate; Ingestion runs list is real; Freshness policies show which categories are currently in-policy.
 
-## Navigation (empty section pages, following the spec's IA)
-
-- `/` Command Centre
-- `/macro` Macroeconomic Environment
-- `/radar` Opportunity Radar
-- `/screeners` Stock / Industry / Commodity / Asset screeners
-- `/history` Historical Event & Sensitivity engine
-- `/alt-data` Alternative Data
-- `/alerts` Alerts
-- `/data-health` Data Health & Model Governance
-
-Each section renders a page header + 2–3 placeholder `<ResearchPanel>` cards with mock content.
-
-## Universal panel contract (built as reusable component)
-
-Every panel — now and forever — renders:
-- Title, one-line purpose
-- Compact body (numbers/mini-viz)
-- **Why this matters** section (what changed, transmission mechanism)
-- **Evidence** list (each item: source, source-tier badge, timestamp, freshness indicator, agree/disagree)
-- **Confidence** meter (0–100 with penalty breakdown on hover)
-- **Positives / Deductions** two-column list (every point traceable)
-- **Verify next** checklist
-- Expand button (opens full detail sheet with same structure at higher fidelity)
-- "Show calculation" drawer scaffold (formula, inputs, version, weights) — empty in Phase 1, wired in the scoring phase
-
-## Data-reliability framework (code, not UI)
-
-`src/lib/reliability/` module implementing:
-- **Source hierarchy tiers** (Tier 1 official/exchange, Tier 2 regulated aggregator, Tier 3 reputable secondary, Tier 4 alternative/social) — enum + weights table.
-- **Freshness policy** per data category (macro release, price, fundamentals, news, alt) — max-age → freshness score 0–1.
-- **Confidence penalty function** — takes (source tier, freshness, cross-source agreement, missing fields) → confidence 0–100 and structured breakdown of every deduction.
-- **Calculation-version stamping** helper — every derived value carries `calc_version` + `computed_at` + inputs hash.
-
-Pure functions with unit-test-friendly signatures. No provider calls yet.
-
-## Design direction
-
-Dense-instrument look inspired by pro research terminals: neutral dark surface, monospaced numbers, precise typography, semantic status colors (positive/negative/neutral/warning), tight grids. Not a "wellness dashboard" and not a black-box AI product — the aesthetic should read as auditable and technical. I'll ask you to pick a palette + typography direction as the first build step so we're not defaulting to generic SaaS blue.
+Out of scope (later phases): auth, equity prices, fundamentals, news, scoring, opportunity radar, historical event engine, alerts, alt-data, AI commentary.
 
 ## Technical details
 
-**Stack**: TanStack Start (existing) + Lovable Cloud (Supabase Postgres) + Tailwind v4 + shadcn.
+**Secret**: `INGEST_FRED_API_KEY` — requested via the secret tool at the start of the phase. Free from fred.stlouisfed.org (you register, paste the key, we store it server-side).
 
-**Schema (initial migration)** — every table gets grants + RLS enabled; owner-only policies stubbed for when auth lands:
+**New files**
+- `src/lib/ingestion/fred/client.server.ts` — typed FRED client (`fetchSeriesObservations`, `fetchSeriesMeta`) with retry + 429 backoff.
+- `src/lib/ingestion/fred/series.ts` — curated series catalog (code, indicator_id, category, cadence).
+- `src/lib/ingestion/fred/ingest.functions.ts` — `ingestFredSeries({ seriesId })` server function: fetch → diff against last `as_of` → insert new `data_points` + `economic_releases` → close `ingestion_runs` row.
+- `src/routes/api/public/ingest/fred.ts` — public HMAC-verified endpoint that fans out to `ingestFredSeries` for scheduled series; also supports `?series=DGS10` for manual runs.
+- `src/lib/panels/macro.functions.ts` — server functions reading `data_points` for each Macro panel and returning `PanelData` with real evidence and confidence.
+- `src/lib/verify/checks.ts` + `src/lib/verify/runners.server.ts` — deterministic algo/API verify-check runners; each returns `VerifyCheck` results the panels attach.
+- `src/routes/data-health.tsx` — rewritten to read `data_sources`, `ingestion_runs`, `source_freshness_policies` live.
+- `src/routes/macro.tsx` — swap from mocks to server-function-loaded panels.
 
-Reference / catalogue
-- `assets` (id, symbol, name, asset_class, country, currency, industry_id, exchange, active)
-- `industries` (id, code, name, parent_id) — GICS-shaped
-- `countries` (id, iso2, name, region)
-- `commodities` (id, code, name, unit)
-- `factors` (id, code, name) — value/momentum/quality/etc.
-- `economic_indicators` (id, code, name, country_id, frequency, unit)
+**New migration**
+- Insert `economic_indicators` rows for the ~12 series, mapped to the FRED series codes.
+- `source_freshness_policies` rows for `macro_release_daily`, `macro_release_monthly`, `macro_release_intraday`.
+- pg_cron schedule rows calling the public ingestion endpoint on cadence.
 
-Sources & reliability
-- `data_sources` (id, name, tier, base_url, api_docs_url, notes, active)
-- `source_freshness_policies` (id, data_category, max_age_seconds, warn_age_seconds)
-- `ingestion_runs` (id, source_id, started_at, finished_at, status, rows_ingested, error)
-- `data_points` (id, subject_type, subject_id, metric_code, value_num, value_text, as_of, source_id, ingested_at, confidence, penalties jsonb, raw jsonb) — the append-only fact table every panel reads through
-
-Market data (schemas only, empty)
-- `prices_daily`, `prices_intraday`, `fundamentals_quarterly`, `fundamentals_annual`, `earnings_events`, `economic_releases`, `news_items`, `commodity_prices`, `fx_rates`, `alt_data_signals`
-
-Analytics layer (schemas only)
-- `scores` (id, subject_type, subject_id, score_type, value, calc_version, computed_at, inputs jsonb, weights jsonb, positives jsonb, deductions jsonb, confidence)
-- `event_study_results`, `regime_classifications`, `sensitivity_matrix`
-
-User layer (schemas only, ready for auth)
-- `watchlists`, `watchlist_items`, `research_notes`, `theses`, `thesis_evidence`, `alerts`, `alert_rules`
-
-**Panel contract types**: `src/lib/panels/contract.ts` exports the `PanelData` TypeScript interface every panel must satisfy (evidence, positives, deductions, confidence breakdown, verify-next). Every future panel is a component that takes `PanelData` and renders through `<ResearchPanel>`.
-
-**Server functions**: `getPanelMock(section)` in `src/lib/panels/panels.functions.ts` returns hardcoded shaped-correct mock data so the UI renders end-to-end without providers.
-
-**Files created**
-- `supabase/migrations/<ts>_phase1_foundation.sql`
-- `src/lib/reliability/{tiers,freshness,confidence,version}.ts`
-- `src/lib/panels/{contract.ts,panels.functions.ts}`
-- `src/components/research/{ResearchPanel,EvidenceList,ConfidenceMeter,PositivesDeductions,VerifyNext,CalculationDrawer}.tsx`
-- `src/components/layout/{AppShell,SideNav,SectionHeader}.tsx`
-- `src/routes/index.tsx` (Command Centre, replaces placeholder)
-- `src/routes/{macro,radar,screeners,history,alt-data,alerts,data-health}.tsx`
-- Update `src/routes/__root.tsx` head with app-specific title/description
+**Panel data shape**
+Macro panels now return `PanelData` with:
+- `metrics` from the latest `data_points`,
+- `evidence` = the source rows used (with FRED tier badge and real `as_of`),
+- `positives`/`deductions` from small deterministic classifier functions,
+- `verifyNext` populated by algo/api runners with real `status` + `checkedAt`,
+- `calculation` stamped via `stampCalculation(...)` so every value is traceable.
 
 ## Verification before hand-off
 
 - `bun run build` passes.
-- Every route renders 2–3 placeholder panels with visible evidence / confidence / positives / deductions / verify-next.
-- Reliability helpers have inline example calls demonstrating a confidence deduction.
-- Migration includes grants + RLS on every public table.
-- Data Health page lists the (empty) `data_sources` and `ingestion_runs` tables and the freshness policies in effect.
+- With `INGEST_FRED_API_KEY` set, hitting `POST /api/public/ingest/fred?series=DGS10` inserts rows into `data_points` and closes an `ingestion_runs` row with `status='success'`.
+- `/macro` renders 3–4 panels with real numbers, real timestamps, T1 FRED evidence rows, non-zero confidence, and at least one verify-check flipped from "pending" to "pass" or "fail".
+- `/data-health` shows FRED as active with a recent successful run and rows_ingested > 0.
+- Killing the API key and re-running shows an `ingestion_runs` row with `status='error'`, and Macro panels degrade to lower confidence with a visible penalty — no crash.
 
-## After Phase 1 (not now — one-by-one with your input)
+## What to prepare on your side
 
-Phase 2: Auth (email + password + Google) + owner role gate on Data Health / admin screens.
-Phase 3: First live source (FRED macro is the easiest place to start) wired through the reliability framework into the Macroeconomic Environment panels.
-Then: equity prices → fundamentals → news → deterministic scoring → Opportunity Radar → screeners → historical event engine → alerts → alt-data → AI commentary layer (last).
+Get a free FRED API key at https://fredaccount.stlouisfed.org/apikeys (takes ~1 minute) and paste it when I ask — I'll store it as `INGEST_FRED_API_KEY` server-side.
