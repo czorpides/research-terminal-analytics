@@ -1,0 +1,1 @@
+DELETE FROM public.ingestion_runs WHERE status='failed' AND (error LIKE '%HTTP 402%' OR error LIKE '%HTTP 429%') AND started_at > now() - interval '2 days';

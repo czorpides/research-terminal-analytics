@@ -1,0 +1,1 @@
+UPDATE public.provider_quotas SET disabled_until = NULL WHERE quota_date = CURRENT_DATE AND provider_code IN ('tiingo','alphavantage','twelvedata');

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { FUNDAMENTAL_METRICS } from "./metrics";
+import { canUse, recordCall } from "@/lib/ingestion/providers/quota.server";
 
 export interface FundamentalsIngestResult {
   status: "success" | "failed" | "skipped";
@@ -8,6 +9,7 @@ export interface FundamentalsIngestResult {
   rowsInserted: number;
   values?: Record<string, number | null>;
   error?: string;
+  reason?: string;
 }
 
 interface FmpKeyMetrics {
@@ -32,10 +34,17 @@ interface FmpProfile {
   beta?: number;
 }
 
+class FmpQuotaError extends Error { constructor(msg: string) { super(msg); this.name = "FmpQuotaError"; } }
+
 async function fmp<T>(endpoint: string, symbol: string, apiKey: string): Promise<T[] | null> {
   const url = `https://financialmodelingprep.com/stable/${endpoint}?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
   const res = await fetch(url);
+  if (res.status === 429 || res.status === 402) {
+    await recordCall("fmp", "rate_limit", `${endpoint} HTTP ${res.status}`);
+    throw new FmpQuotaError(`FMP quota exhausted (${res.status})`);
+  }
   if (!res.ok) throw new Error(`FMP ${endpoint} HTTP ${res.status}`);
+  await recordCall("fmp", "ok");
   const j = (await res.json()) as unknown;
   if (!Array.isArray(j)) return null;
   return j as T[];
@@ -60,6 +69,13 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
     .select("id").eq("provider_code", "fmp").maybeSingle();
   const sourceId = (source?.id as string | undefined) ?? null;
 
+  // Quota gate — reserve 3 calls (profile + key-metrics + ratios). Skip cleanly without
+  // creating a failed ingestion_runs row so Data Health reflects reality.
+  const gate = await canUse("fmp", 250, 3);
+  if (!gate.ok) {
+    return { status: "skipped", symbol, runId: "", rowsInserted: 0, reason: gate.reason };
+  }
+
   const { data: run } = await supabaseAdmin.from("ingestion_runs").insert({
     source_id: sourceId ?? asset.id, data_category: "fundamentals",
     status: "running", details: { symbol, category: "fundamentals" },
@@ -67,11 +83,10 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
   const runId = run!.id as string;
 
   try {
-    const [km, ra, pr] = await Promise.all([
-      fmp<FmpKeyMetrics>("key-metrics-ttm", symbol, apiKey),
-      fmp<FmpRatios>("ratios-ttm", symbol, apiKey),
-      fmp<FmpProfile>("profile", symbol, apiKey),
-    ]);
+    // Serialize — the free tier rate-limits parallel calls aggressively.
+    const km = await fmp<FmpKeyMetrics>("key-metrics-ttm", symbol, apiKey);
+    const ra = await fmp<FmpRatios>("ratios-ttm", symbol, apiKey);
+    const pr = await fmp<FmpProfile>("profile", symbol, apiKey);
     const k = km?.[0] ?? {};
     const r = ra?.[0] ?? {};
     const p = pr?.[0] ?? {};
@@ -127,6 +142,14 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
 
     return { status: "success", symbol, runId, rowsInserted: rows.length, values };
   } catch (e) {
+    if (e instanceof FmpQuotaError) {
+      // Convert to skipped — this isn't a data failure, it's the free tier resetting tomorrow.
+      await supabaseAdmin.from("ingestion_runs").update({
+        status: "skipped" as unknown as "failed", finished_at: new Date().toISOString(),
+        error: (e as Error).message,
+      }).eq("id", runId);
+      return { status: "skipped", symbol, runId, rowsInserted: 0, reason: (e as Error).message };
+    }
     await supabaseAdmin.from("ingestion_runs").update({
       status: "failed", finished_at: new Date().toISOString(), error: (e as Error).message,
     }).eq("id", runId);
@@ -142,10 +165,16 @@ export async function runAllFundamentalsIngest(opts: { symbols?: string[] } = {}
   }
   const out: FundamentalsIngestResult[] = [];
   for (const s of syms) {
+    // Short-circuit the whole run once FMP quota is exhausted.
+    const gate = await canUse("fmp", 250, 3);
+    if (!gate.ok) {
+      out.push({ status: "skipped", symbol: s, runId: "", rowsInserted: 0, reason: gate.reason });
+      continue;
+    }
     try { out.push(await runFundamentalsIngest(s)); }
     catch (e) { out.push({ status: "failed", symbol: s, runId: "", rowsInserted: 0, error: (e as Error).message }); }
-    // Pace FMP calls (~4/sec well under free-tier).
-    await new Promise((r) => setTimeout(r, 250));
+    // Free tier throttles hard — pace conservatively (~1/sec, 3 endpoints each).
+    await new Promise((r) => setTimeout(r, 1000));
   }
   return out;
 }

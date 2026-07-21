@@ -25,7 +25,7 @@ export const fmp: PriceProvider = {
     url.searchParams.set("apikey", key);
     const res = await fetch(url.toString());
     if (res.status === 401 || res.status === 403) throw new ProviderError("auth", "auth", res.status);
-    if (res.status === 429) throw new ProviderError("rate", "rate_limit", 429);
+    if (res.status === 429 || res.status === 402) throw new ProviderError("rate", "rate_limit", res.status);
     if (!res.ok) throw new ProviderError(`HTTP ${res.status}`, "bad_response", res.status);
     const j = await res.json() as unknown;
     const arr = Array.isArray(j)
