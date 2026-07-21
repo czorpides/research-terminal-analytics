@@ -17,6 +17,7 @@ import { Route as DataHealthRouteImport } from './routes/data-health'
 import { Route as AltDataRouteImport } from './routes/alt-data'
 import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
 
 const ScreenersRoute = ScreenersRouteImport.update({
@@ -59,6 +60,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
+  id: '/api/public/verify/run',
+  path: '/api/public/verify/run',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicIngestFredRoute = ApiPublicIngestFredRouteImport.update({
   id: '/api/public/ingest/fred',
   path: '/api/public/ingest/fred',
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +106,7 @@ export interface FileRoutesById {
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
+    | '/api/public/verify/run'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
+    | '/api/public/verify/run'
   id:
     | '__root__'
     | '/'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
+    | '/api/public/verify/run'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -145,6 +157,7 @@ export interface RootRouteChildren {
   RadarRoute: typeof RadarRoute
   ScreenersRoute: typeof ScreenersRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
+  ApiPublicVerifyRunRoute: typeof ApiPublicVerifyRunRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/verify/run': {
+      id: '/api/public/verify/run'
+      path: '/api/public/verify/run'
+      fullPath: '/api/public/verify/run'
+      preLoaderRoute: typeof ApiPublicVerifyRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/fred': {
       id: '/api/public/ingest/fred'
       path: '/api/public/ingest/fred'
@@ -225,6 +245,7 @@ const rootRouteChildren: RootRouteChildren = {
   RadarRoute: RadarRoute,
   ScreenersRoute: ScreenersRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
+  ApiPublicVerifyRunRoute: ApiPublicVerifyRunRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

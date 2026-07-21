@@ -5,8 +5,11 @@ import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { SOURCE_TIER_META } from "@/lib/reliability/tiers";
 import { DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
-import { getDataHealthOverview } from "@/lib/panels/data-health.functions";
+import { getDataHealthOverview, triggerVerifierRun } from "@/lib/panels/data-health.functions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 export const Route = createFileRoute("/data-health")({
   head: () => ({ meta: [
@@ -18,7 +21,16 @@ export const Route = createFileRoute("/data-health")({
 
 function DataHealth() {
   const fetchOverview = useServerFn(getDataHealthOverview);
+  const runVerifier = useServerFn(triggerVerifierRun);
+  const qc = useQueryClient();
+  const [running, setRunning] = useState(false);
   const { data } = useQuery({ queryKey: ["data-health"], queryFn: () => fetchOverview(), refetchOnWindowFocus: false });
+
+  async function onRun() {
+    setRunning(true);
+    try { await runVerifier({ data: {} }); await qc.invalidateQueries({ queryKey: ["data-health"] }); }
+    finally { setRunning(false); }
+  }
 
   return (
     <AppShell>
@@ -88,6 +100,56 @@ function DataHealth() {
               </tr>
             ))}
             {data && data.recentRuns.length === 0 && <tr><td colSpan={6} className="py-2 text-muted-foreground">No runs recorded yet.</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="mb-6 rounded-md border border-border/70 bg-card/60 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            Verifier audit trail · latest 25 runs
+          </h2>
+          <Button size="sm" variant="outline" className="h-7 text-[10px] uppercase tracking-wider" disabled={running} onClick={onRun}>
+            {running ? "Running…" : "Run verifier now"}
+          </Button>
+        </div>
+        <table className="w-full text-xs">
+          <thead className="text-[10px] uppercase text-muted-foreground">
+            <tr className="border-b border-border/60">
+              <th className="py-1 text-left">Started</th>
+              <th className="text-left">Panel</th>
+              <th className="text-left">Check</th>
+              <th className="text-left">Verifier</th>
+              <th className="text-left">Status</th>
+              <th className="text-left">Trigger</th>
+              <th className="text-left">Runner</th>
+              <th className="text-left">Calc ver</th>
+              <th className="text-right">Conf</th>
+              <th className="text-right">ms</th>
+              <th className="text-left">Detail</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono">
+            {(data?.verifyRuns ?? []).map((r) => (
+              <tr key={r.id} className="border-b border-border/40 last:border-b-0">
+                <td className="py-1 pr-2 text-muted-foreground">{new Date(r.startedAt).toLocaleString()}</td>
+                <td className="pr-2">{r.panelId}</td>
+                <td className="pr-2 text-muted-foreground truncate max-w-[14rem]">{r.checkId}</td>
+                <td className="pr-2"><Badge variant="outline" className="text-[10px] uppercase">{r.verifier}</Badge></td>
+                <td className="pr-2">
+                  <span className={r.status === "pass" ? "text-[var(--positive)]" : r.status === "fail" || r.status === "stale" ? "text-[var(--negative)]" : "text-[var(--warning)]"}>
+                    {r.status}
+                  </span>
+                </td>
+                <td className="pr-2 text-muted-foreground">{r.trigger ?? "—"}</td>
+                <td className="pr-2 text-muted-foreground">{r.runnerKey ?? "—"}</td>
+                <td className="pr-2 text-muted-foreground">{r.calcVersion ?? "—"}</td>
+                <td className="text-right tabular-nums">{r.confidence !== null ? r.confidence.toFixed(2) : "—"}</td>
+                <td className="text-right tabular-nums text-muted-foreground">{r.durationMs ?? "—"}</td>
+                <td className="pr-2 text-muted-foreground truncate max-w-[18rem]">{r.detail ?? ""}</td>
+              </tr>
+            ))}
+            {data && data.verifyRuns.length === 0 && <tr><td colSpan={11} className="py-2 text-muted-foreground">No verification runs yet — click "Run verifier now" or wait for the 30-minute cron.</td></tr>}
           </tbody>
         </table>
       </section>

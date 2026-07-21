@@ -22,15 +22,34 @@ export interface RunRow {
   error: string | null;
 }
 
+export interface VerifyRunRow {
+  id: string;
+  checkId: string;
+  panelId: string;
+  verifier: string;
+  status: string;
+  detail: string | null;
+  runnerKey: string | null;
+  calcVersion: string | null;
+  trigger: string | null;
+  confidence: number | null;
+  startedAt: string;
+  durationMs: number | null;
+}
+
 export const getDataHealthOverview = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const [{ data: sources }, { data: runs }] = await Promise.all([
+  const [{ data: sources }, { data: runs }, { data: vruns }] = await Promise.all([
     supabaseAdmin.from("data_sources").select("id, name, tier, provider_code, active").order("name"),
     supabaseAdmin.from("ingestion_runs")
       .select("id, source_id, status, data_category, started_at, finished_at, rows_ingested, error")
       .order("started_at", { ascending: false })
       .limit(20),
+    supabaseAdmin.from("verify_runs")
+      .select("id, check_id, panel_id, verifier, status, detail, runner_key, calc_version, trigger_source, confidence, started_at, duration_ms")
+      .order("started_at", { ascending: false })
+      .limit(25),
   ]);
 
   const sourceMap = new Map((sources ?? []).map((s) => [s.id as string, s]));
@@ -84,5 +103,30 @@ export const getDataHealthOverview = createServerFn({ method: "GET" }).handler(a
     error: (r.error as string | null) ?? null,
   }));
 
-  return { sources: sourceRows, recentRuns };
+  const verifyRuns: VerifyRunRow[] = (vruns ?? []).map((r) => ({
+    id: r.id as string,
+    checkId: r.check_id as string,
+    panelId: r.panel_id as string,
+    verifier: r.verifier as string,
+    status: r.status as string,
+    detail: (r.detail as string | null) ?? null,
+    runnerKey: (r.runner_key as string | null) ?? null,
+    calcVersion: (r.calc_version as string | null) ?? null,
+    trigger: (r.trigger_source as string | null) ?? null,
+    confidence: (r.confidence as number | null) ?? null,
+    startedAt: r.started_at as string,
+    durationMs: (r.duration_ms as number | null) ?? null,
+  }));
+
+  return { sources: sourceRows, recentRuns, verifyRuns };
 });
+
+export const triggerVerifierRun = createServerFn({ method: "POST" })
+  .inputValidator((input: { panelId?: string } | undefined) => input ?? {})
+  .handler(async ({ data }) => {
+    const { runVerificationForPanel, runAllVerifications } = await import("@/lib/verify/executor.server");
+    const results = data.panelId
+      ? await runVerificationForPanel(data.panelId, "manual")
+      : await runAllVerifications("manual");
+    return { ok: true, count: results.length };
+  });

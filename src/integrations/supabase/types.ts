@@ -1214,6 +1214,116 @@ export type Database = {
           },
         ]
       }
+      verify_check_definitions: {
+        Row: {
+          active: boolean
+          config: Json
+          created_at: string
+          id: string
+          label: string
+          max_age_seconds: number
+          min_confidence: number
+          panel_id: string
+          required_series: string[]
+          runner_key: string
+          updated_at: string
+          verifier_chain: string[]
+        }
+        Insert: {
+          active?: boolean
+          config?: Json
+          created_at?: string
+          id: string
+          label: string
+          max_age_seconds?: number
+          min_confidence?: number
+          panel_id: string
+          required_series?: string[]
+          runner_key: string
+          updated_at?: string
+          verifier_chain?: string[]
+        }
+        Update: {
+          active?: boolean
+          config?: Json
+          created_at?: string
+          id?: string
+          label?: string
+          max_age_seconds?: number
+          min_confidence?: number
+          panel_id?: string
+          required_series?: string[]
+          runner_key?: string
+          updated_at?: string
+          verifier_chain?: string[]
+        }
+        Relationships: []
+      }
+      verify_runs: {
+        Row: {
+          calc_version: string | null
+          check_id: string
+          confidence: number | null
+          detail: string | null
+          duration_ms: number | null
+          error: string | null
+          evidence: Json
+          finished_at: string | null
+          id: string
+          inputs: Json
+          panel_id: string
+          runner_key: string | null
+          started_at: string
+          status: string
+          trigger_source: string | null
+          verifier: string
+        }
+        Insert: {
+          calc_version?: string | null
+          check_id: string
+          confidence?: number | null
+          detail?: string | null
+          duration_ms?: number | null
+          error?: string | null
+          evidence?: Json
+          finished_at?: string | null
+          id?: string
+          inputs?: Json
+          panel_id: string
+          runner_key?: string | null
+          started_at?: string
+          status: string
+          trigger_source?: string | null
+          verifier: string
+        }
+        Update: {
+          calc_version?: string | null
+          check_id?: string
+          confidence?: number | null
+          detail?: string | null
+          duration_ms?: number | null
+          error?: string | null
+          evidence?: Json
+          finished_at?: string | null
+          id?: string
+          inputs?: Json
+          panel_id?: string
+          runner_key?: string | null
+          started_at?: string
+          status?: string
+          trigger_source?: string | null
+          verifier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verify_runs_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "verify_check_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       watchlist_items: {
         Row: {
           added_at: string
