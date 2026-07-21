@@ -99,8 +99,8 @@ async function runIngest(seriesCode: string): Promise<{ status: "success" | "par
         as_of: asOf.toISOString(),
         source_id: source.id,
         confidence: c.value,
-        penalties: c.penalties,
-        raw: { date: o.date, value: o.value, realtime_start: o.realtime_start, realtime_end: o.realtime_end },
+        penalties: c.penalties as unknown as Record<string, unknown>[],
+        raw: { date: o.date, value: o.value, realtime_start: o.realtime_start, realtime_end: o.realtime_end } as Record<string, unknown>,
       };
     });
 
