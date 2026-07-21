@@ -1,56 +1,51 @@
-# Phase 3 — Equity universe, daily prices, and the first real scores
+## Scope for this prompt
 
-Phase 1 laid the foundation. Phase 2 proved the ingestion → reliability → verify pipeline works end-to-end on FRED macro data. Phase 3 extends that same pipeline to **equities**: a curated asset universe, daily prices, and the first deterministic scores that light up the Opportunity Radar and Screeners sections with real, auditable numbers.
+Finish the small remaining pieces of Prompts 4 + 8, then build **Prompt 5 — Command Centre synthesis** as the major new area. Deliberately deferring the big items (fundamentals/valuation scoring, broad AI commentary, security master deep-dive) so quality stays high.
 
-We stay on free, reliable data (Stooq for daily EOD prices — no key, no rate-limit drama) so we can prove the pattern before paying for anything. Fundamentals, intraday, and news come in later phases.
+---
 
-## What Phase 3 delivers
+### 1. Finish Prompt 4 — Equity data pool (minor)
 
-1. **Curated equity universe** — seed ~50–100 liquid US tickers (large-cap + a few ETFs like SPY/QQQ/IWM) into `assets`, linked to industries and countries. This becomes the working set for radar/screeners.
-2. **Stooq price ingestion (Tier 2 source)** — a resilient server-side client that fetches daily OHLCV per ticker, appends to `prices_daily` with per-row confidence, and logs to `ingestion_runs`. Cron runs after US close.
-3. **Deterministic scoring engine** — first three scores computed from `prices_daily` only (no fundamentals yet):
-   - **Momentum** (12-1 month return, risk-adjusted)
-   - **Trend** (price vs 50/200 MA, MA slope)
-   - **Volatility regime** (realised vol vs 1y median, drawdown from 52w high)
-   Every score is stamped with `calc_version`, inputs, and a confidence penalty from missing/stale data.
-4. **Opportunity Radar goes live** — the `/radar` page reads real scores, ranks the universe, and renders one `ResearchPanel` per top candidate with metrics, evidence rows (Tier 2 Stooq), positives/deductions, and an auto-verify chain (e.g. "trend up on both 50 and 200 MA", "price within 5% of 52w high").
-5. **Screeners v1** — the `/screeners` page gets 3 saved deterministic screens: "Momentum leaders", "Oversold quality", "Fresh 52w highs on volume". Each row is a live scored asset with a confidence badge.
-6. **Verify chain extended to equities** — new `verify_check_definitions` for the price-based checks; the existing algo → api → AI executor runs them on ingest and on the 30-min cron.
-7. **Data Health picks up the new source** — Stooq appears alongside FRED with its own freshness policy, run history, and error rate.
+- Repoint the ingestion pipeline from Stooq (blocked by anti-bot) to the provider pool via `fetchWithFailover`, keeping the existing `prices_daily` schema and quality gate.
+- Kick off the first backfill for the seeded ~65 US assets (Tiingo primary → Twelve Data → FMP failover), with cross-verification on the latest close.
+- Immediately run the scoring job so Radar and Screeners show live data.
+- Update the Stooq cron to call the new multi-provider entry point (keep name for continuity).
 
-Out of scope for Phase 3 (still later): auth, fundamentals, intraday, news, alerts firing, alt-data, historical event engine, thesis workflow, Command Centre synthesis.
+### 2. Finish Prompt 8 — Overvaluation Radar (minor)
 
-## Technical details
+- Add a symmetric `/overvaluation` route using the existing scoring outputs (inverted momentum + volatility + extreme trend deviation).
+- Reuse `PanelGrid` + universal panel contract; every candidate ships with visible positives/deductions and verify-next chain — same discipline as Opportunity Radar.
+- Add nav entry.
 
-**New source**: Stooq daily CSV (`https://stooq.com/q/d/l/?s=<ticker>.us&i=d`) — no API key, Tier 2 (public aggregator).
+### 3. Prompt 5 — Command Centre synthesis (major)
 
-**New files**
-- `src/lib/ingestion/stooq/client.server.ts` — CSV fetcher with retry, UA header, empty-response detection.
-- `src/lib/ingestion/stooq/universe.ts` — curated ticker list with industry/country mapping.
-- `src/lib/ingestion/stooq/ingest.server.ts` + `ingest.functions.ts` — per-ticker ingest, diff against last `as_of`, append to `prices_daily`, close `ingestion_runs`, trigger verify.
-- `src/routes/api/public/ingest/stooq.ts` — public anon-key endpoint (`?ticker=AAPL` or full-universe run).
-- `src/lib/scoring/momentum.server.ts`, `trend.server.ts`, `volatility.server.ts` — pure deterministic functions taking a price series and returning `{ value, inputs, calcVersion, confidencePenalties }`.
-- `src/lib/scoring/run.server.ts` + `run.functions.ts` — scores every asset in the universe, upserts into `scores` with `as_of`, `calc_version`, `confidence`.
-- `src/lib/panels/radar.functions.ts` — top-N ranked panels for `/radar`.
-- `src/lib/panels/screeners.functions.ts` — three saved screens.
-- `src/routes/radar.tsx`, `src/routes/screeners.tsx` — swap mocks for live queries.
+The Command Centre is the "one screen that answers *what deserves attention right now*". Build it as composed panels, each satisfying the universal contract:
 
-**New migration**
-- Insert `data_sources` row for Stooq (Tier 2, `provider_code='stooq'`).
-- Insert `source_freshness_policies` for `equity_price_daily`.
-- Seed ~50–100 `assets` rows + link to `industries`.
-- Add `verify_check_definitions` for the new equity checks (trend, MA cross, 52w-high proximity, vol regime).
-- pg_cron: `stooq-daily-ingest` at 22:30 UTC (after US close) and `scores-daily-recompute` at 23:00 UTC.
+- **Regime panel** — current macro regime read (yield curve sign, inflation trend, unemployment trend) sourced from live FRED data + verify_runs.
+- **Top opportunities** — top 5 from Opportunity Radar with score, confidence, freshness.
+- **Top overvaluation risks** — top 5 from the new Overvaluation Radar.
+- **Data health summary** — count of stale/failed sources, latest verifier runs, provider quota status.
+- **Verifier activity** — most recent `verify_runs` across all panels (algo/api/ai badges).
+- **What changed today** — deterministic diff: new score entries, freshness state transitions, verifier status flips vs previous day.
 
-## Verification before hand-off
+All panels are read-only aggregations over existing tables (`scores`, `verify_runs`, `data_points`, `ingestion_runs`, `provider_quotas`). No new scoring math, no AI narrative — pure synthesis with full audit trail. The existing `/` route becomes the Command Centre.
 
-- `bun run build` passes.
-- Hitting `POST /api/public/ingest/stooq?ticker=AAPL` inserts rows into `prices_daily` and closes an `ingestion_runs` row with `status='success'`.
-- The scoring runner produces `scores` rows for every asset with non-null `confidence` and a `calc_version` stamp.
-- `/radar` renders at least 10 ranked panels with real metrics, Tier 2 Stooq evidence rows, and at least one verify check that has flipped from pending to pass/fail.
-- `/screeners` shows the three screens with live ranked rows.
-- `/data-health` shows Stooq as active with a recent successful run and rows_ingested > 0, and the Verifier audit trail includes equity-check runs.
+---
 
-## What to prepare on your side
+### Explicitly out of scope (next prompts)
 
-Nothing — Stooq needs no key. Just approve the plan and I'll ship it.
+- Fundamentals / valuation / catalyst scoring (Prompt 7 rest)
+- Security Master deep-dive pages (Prompt 6)
+- Historical Event Engine (Prompt 9)
+- Alternative data ingestion (Prompt 10)
+- Broad AI commentary beyond existing verifier (Prompt 11 rest)
+- Alert firing engine (Prompt 12)
+
+### Technical notes
+
+- New server function `getCommandCentrePanels` in `src/lib/panels/command-centre.functions.ts`, mirroring `radar.functions.ts` shape.
+- Multi-provider ingest lives in `src/lib/ingestion/equities/ingest.server.ts` (keeps Stooq module intact but unused).
+- Backfill triggered via existing `/api/public/ingest/stooq` endpoint repointed, or a new `/api/public/ingest/equities` alias — will pick during implementation to avoid breaking cron.
+- Overvaluation scoring reuses existing score rows; no new `scores.score_type`, just a different ranking view.
+
+Ready to build on your go.
