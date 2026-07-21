@@ -109,7 +109,8 @@ async function runIngest(seriesCode: string): Promise<{ status: "success" | "par
     let inserted = 0;
     for (let i = 0; i < rows.length; i += BATCH) {
       const chunk = rows.slice(i, i + BATCH);
-      const { error } = await supabaseAdmin.from("data_points").insert(chunk);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await supabaseAdmin.from("data_points").insert(chunk as any);
       if (error) throw error;
       inserted += chunk.length;
     }
