@@ -185,13 +185,88 @@ function placeholder(): PanelData[] {
     title: "Undervaluation Radar",
     purpose: "Stable weekly watchlist of value candidates — cheap on fundamentals, not falling knives.",
     metrics: [{ label: "On watchlist", value: "0" }],
-    whatChanged: "Watchlist is empty. Run the weekly refresh: POST /api/public/radars/undervaluation/refresh.",
-    whyItMatters: "Weekly cadence keeps the list stable — no daily churn.",
+    whatChanged: "Watchlist is currently empty.",
+    whyItMatters: "No assets currently meet the deterministic undervaluation criteria.",
+    whyBullets: [
+      "No asset scores a UV composite ≥ 60 (valuation × 0.5 + quality × 0.3 + trend × 0.2).",
+      "Either the equity universe hasn't been fully scored yet, or the current tape is broadly expensive vs. fundamentals.",
+      "Weekly refresh cadence keeps the list stable — new names only enter when they clearly qualify.",
+      "Trigger a manual refresh: POST /api/public/radars/undervaluation/refresh.",
+    ],
     evidence: [], positives: [],
-    deductions: [{ id: "empty", label: "No qualifying assets yet." }],
+    deductions: [{ id: "empty", label: "No qualifying assets — universe scored above the entry threshold." }],
     verifyNext: [],
     confidence: { value: 0, penalties: [{ code: "no_data", points: 100, reason: "Watchlist empty." }] },
   }];
+}
+
+/**
+ * Deterministic AI cross-check row. Aggregates the algo/api results and
+ * marks the AI check pass/fail based on their coherence — no LLM call at
+ * render time. The full AI thesis layer will replace `detail` later.
+ */
+export function aiCoherenceCheck(prior: VerifyCheck[], evidenceSummary: string): VerifyCheck {
+  const fails = prior.filter((v) => v.status === "fail").length;
+  const passes = prior.filter((v) => v.status === "pass").length;
+  const stales = prior.filter((v) => v.status === "stale").length;
+  const status: VerifyCheck["status"] =
+    fails > 0 ? "fail" : stales > 0 ? "stale" : passes > 0 ? "pass" : "unavailable";
+  return {
+    id: "v-ai-crosscheck",
+    label: "AI: cross-check algo & API results",
+    verifier: "ai",
+    status,
+    detail: `${passes} pass · ${fails} fail · ${stales} stale across upstream checks. ${evidenceSummary}.`,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Build 4–5 forward-looking research bullets for a radar panel. Deterministic:
+ * derived from score component bag, current catalysts, and their reasoning.
+ */
+export function buildWhyBullets(
+  kind: "under" | "over",
+  ctx: { symbol: string; bag: Record<string, { value: number; positives: Point[]; deductions: Point[] }>; catalysts: Catalyst[]; lastScore?: number; daysOnList?: number },
+): string[] {
+  const bullets: string[] = [];
+  const val = ctx.bag["valuation"]?.value;
+  const qua = ctx.bag["quality"]?.value;
+  const trn = ctx.bag["trend"]?.value;
+  const mom = ctx.bag["momentum"]?.value;
+  const vol = ctx.bag["volatility"]?.value;
+
+  if (kind === "under") {
+    if (val != null && val >= 60) bullets.push(`Valuation percentile ${val.toFixed(0)}/100 — cheap vs. industry peers on the composite multiple stack.`);
+    if (qua != null && qua >= 55) bullets.push(`Quality holding at ${qua.toFixed(0)}/100 — earnings/margin durability supports the value case rather than signalling a trap.`);
+    if (trn != null && trn < 45) bullets.push(`Trend still weak (${trn.toFixed(0)}/100) — confirm the price is basing before assuming re-rating has started.`);
+  } else {
+    if (mom != null && mom < 40) bullets.push(`Momentum fading at ${mom.toFixed(0)}/100 — recent returns are decelerating relative to the universe.`);
+    if (trn != null && trn < 40) bullets.push(`Price sitting below trend anchors (trend ${trn.toFixed(0)}/100) — regime has flipped from support to resistance.`);
+    if (vol != null && vol > 60) bullets.push(`Volatility regime elevated (${vol.toFixed(0)}/100) — drawdowns amplify each incremental miss.`);
+    if (val != null && val < 40) bullets.push(`Rich on valuation (${val.toFixed(0)}/100) — multiple compression risk if growth slows.`);
+  }
+
+  const tailwinds = ctx.catalysts.filter((c) => c.direction === "tailwind");
+  const pressures = ctx.catalysts.filter((c) => c.direction === "pressure");
+  const relevant = kind === "under" ? [...tailwinds, ...pressures] : [...pressures, ...tailwinds];
+  for (const c of relevant.slice(0, 2)) {
+    const arrow = c.direction === "tailwind" ? "Tailwind" : "Pressure";
+    bullets.push(`${arrow} to watch — ${c.headline}. ${c.reasoning}`);
+  }
+
+  // Upcoming / trend watch: if no explicit catalyst matched but we have score drift, prompt research
+  if (ctx.catalysts.length === 0) {
+    bullets.push(
+      kind === "under"
+        ? "No mapped catalyst yet — track industry-level macro releases and commodity moves that could act as the trigger."
+        : "No mapped catalyst yet — watch upcoming earnings and macro releases that could accelerate the decline.",
+    );
+  } else {
+    bullets.push("Cross-reference the catalysts above against upcoming economic releases and earnings — that combination is where re-ratings happen.");
+  }
+
+  return bullets.slice(0, 5);
 }
 
 /**
