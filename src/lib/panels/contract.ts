@@ -59,6 +59,12 @@ export type ChartFormat = "percent" | "number" | "index" | "bp";
 export interface TrendSeries {
   points: ChartPoint[];
   projection?: ChartPoint[];
+  /**
+   * Optional ±band around `projection` — typically the ensemble nowcast's
+   * confidence interval. Rendered as a translucent area behind the dotted
+   * projection line.
+   */
+  projectionBand?: { upper: ChartPoint[]; lower: ChartPoint[] };
   zones?: ChartZone[];
   yLabel?: string;
   format?: ChartFormat;
