@@ -1,5 +1,7 @@
 import { computeConfidence } from "@/lib/reliability/confidence";
 import { FRED_SERIES, findSeries } from "./series";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { fetchSeriesObservations } from "./client.server";
 
 export interface IngestResult {
   status: "success" | "partial" | "failed";
@@ -12,9 +14,6 @@ export interface IngestResult {
 export async function runFredIngest(seriesCode: string): Promise<IngestResult> {
   const spec = findSeries(seriesCode);
   if (!spec) throw new Error(`Unknown FRED series: ${seriesCode}`);
-
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { fetchSeriesObservations } = await import("./client.server");
 
   const { data: source } = await supabaseAdmin
     .from("data_sources").select("id, tier").eq("provider_code", "fred").maybeSingle();
