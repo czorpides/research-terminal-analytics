@@ -73,6 +73,9 @@ export async function fetchStooqDaily(stooqSymbol: string, opts: { from?: string
     }
     if (!res.ok) throw new StooqError(`Stooq ${res.status}`, res.status);
     const text = await res.text();
+    if (text.startsWith("<!DOCTYPE") || text.startsWith("<html") || /verify your browser/i.test(text)) {
+      throw new StooqError("Stooq returned anti-bot challenge (no CSV). Provider is blocking server IPs.", 403);
+    }
     return parseCsv(text);
   }
   throw last ?? new StooqError("Stooq request failed after retries");
