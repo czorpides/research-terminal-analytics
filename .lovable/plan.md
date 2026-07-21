@@ -1,78 +1,65 @@
-## Sequencing (per your answers)
 
-1. **Native macro APIs** (this pass) — ONS, ECB SDW, HMRC.
-2. **Ensemble nowcasts** (next pass) — AR(1) + Holt-Winters + drift with confidence bands.
-3. **Auth + per-user zones** (pass after) — email/password + Google, then zone editor.
+## Why this is needed
 
-Only pass 1 ships in this build. Passes 2 and 3 are scoped here so you can approve the shape.
+Diagnosis of the live database (today = 2026-07-21):
 
----
+- Only **2 of 13 scheduled refresh jobs** actually ran in the past week — `verify-runner-every-30m` and one `ingest-commodities-daily`. Every other job (FRED, Stooq prices, fundamentals, alt-data, ECB/BoE/ONS/HMRC, scores, undervaluation refresh) has **no run history at all**. That is why charts trail off in older months: the pipeline is silently stalled.
+- `commodity_prices`, `alt_data_signals`, and `fundamentals_quarterly` tables currently hold **0 rows**, even though the ingest endpoints exist — data is being written to `data_points` only, so the dedicated tables (and any chart that reads them) look empty.
+- Chart series use `slice(-tail)` on whatever is in the DB, so they honestly represent the latest observation. The issue isn't the chart — it's that the latest observation is stale because the crons aren't firing.
+- There is no watchdog: if a job dies, nothing surfaces it until a user notices a flat line.
 
-## Pass 1 — Native ONS / ECB SDW / HMRC ingestion
+## What to build
 
-### Providers
+### 1. Repair the scheduler (root cause)
 
-- **ECB SDW** (`data-api.ecb.europa.eu/service/data/{flow}/{key}`). No key required. CSV/JSON. Replaces the FRED-mirrored EA rates, HICP, unemployment, 10Y yield.
-- **ONS Beta API** (`api.beta.ons.gov.uk/v1/datasets/...`). No key required. Replaces UK CPI, unemployment, GDP.
-- **BoE IADB** (`www.bankofengland.co.uk/boeapps/iadb/fromshowcolumns.asp?csv.x=yes&SeriesCodes=...`). No key. Replaces SONIA / Bank Rate / gilt yields.
-- **HMRC** — real business-payments series come from HMRC's monthly bulletin (VAT receipts, PAYE, self-assessment) via HMRC's stats API (`www.gov.uk/government/statistics` JSON feeds). No key. New category previously flagged `partial_coverage`.
+- Re-register all 13 cron jobs with a single idempotent migration/insert so they exist against the current `pg_cron` schema, using the stable `project--<id>.lovable.app` URL (no preview URLs, which have been observed to churn).
+- Add a `heartbeat` job (`*/5 * * * *`) that writes to a new `cron_heartbeat` table. If we ever see the same silent-drop pattern again, this table proves whether `pg_cron` itself stopped or whether individual jobs failed.
+- Add explicit `EXCEPTION` capture in each cron command so failures land in `cron.job_run_details.return_message` instead of vanishing.
 
-No new secrets needed — all four are public open-data endpoints.
+### 2. Per-source refresh cadences
 
-### Provider abstraction
+Wire each source to the cadence that matches its true update frequency, not a blanket daily job.
 
-- New folder `src/lib/ingestion/macro-native/` with one client per source (`ecb.server.ts`, `ons.server.ts`, `boe.server.ts`, `hmrc.server.ts`). Each exports `fetchSeries(id, opts) → { date, value }[]` matching the FRED shape so the ingest runner is source-agnostic.
-- Add `provider` and `provider_series_code` columns to a small registry (`macro_native_series`) so the same `economic_indicators` row can be sourced from any of the four providers.
-- Migration adds one row per indicator with `provider = 'ecb' | 'ons' | 'boe' | 'hmrc'`. Existing FRED-sourced UK/EA rows are demoted to fallback (kept for backfill continuity, hidden from panel selection when a native row exists).
+| Source | Cadence | Cron |
+| --- | --- | --- |
+| Equity prices (Stooq/Tiingo/FMP intraday) | Every 15 min during US market hours | `*/15 13-21 * * 1-5` |
+| Equity prices end-of-day reconciliation | Daily 22:30 UTC weekdays | `30 22 * * 1-5` |
+| Commodity spot prices | Hourly 24/7 | `0 * * * *` |
+| FX rates | Hourly | `5 * * * *` |
+| FRED macro (daily series) | Daily 07:15 UTC | existing |
+| ECB / BoE / ONS native macro | Daily 06:00–06:20 UTC | existing |
+| HMRC receipts | Monthly 15th 06:30 UTC | existing |
+| Fundamentals (quarterly filings) | Daily 06:15 UTC (cheap, only writes on new filing) | existing |
+| Wikipedia attention | Daily 06:15 UTC | existing |
+| Scores composite | Every 30 min | `*/30 * * * *` |
+| Undervaluation / overvaluation refresh | Every 6 h | `0 */6 * * *` |
+| Verify runner | Every 30 min | existing |
 
-### Ingest runner + endpoint
+### 3. Fix the empty dedicated tables
 
-- `src/lib/ingestion/macro-native/ingest.server.ts` — mirrors the FRED runner shape (dedupe on `(indicator_id, ts)`, writes `ingestion_runs`, respects freshness policies).
-- Public route `POST /api/public/ingest/macro-native` with anon-key auth (same pattern as `fred.ts`).
-- Register three pg_cron jobs:
-  - `ecb-daily-06:00`
-  - `ons-daily-06:10`
-  - `boe-daily-06:20`
-  - `hmrc-monthly-15th-06:30`
+- Update `ingest/commodities`, `ingest/altdata`, and `ingest/fundamentals` to write to their **dedicated tables** (`commodity_prices`, `alt_data_signals`, `fundamentals_quarterly`) in addition to the generic `data_points` mirror. Panels that read these tables will then populate.
+- Backfill with a one-shot `POST /api/public/ingest/backfill?source=…` call per source, invoked immediately after deploy.
 
-### Panel wiring
+### 4. Guarantee charts extend to today
 
-- `macro.functions.ts` prefers a native indicator when both exist; falls back to FRED silently.
-- Each panel's evidence list picks up the native source name and Tier 1 badge automatically via the existing `data_sources` lookup.
+- Add a shared helper `extendSeriesToToday(points, cadence)` used by every panel builder. For daily series it forward-fills with the last observed value (marked `stale=true`) up to today so the x-axis always ends at "today"; for quarterly series it extends to the current quarter-end. Stale-filled points render as a lighter dashed segment so the visual doesn't lie about freshness.
+- Update `TrendChart` to render that dashed "stale tail" style and to always compute `xDomain[1] = today`.
 
-### HMRC business-payments panel
+### 5. Freshness watchdog + surfaced in Data Health
 
-- New `macro-business` panel becomes real (was `partial_coverage`): VAT receipts YoY, PAYE receipts YoY, self-assessment receipts. Includes 5-year chart + zone bands (`warn` at YoY < 0, `bad` at YoY < -5%).
+- New table `source_freshness_expectations(source_code, max_lag_minutes, cadence)`.
+- New server function `computeFreshness()` that joins each source's latest `as_of` against expectations and returns `fresh | lagging | stale | dead`.
+- Data Health page adds a "Freshness" panel with a row per source, its expected cadence, actual lag, and last successful cron run — so silent failures are immediately visible.
+- Alerts: any source in `stale` or `dead` state auto-creates an alert row.
 
-### Verify chain
+### 6. Verification after deploy
 
-- Reuse the existing `algo → api → ai` executor. New algo runner: `nativeVsFredParity` — compares native and FRED values on overlapping dates and fails the check if divergence > 25 bps (rates) or > 0.3 pp (inflation/unemployment). Surfaces provenance drift automatically.
+- Trigger every ingest endpoint once via `net.http_post` from a supabase insert to backfill immediately.
+- Read `MAX(as_of)` per source and confirm all are within their expected lag window.
+- Load `/macro`, `/radar`, `/data-health` and confirm every chart line reaches today.
 
----
+## Technical notes
 
-## Pass 2 — Ensemble nowcasts (deferred)
-
-Replaces `linearProjection` in `TrendChart.tsx` with `src/lib/forecast/ensemble.ts`:
-
-- `ar1(points)` — one-lag autoregressive with OLS fit
-- `holtWinters(points, seasonLength)` — additive, α/β/γ chosen by grid-search minimising in-sample RMSE
-- `drift(points)` — random-walk-with-drift baseline
-- `ensemble(points, horizon)` → `{ mean: ChartPoint[], lo: ChartPoint[], hi: ChartPoint[] }` where lo/hi come from ±1σ across the three model outputs.
-
-`TrendSeries.projection` stays a `ChartPoint[]` for compatibility; new optional `projectionBand: { lo, hi }` renders a shaded cone. Server-computed only.
-
----
-
-## Pass 3 — Auth + per-user zones (deferred)
-
-- Enable email/password + Google via `configure_auth` + `configure_social_auth`.
-- Managed `_authenticated/route.tsx` layout, public `/auth` page, session-aware header.
-- `profiles` table (display name, avatar) + trigger.
-- `user_zone_overrides(user_id, indicator_id, zones jsonb)` with RLS `auth.uid() = user_id`.
-- Zone editor sheet accessible from any `TrendChart`; falls back to registry defaults when no override.
-
----
-
-## What ships this build
-
-Pass 1 only: 4 native providers, migration, ingest runner, cron jobs, native-preferred panel wiring, HMRC business panel, parity verify runner. No changes to auth or the projection engine yet.
+- Files touched: `src/lib/panels/contract.ts` (add `stale` flag on points), `src/components/research/TrendChart.tsx` (dashed stale tail, today-anchored xDomain), `src/lib/freshness/*` (new), `src/routes/_authenticated/data-health.tsx`, all `src/lib/ingestion/*/ingest.server.ts` (dual-write to dedicated tables), one new migration for `cron_heartbeat` + `source_freshness_expectations`, and one Supabase insert re-registering every cron job against the stable prod URL.
+- No schema-breaking changes; existing `data_points` writes are preserved.
+- Intraday equity refresh will consume more provider quota — the existing `provider_quotas` gate already caps FMP/Tiingo, so we stay within free tiers.
