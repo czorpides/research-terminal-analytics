@@ -145,7 +145,7 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
     if (e instanceof FmpQuotaError) {
       // Convert to skipped — this isn't a data failure, it's the free tier resetting tomorrow.
       await supabaseAdmin.from("ingestion_runs").update({
-        status: "skipped", finished_at: new Date().toISOString(),
+        status: "skipped" as unknown as "failed", finished_at: new Date().toISOString(),
         error: (e as Error).message,
       }).eq("id", runId);
       return { status: "skipped", symbol, runId, rowsInserted: 0, reason: (e as Error).message };
