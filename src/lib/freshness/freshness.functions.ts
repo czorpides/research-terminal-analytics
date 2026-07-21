@@ -7,14 +7,12 @@ export interface SourceFreshnessRow {
   latestAsOf: string | null;
   lagMinutes: number | null;
   state: "fresh" | "lagging" | "stale" | "dead" | "unknown";
-  lastCronRunAt: string | null;
-  lastCronStatus: string | null;
 }
 
 /**
  * Reads live max(as_of) per source and joins it against the expected cadence
  * from `source_freshness_expectations`. Used by Data Health to surface silent
- * ingestion failures — the exact class of bug that was hiding stale charts.
+ * ingestion failures.
  */
 export const getSourceFreshness = createServerFn({ method: "GET" }).handler(async (): Promise<SourceFreshnessRow[]> => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -23,15 +21,10 @@ export const getSourceFreshness = createServerFn({ method: "GET" }).handler(asyn
     .from("source_freshness_expectations")
     .select("source_code, cadence, max_lag_minutes");
 
-  const { data: latestPerSource } = await supabaseAdmin.rpc as unknown as (
-    fn: string,
-    args?: Record<string, unknown>,
-  ) => Promise<{ data: Array<{ provider_code: string; latest: string | null }> | null }>;
-
-  // Fallback: compute via a direct query (RPC not defined) — join data_sources -> data_points.
   const { data: sources } = await supabaseAdmin
     .from("data_sources")
     .select("id, provider_code");
+
   const latestByCode = new Map<string, string | null>();
   for (const s of sources ?? []) {
     if (!s.provider_code) continue;
@@ -45,7 +38,6 @@ export const getSourceFreshness = createServerFn({ method: "GET" }).handler(asyn
     latestByCode.set(s.provider_code, dp?.as_of ?? null);
   }
 
-  // Best-effort cron read (cron.job_run_details is not exposed via PostgREST) — omit.
   const now = Date.now();
   const rows: SourceFreshnessRow[] = (exp ?? []).map((e) => {
     const latest = latestByCode.get(e.source_code) ?? null;
@@ -63,11 +55,7 @@ export const getSourceFreshness = createServerFn({ method: "GET" }).handler(asyn
       latestAsOf: latest,
       lagMinutes: lag,
       state,
-      lastCronRunAt: null,
-      lastCronStatus: null,
     };
   });
-  // Reference `latestPerSource` to keep the type declaration honest even though we don't use it.
-  void latestPerSource;
   return rows.sort((a, b) => a.sourceCode.localeCompare(b.sourceCode));
 });

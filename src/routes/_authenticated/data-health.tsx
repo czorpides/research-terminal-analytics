@@ -6,6 +6,7 @@ import { SectionHeader } from "@/components/layout/SectionHeader";
 import { SOURCE_TIER_META } from "@/lib/reliability/tiers";
 import { DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { getDataHealthOverview, triggerVerifierRun } from "@/lib/panels/data-health.functions";
+import { getSourceFreshness } from "@/lib/freshness/freshness.functions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,9 +23,15 @@ export const Route = createFileRoute("/_authenticated/data-health")({
 function DataHealth() {
   const fetchOverview = useServerFn(getDataHealthOverview);
   const runVerifier = useServerFn(triggerVerifierRun);
+  const fetchFreshness = useServerFn(getSourceFreshness);
   const qc = useQueryClient();
   const [running, setRunning] = useState(false);
   const { data } = useQuery({ queryKey: ["data-health"], queryFn: () => fetchOverview(), refetchOnWindowFocus: false });
+  const { data: freshness } = useQuery({
+    queryKey: ["source-freshness"],
+    queryFn: () => fetchFreshness(),
+    refetchInterval: 60_000,
+  });
 
   async function onRun() {
     setRunning(true);
@@ -39,6 +46,43 @@ function DataHealth() {
         title="Is the underlying data trustworthy right now?"
         purpose="The reliability framework driving every panel's confidence score. Owner-only administration lives here."
       />
+
+      <section className="mb-6 rounded-md border border-border/70 bg-card/60 p-3">
+        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Source freshness · live watchdog
+        </h2>
+        <table className="w-full text-xs">
+          <thead className="text-[10px] uppercase text-muted-foreground">
+            <tr className="border-b border-border/60">
+              <th className="py-1 text-left">Source</th>
+              <th className="text-left">Cadence</th>
+              <th className="text-left">Latest observation</th>
+              <th className="text-right">Lag</th>
+              <th className="text-right">Max allowed</th>
+              <th className="text-left">State</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono">
+            {(freshness ?? []).map((r) => (
+              <tr key={r.sourceCode} className="border-b border-border/40 last:border-b-0">
+                <td className="py-1 pr-2 uppercase">{r.sourceCode}</td>
+                <td className="pr-2 text-muted-foreground">{r.cadence}</td>
+                <td className="pr-2 text-muted-foreground">{r.latestAsOf ? new Date(r.latestAsOf).toLocaleString() : "—"}</td>
+                <td className="text-right tabular-nums">{r.lagMinutes !== null ? formatDur(r.lagMinutes * 60) : "—"}</td>
+                <td className="text-right tabular-nums text-muted-foreground">{formatDur(r.maxLagMinutes * 60)}</td>
+                <td className="pr-2">
+                  <span className={
+                    r.state === "fresh" ? "text-[var(--positive)]" :
+                    r.state === "lagging" ? "text-[var(--warning)]" :
+                    "text-[var(--negative)]"
+                  }>{r.state}</span>
+                </td>
+              </tr>
+            ))}
+            {!freshness && <tr><td colSpan={6} className="py-2 text-muted-foreground">Loading…</td></tr>}
+          </tbody>
+        </table>
+      </section>
 
       <section className="mb-6 rounded-md border border-border/70 bg-card/60 p-3">
         <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Sources · live</h2>
