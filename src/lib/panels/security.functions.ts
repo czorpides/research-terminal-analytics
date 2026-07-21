@@ -5,8 +5,7 @@ import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck, Metric } from "./contract";
 import { compositeScore } from "@/lib/scoring/composite";
-import { FUNDAMENTAL_METRICS, VALUATION_LOWER_IS_BETTER, QUALITY_METRICS } from "@/lib/ingestion/fundamentals/metrics";
-import { checkFundamentalsFresh, checkPeerRankStable, pendingAiCheck } from "@/lib/verify/runners.server";
+import { FUNDAMENTAL_METRICS } from "@/lib/ingestion/fundamentals/metrics";
 
 export interface UniverseRow {
   symbol: string;
