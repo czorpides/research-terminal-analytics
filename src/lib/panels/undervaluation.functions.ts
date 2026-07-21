@@ -4,6 +4,7 @@ import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck, Catalyst } from "./contract";
 import { detectCatalystsForIndustry } from "@/lib/catalysts/detect.server";
+import { historicalParallelBullet } from "@/lib/history/match.server";
 
 /**
  * Undervaluation Radar — renders the persisted weekly watchlist. The list
@@ -143,6 +144,10 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
       lastScore: Number(w.last_score),
       daysOnList,
     });
+    if (indCode) {
+      const parallel = await historicalParallelBullet("sector", indCode, "under");
+      if (parallel) whyBullets.push(parallel);
+    }
 
     const panel: PanelData = {
       id: `uv-${symbol}`,

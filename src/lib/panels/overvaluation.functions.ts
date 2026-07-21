@@ -6,6 +6,7 @@ import type { PanelData, Evidence, Point, VerifyCheck } from "./contract";
 import { riskScore } from "@/lib/scoring/composite";
 import { detectCatalystsForIndustry } from "@/lib/catalysts/detect.server";
 import { aiCoherenceCheck, buildWhyBullets } from "./undervaluation.functions";
+import { historicalParallelBullet } from "@/lib/history/match.server";
 
 interface LatestScore {
   asset_id: string; score_type: string; value: number; confidence: number;
@@ -176,6 +177,10 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
     verifyNext.push(aiCoherenceCheck(verifyNext, `${positives.length} mitigants / ${deductions.length} decline drivers`));
 
     const whyBullets = buildWhyBullets("over", { symbol, bag, catalysts });
+    if (indCode) {
+      const parallel = await historicalParallelBullet("sector", indCode, "over");
+      if (parallel) whyBullets.push(parallel);
+    }
 
     return {
       id: `ov-${symbol}`,

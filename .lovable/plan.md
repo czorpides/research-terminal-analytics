@@ -1,82 +1,43 @@
-# Plan: Undervaluation Radar, Catalyst pairing, Commodities, Label rename
+## Phase: Prompt 9 — Historical Event Engine
 
-## 1. Rename "Verify next" → "Verified by platform"
+Build a deterministic historical-analog engine so every radar entry, catalyst, and macro regime can be answered with "what happened last time this setup appeared?" — with auditable evidence, not vibes.
 
-- Update `src/components/research/ResearchPanel.tsx` label only.
-- Reframe the section as **secondary corroboration** to the primary fundamental/technical/macro metrics shown above it. Add a one-line subhead: "Secondary corroboration for the metrics above."
-- No contract/field renames — `verifyNext` stays as the internal key to avoid breaking every panel builder.
+### What ships
 
-## 2. Catalyst engine (macro + alt-data → asset/industry)
+1. **Event library (seeded + extensible)**
+   - New tables: `historical_events`, `event_tags`, `event_impacts` (asset/sector/commodity level with %move + window).
+   - Seed ~40 well-documented events across regimes: rate-cut cycles, yield-curve inversions, oil shocks (1973, 2008, 2014, 2020, 2022), tariff rounds (2018–19, 2025), tightening cycles, recessions, banking stress (SVB), COVID crash/recovery.
+   - Each event carries: date range, category, macro fingerprint (which FRED series moved and by how much), affected industries/commodities, outcome window returns.
 
-The user's core ask: know *why* an asset is under- or overvalued before it happens. Deterministic, evidence-backed, no black-box AI required.
+2. **Analog matcher (deterministic)**
+   - `src/lib/history/match.server.ts`: given a current macro fingerprint (rate direction, curve shape, inflation trend, commodity regime) OR a catalyst (e.g. "tariff on steel"), return top-N historical analogs ranked by fingerprint distance + tag overlap.
+   - Confidence = coverage of matched dimensions × recency weight × data-tier of underlying series.
 
-**New module: `src/lib/catalysts/detect.server.ts`**
-- Detects recent macro/alt-data events that plausibly pressure or support each asset.
-- Sources already in the DB:
-  - `data_points` (FRED macro series: fed funds, CPI, unemployment, yield curve, USD index, etc.)
-  - `alt_data_signals` (existing table — we'll seed a handful of tariff/tax/regulatory event rows manually via a seed function so the pipeline has real data to render)
-  - `commodity_prices` (added below)
-- Detection rules (deterministic, tagged with reasoning):
-  - **Macro deltas**: month-over-month move > 1σ on a series that historically correlates with a sector (e.g. rising 10Y yields → pressure on Utilities/REITs; rising oil → pressure on Airlines, tailwind for Energy).
-  - **Commodity shocks**: >5% 4-week move in a commodity → pressure/tailwind mapped to industries (oil↑ → Energy+ / Airlines−; copper↓ → Materials−).
-  - **Alt-data events**: tariff / tax / regulatory rows tagged with target industry/country → pressure sign + magnitude.
-- Output shape (new type `Catalyst` in `src/lib/catalysts/types.ts`):
-  ```
-  { id, direction: "pressure"|"tailwind", magnitude: 1-3,
-    headline, source, asOf, evidenceUrl?,
-    reasoning: string,   // deterministic sentence template
-    historicalNote?: string  // "Similar 2018 tariff round preceded 12% Materials drawdown"
-  }
-  ```
-- Industry→series mapping table lives in `src/lib/catalysts/mappings.ts` (hand-curated, versioned).
+3. **Panel integration**
+   - New "Historical analogs" block on: Command Centre (regime-level), Overvaluation/Undervaluation radar rows (per-asset via sector/industry), Catalyst rows (per-catalyst).
+   - Each analog shows: event name, date, 1-line setup, forward returns (1m/3m/6m/12m) for the affected group, link to full event card.
+   - New route `/history` — browsable event library + fingerprint search.
+   - New route `/history/$eventId` — full event card with macro chart context, impacts table, sources.
 
-## 3. Commodities ingestion + panels
+4. **Why-bullets upgrade**
+   - Undervaluation/Overvaluation `whyBullets` gain a "Historical parallel" line when a strong analog exists (e.g. "Similar setup in 2016 preceded +18% median 6m return for the industry").
 
-- Ingest daily commodity spot/futures via FMP `/quote/{symbol}` for a curated basket: WTI, Brent, Natural Gas, Gold, Silver, Copper, Wheat, Corn, Soybeans.
-- New ingestor `src/lib/ingestion/commodities/ingest.server.ts` writing to existing `commodity_prices` table.
-- New endpoint `POST /api/public/ingest/commodities`.
-- Weekly cron.
-- Extend catalyst engine to read commodity 4-week moves.
-- Commodities appear as first-class rows on both radars (treated like assets with symbol/name; scoring uses momentum + trend + volatility only — no fundamentals).
+5. **Verify chain**
+   - Algo runner: `checkAnalogCoverage` — did we find ≥3 analogs above min-confidence?
+   - AI verifier: coherence check that flagged analogs actually match the current setup (guardrail against spurious tag matches).
 
-## 4. Undervaluation Radar (weekly stable list)
+6. **Automation**
+   - Weekly `pg_cron` job recomputes macro fingerprints + refreshes analog cache per active radar entry.
 
-**Concept**: symmetric to Overvaluation Radar, but *stable* — the list only churns when a name meaningfully enters/exits the deep-value zone.
+### Technical notes
 
-- New server fn `src/lib/panels/undervaluation.functions.ts`:
-  - Uses composite `opportunityScore` (already exists as the standard composite) inverted focus: rank by **low valuation percentile + non-broken quality**.
-  - Formula: `undervaluation = valuation_score × 0.5 + quality_score × 0.3 + (100 − trend_break_penalty) × 0.2` — cheap names that aren't falling knives.
-- **Stable weekly list** (the "don't churn" requirement):
-  - New table `undervaluation_watchlist` persisting the current list with `added_at`, `last_confirmed_at`, `entry_score`, `exit_score?`.
-  - Weekly cron `/api/public/radars/undervaluation/refresh`:
-    - Compute current scores.
-    - **Add**: candidate scoring ≥ 70 AND not already in list.
-    - **Remove**: existing entry scoring < 55 for 2 consecutive weekly runs (hysteresis prevents flip-flop).
-    - **Keep**: everything else — no reorder churn, no unnecessary rewrites.
-  - Panel reads from the persisted table, not from a fresh recompute, so the visible list only changes on the weekly cadence.
-- Route `src/routes/undervaluation.tsx` mirroring the overvaluation page.
+- Fingerprint = fixed-dimension vector (rate level bucket, rate direction, curve sign, inflation regime, USD trend, oil regime). Distance = weighted Hamming/L1. Deterministic, auditable, no embeddings.
+- Events stored with source URLs (Fed minutes, BLS releases, news archives) so every analog can be traced.
+- Impact returns computed from actual price history where we have it; seeded from published research where we don't, tagged with lower confidence tier.
+- All new panels follow existing `PanelData` contract: sources, freshness, confidence, verify chain, whyBullets, positives/deductions semantics.
 
-## 5. Wire catalysts into both radars
+### Out of scope (future phases)
 
-- `getOvervaluationPanels` and `getUndervaluationPanels` each call `getCatalystsForAsset(assetId, industryId, countryId)`.
-- Catalysts render as a new **"Catalysts & pressures"** block inside each panel (above Evidence), showing direction (pressure/tailwind), magnitude bar, source, deterministic reasoning line, and historical note when available.
-- Each catalyst also emits an `Evidence` entry so the confidence math and audit trail pick it up.
-
-## 6. Nav + Command Centre
-
-- Add "UV · Undervaluation Radar" to `AppShell` nav.
-- Command Centre "Top Opportunities" panel starts pulling from the persisted undervaluation watchlist instead of ad-hoc composite ranking.
-
-## Explicitly out of scope
-
-- LLM-written catalyst narratives (deterministic templates only for now — AI layer arrives in the Prompt 11 phase).
-- Backtested historical impact modelling (we use a hand-curated `historicalNote` table for now).
-- Non-US macro catalysts beyond what FRED already provides.
-- Automated news scraping — alt-data events are seeded manually until a news ingester is built.
-
-## Technical notes
-
-- No breaking schema changes; two new tables (`undervaluation_watchlist`, minor extension to seed `alt_data_signals`).
-- Commodities re-use `commodity_prices` + `commodities` tables that already exist.
-- All catalyst detection is deterministic + versioned (`catalyst.detect.v0.1` stamp) so verifier audit trail keeps working.
-- Weekly cadence uses pg_cron `0 6 * * 1` (Monday 06:00 UTC).
+- Prompt 10 (broader alt-data ingestion beyond what catalysts already use).
+- Prompt 11 rest (AI narrative commentary layer).
+- Prompt 12 (alerts + notification controls).

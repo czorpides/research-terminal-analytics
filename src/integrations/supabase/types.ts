@@ -521,6 +521,47 @@ export type Database = {
           },
         ]
       }
+      event_impacts: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          note: string | null
+          return_pct: number
+          scope_code: string
+          scope_type: string
+          window_days: number
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          note?: string | null
+          return_pct: number
+          scope_code: string
+          scope_type: string
+          window_days?: number
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          note?: string | null
+          return_pct?: number
+          scope_code?: string
+          scope_type?: string
+          window_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_impacts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "historical_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_study_results: {
         Row: {
           calc_version: string
@@ -723,6 +764,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      historical_events: {
+        Row: {
+          category: string
+          code: string
+          created_at: string
+          end_date: string | null
+          fingerprint: Json
+          id: string
+          name: string
+          source_url: string | null
+          start_date: string
+          summary: string
+          tags: string[]
+        }
+        Insert: {
+          category: string
+          code: string
+          created_at?: string
+          end_date?: string | null
+          fingerprint?: Json
+          id?: string
+          name: string
+          source_url?: string | null
+          start_date: string
+          summary: string
+          tags?: string[]
+        }
+        Update: {
+          category?: string
+          code?: string
+          created_at?: string
+          end_date?: string | null
+          fingerprint?: Json
+          id?: string
+          name?: string
+          source_url?: string | null
+          start_date?: string
+          summary?: string
+          tags?: string[]
+        }
+        Relationships: []
       }
       industries: {
         Row: {

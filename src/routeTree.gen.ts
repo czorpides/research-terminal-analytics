@@ -21,6 +21,7 @@ import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SecurityIndexRouteImport } from './routes/security.index'
 import { Route as SecuritySymbolRouteImport } from './routes/security.$symbol'
+import { Route as HistoryEventIdRouteImport } from './routes/history.$eventId'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
@@ -90,6 +91,11 @@ const SecuritySymbolRoute = SecuritySymbolRouteImport.update({
   path: '/security/$symbol',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HistoryEventIdRoute = HistoryEventIdRouteImport.update({
+  id: '/$eventId',
+  path: '/$eventId',
+  getParentRoute: () => HistoryRoute,
+} as any)
 const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
   id: '/api/public/verify/run',
   path: '/api/public/verify/run',
@@ -139,12 +145,13 @@ export interface FileRoutesByFullPath {
   '/alerts': typeof AlertsRoute
   '/alt-data': typeof AltDataRoute
   '/data-health': typeof DataHealthRoute
-  '/history': typeof HistoryRoute
+  '/history': typeof HistoryRouteWithChildren
   '/macro': typeof MacroRoute
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/undervaluation': typeof UndervaluationRoute
+  '/history/$eventId': typeof HistoryEventIdRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -161,12 +168,13 @@ export interface FileRoutesByTo {
   '/alerts': typeof AlertsRoute
   '/alt-data': typeof AltDataRoute
   '/data-health': typeof DataHealthRoute
-  '/history': typeof HistoryRoute
+  '/history': typeof HistoryRouteWithChildren
   '/macro': typeof MacroRoute
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/undervaluation': typeof UndervaluationRoute
+  '/history/$eventId': typeof HistoryEventIdRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security': typeof SecurityIndexRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -184,12 +192,13 @@ export interface FileRoutesById {
   '/alerts': typeof AlertsRoute
   '/alt-data': typeof AltDataRoute
   '/data-health': typeof DataHealthRoute
-  '/history': typeof HistoryRoute
+  '/history': typeof HistoryRouteWithChildren
   '/macro': typeof MacroRoute
   '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/undervaluation': typeof UndervaluationRoute
+  '/history/$eventId': typeof HistoryEventIdRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -214,6 +223,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/undervaluation'
+    | '/history/$eventId'
     | '/security/$symbol'
     | '/security/'
     | '/api/public/ingest/commodities'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/undervaluation'
+    | '/history/$eventId'
     | '/security/$symbol'
     | '/security'
     | '/api/public/ingest/commodities'
@@ -258,6 +269,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/undervaluation'
+    | '/history/$eventId'
     | '/security/$symbol'
     | '/security/'
     | '/api/public/ingest/commodities'
@@ -275,7 +287,7 @@ export interface RootRouteChildren {
   AlertsRoute: typeof AlertsRoute
   AltDataRoute: typeof AltDataRoute
   DataHealthRoute: typeof DataHealthRoute
-  HistoryRoute: typeof HistoryRoute
+  HistoryRoute: typeof HistoryRouteWithChildren
   MacroRoute: typeof MacroRoute
   OvervaluationRoute: typeof OvervaluationRoute
   RadarRoute: typeof RadarRoute
@@ -379,6 +391,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SecuritySymbolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/history/$eventId': {
+      id: '/history/$eventId'
+      path: '/$eventId'
+      fullPath: '/history/$eventId'
+      preLoaderRoute: typeof HistoryEventIdRouteImport
+      parentRoute: typeof HistoryRoute
+    }
     '/api/public/verify/run': {
       id: '/api/public/verify/run'
       path: '/api/public/verify/run'
@@ -438,12 +457,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface HistoryRouteChildren {
+  HistoryEventIdRoute: typeof HistoryEventIdRoute
+}
+
+const HistoryRouteChildren: HistoryRouteChildren = {
+  HistoryEventIdRoute: HistoryEventIdRoute,
+}
+
+const HistoryRouteWithChildren =
+  HistoryRoute._addFileChildren(HistoryRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AlertsRoute: AlertsRoute,
   AltDataRoute: AltDataRoute,
   DataHealthRoute: DataHealthRoute,
-  HistoryRoute: HistoryRoute,
+  HistoryRoute: HistoryRouteWithChildren,
   MacroRoute: MacroRoute,
   OvervaluationRoute: OvervaluationRoute,
   RadarRoute: RadarRoute,
