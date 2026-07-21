@@ -57,8 +57,8 @@ export function TrendChart({
         <AreaChart data={data} margin={{ top: 4, right: 4, bottom: compact ? 0 : 14, left: 0 }}>
           <defs>
             <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0}    />
+              <stop offset="0%"   stopColor="var(--primary)" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="var(--primary)" stopOpacity={0}    />
             </linearGradient>
           </defs>
 
