@@ -3,7 +3,7 @@ import { z } from "zod";
 import { computeConfidence } from "@/lib/reliability/confidence";
 import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
-import { linearProjection } from "@/components/research/TrendChart";
+import { ensembleForecast } from "@/lib/forecasting/ensemble";
 import type { PanelData, Evidence, VerifyCheck, ChartZone, TrendSeries, Metric } from "./contract";
 import { FRED_SERIES } from "@/lib/ingestion/fred/series";
 import { NATIVE_SERIES } from "@/lib/ingestion/macro-native/registry";
@@ -168,9 +168,13 @@ function fredEvidence(seriesCode: string, sourceName: string, asOf: string): Evi
 function makeTrend(arr: Obs[] | undefined, opts: { format?: TrendSeries["format"]; zones?: ChartZone[]; project?: number; tail?: number }): TrendSeries | undefined {
   const pts = toChartPoints(arr, opts.tail ?? 120);
   if (pts.length === 0) return undefined;
+  const forecast = opts.project ? ensembleForecast(pts, opts.project) : undefined;
   return {
     points: pts,
-    projection: opts.project ? linearProjection(pts, opts.project) : undefined,
+    projection: forecast?.projection,
+    projectionBand: forecast && forecast.upper.length > 0
+      ? { upper: forecast.upper, lower: forecast.lower }
+      : undefined,
     zones: opts.zones,
     format: opts.format,
   };
