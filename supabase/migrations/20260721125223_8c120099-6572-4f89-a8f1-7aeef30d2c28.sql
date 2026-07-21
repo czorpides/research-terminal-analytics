@@ -1,0 +1,1 @@
+UPDATE public.economic_indicators SET provider_series_code = 'BOERUKA' WHERE code = 'UK_BANK_RATE';
