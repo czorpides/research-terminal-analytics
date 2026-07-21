@@ -193,8 +193,10 @@ async function recordRun(def: CheckDef, verifier: VerifyVerifier, outcome: Runne
     verifier,
     status: outcome.status,
     detail: outcome.detail ?? null,
-    inputs: outcome.inputs as unknown as Record<string, unknown>,
-    evidence: outcome.evidence as unknown as Record<string, unknown>[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    inputs: outcome.inputs as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    evidence: outcome.evidence as any,
     confidence: outcome.confidence ?? null,
     calc_version: CALC_VERSION,
     runner_key: def.runner_key,
