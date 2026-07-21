@@ -5,8 +5,11 @@ import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { SOURCE_TIER_META } from "@/lib/reliability/tiers";
 import { DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
-import { getDataHealthOverview } from "@/lib/panels/data-health.functions";
+import { getDataHealthOverview, triggerVerifierRun } from "@/lib/panels/data-health.functions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 export const Route = createFileRoute("/data-health")({
   head: () => ({ meta: [
@@ -18,7 +21,16 @@ export const Route = createFileRoute("/data-health")({
 
 function DataHealth() {
   const fetchOverview = useServerFn(getDataHealthOverview);
+  const runVerifier = useServerFn(triggerVerifierRun);
+  const qc = useQueryClient();
+  const [running, setRunning] = useState(false);
   const { data } = useQuery({ queryKey: ["data-health"], queryFn: () => fetchOverview(), refetchOnWindowFocus: false });
+
+  async function onRun() {
+    setRunning(true);
+    try { await runVerifier({ data: {} }); await qc.invalidateQueries({ queryKey: ["data-health"] }); }
+    finally { setRunning(false); }
+  }
 
   return (
     <AppShell>
