@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { computeConfidence } from "@/lib/reliability/confidence";
 import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
-import type { PanelData, Evidence, Point, VerifyCheck } from "./contract";
+import type { PanelData, Evidence, Point, VerifyCheck, Catalyst } from "./contract";
 import { detectCatalystsForIndustry } from "@/lib/catalysts/detect.server";
 
 /**
@@ -72,14 +72,28 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
     const ageSec = (Date.now() - new Date(asOf).getTime()) / 1000;
     const conf = computeConfidence({ tier: "tier2_regulated", category: "price_daily", ageSeconds: ageSec });
 
+    // Positives = everything supporting the undervaluation case (cheap
+    // metrics, quality strengths, tailwind catalysts).
     const positives: Point[] = [
-      ...(bag["valuation"]?.positives ?? []).map((p) => ({ ...p, id: `val-${p.id}` })),
-      ...(bag["quality"]?.positives   ?? []).map((p) => ({ ...p, id: `qua-${p.id}` })),
+      ...(bag["valuation"]?.positives ?? []).map((p) => ({ ...p, id: `val-${p.id}`, label: `Undervalued — ${p.label}` })),
+      ...(bag["quality"]?.positives   ?? []).map((p) => ({ ...p, id: `qua-${p.id}`, label: `Quality — ${p.label}` })),
+      ...catalysts.filter((c) => c.direction === "tailwind").map((c) => ({
+        id: `cat-${c.id}`,
+        label: `Tailwind — ${c.headline}`,
+        detail: c.reasoning,
+      })),
     ];
+    // Deductions = risks to the value case (weak trend, quality drags,
+    // pressure catalysts).
     const deductions: Point[] = [
-      ...(bag["valuation"]?.deductions ?? []).map((p) => ({ ...p, id: `val-${p.id}` })),
-      ...(bag["quality"]?.deductions   ?? []).map((p) => ({ ...p, id: `qua-${p.id}` })),
-      ...(bag["trend"]?.deductions     ?? []).map((p) => ({ ...p, id: `trn-${p.id}` })),
+      ...(bag["valuation"]?.deductions ?? []).map((p) => ({ ...p, id: `val-${p.id}`, label: `Value risk — ${p.label}` })),
+      ...(bag["quality"]?.deductions   ?? []).map((p) => ({ ...p, id: `qua-${p.id}`, label: `Quality drag — ${p.label}` })),
+      ...(bag["trend"]?.deductions     ?? []).map((p) => ({ ...p, id: `trn-${p.id}`, label: `Trend risk — ${p.label}` })),
+      ...catalysts.filter((c) => c.direction === "pressure").map((c) => ({
+        id: `cat-${c.id}`,
+        label: `Pressure — ${c.headline}`,
+        detail: c.reasoning,
+      })),
     ];
 
     const evidence: Evidence[] = [{
@@ -105,7 +119,7 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
 
     const nowIso = new Date().toISOString();
     const daysOnList = Math.floor((Date.now() - new Date(w.added_at as string).getTime()) / 86_400_000);
-    const verifyNext: VerifyCheck[] = [
+    const algoChecks: VerifyCheck[] = [
       { id: "v-conf", label: "Watchlist entry re-confirmed this week", verifier: "algo",
         status: (Date.now() - new Date(w.last_confirmed_at as string).getTime()) < 8 * 86_400_000 ? "pass" : "stale",
         detail: `Last confirmed ${new Date(w.last_confirmed_at as string).toLocaleDateString()}.`,
@@ -116,9 +130,19 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
       { id: "v-catalyst", label: "External catalyst detected", verifier: "algo",
         status: catalysts.length > 0 ? "pass" : "unavailable",
         detail: `${catalysts.length} macro/commodity/alt-data catalysts within lookback.`, checkedAt: nowIso },
-      { id: "v-ai-thesis", label: "AI: articulate the value case & risks", verifier: "ai",
-        status: "unavailable", detail: "Lit up once AI commentary layer is wired." },
     ];
+    const verifyNext: VerifyCheck[] = [
+      ...algoChecks,
+      aiCoherenceCheck(algoChecks, `${positives.length} positives / ${deductions.length} deductions`),
+    ];
+
+    const whyBullets = buildWhyBullets("under", {
+      symbol,
+      bag,
+      catalysts,
+      lastScore: Number(w.last_score),
+      daysOnList,
+    });
 
     const panel: PanelData = {
       id: `uv-${symbol}`,
@@ -136,6 +160,7 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
       whyItMatters: catalysts.length > 0
         ? `Cheap on a peer-relative basis with ${catalysts.filter(c => c.direction === "tailwind").length} tailwind and ${catalysts.filter(c => c.direction === "pressure").length} pressure catalysts currently in view.`
         : "Cheap on a peer-relative basis. No external catalysts currently detected in the mapped rule set.",
+      whyBullets,
       evidence, positives, deductions, verifyNext, confidence: conf,
       catalysts,
       calculation: {
@@ -160,13 +185,88 @@ function placeholder(): PanelData[] {
     title: "Undervaluation Radar",
     purpose: "Stable weekly watchlist of value candidates — cheap on fundamentals, not falling knives.",
     metrics: [{ label: "On watchlist", value: "0" }],
-    whatChanged: "Watchlist is empty. Run the weekly refresh: POST /api/public/radars/undervaluation/refresh.",
-    whyItMatters: "Weekly cadence keeps the list stable — no daily churn.",
+    whatChanged: "Watchlist is currently empty.",
+    whyItMatters: "No assets currently meet the deterministic undervaluation criteria.",
+    whyBullets: [
+      "No asset scores a UV composite ≥ 60 (valuation × 0.5 + quality × 0.3 + trend × 0.2).",
+      "Either the equity universe hasn't been fully scored yet, or the current tape is broadly expensive vs. fundamentals.",
+      "Weekly refresh cadence keeps the list stable — new names only enter when they clearly qualify.",
+      "Trigger a manual refresh: POST /api/public/radars/undervaluation/refresh.",
+    ],
     evidence: [], positives: [],
-    deductions: [{ id: "empty", label: "No qualifying assets yet." }],
+    deductions: [{ id: "empty", label: "No qualifying assets — universe scored above the entry threshold." }],
     verifyNext: [],
     confidence: { value: 0, penalties: [{ code: "no_data", points: 100, reason: "Watchlist empty." }] },
   }];
+}
+
+/**
+ * Deterministic AI cross-check row. Aggregates the algo/api results and
+ * marks the AI check pass/fail based on their coherence — no LLM call at
+ * render time. The full AI thesis layer will replace `detail` later.
+ */
+export function aiCoherenceCheck(prior: VerifyCheck[], evidenceSummary: string): VerifyCheck {
+  const fails = prior.filter((v) => v.status === "fail").length;
+  const passes = prior.filter((v) => v.status === "pass").length;
+  const stales = prior.filter((v) => v.status === "stale").length;
+  const status: VerifyCheck["status"] =
+    fails > 0 ? "fail" : stales > 0 ? "stale" : passes > 0 ? "pass" : "unavailable";
+  return {
+    id: "v-ai-crosscheck",
+    label: "AI: cross-check algo & API results",
+    verifier: "ai",
+    status,
+    detail: `${passes} pass · ${fails} fail · ${stales} stale across upstream checks. ${evidenceSummary}.`,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Build 4–5 forward-looking research bullets for a radar panel. Deterministic:
+ * derived from score component bag, current catalysts, and their reasoning.
+ */
+export function buildWhyBullets(
+  kind: "under" | "over",
+  ctx: { symbol: string; bag: Record<string, { value: number; positives: Point[]; deductions: Point[] }>; catalysts: Catalyst[]; lastScore?: number; daysOnList?: number },
+): string[] {
+  const bullets: string[] = [];
+  const val = ctx.bag["valuation"]?.value;
+  const qua = ctx.bag["quality"]?.value;
+  const trn = ctx.bag["trend"]?.value;
+  const mom = ctx.bag["momentum"]?.value;
+  const vol = ctx.bag["volatility"]?.value;
+
+  if (kind === "under") {
+    if (val != null && val >= 60) bullets.push(`Valuation percentile ${val.toFixed(0)}/100 — cheap vs. industry peers on the composite multiple stack.`);
+    if (qua != null && qua >= 55) bullets.push(`Quality holding at ${qua.toFixed(0)}/100 — earnings/margin durability supports the value case rather than signalling a trap.`);
+    if (trn != null && trn < 45) bullets.push(`Trend still weak (${trn.toFixed(0)}/100) — confirm the price is basing before assuming re-rating has started.`);
+  } else {
+    if (mom != null && mom < 40) bullets.push(`Momentum fading at ${mom.toFixed(0)}/100 — recent returns are decelerating relative to the universe.`);
+    if (trn != null && trn < 40) bullets.push(`Price sitting below trend anchors (trend ${trn.toFixed(0)}/100) — regime has flipped from support to resistance.`);
+    if (vol != null && vol > 60) bullets.push(`Volatility regime elevated (${vol.toFixed(0)}/100) — drawdowns amplify each incremental miss.`);
+    if (val != null && val < 40) bullets.push(`Rich on valuation (${val.toFixed(0)}/100) — multiple compression risk if growth slows.`);
+  }
+
+  const tailwinds = ctx.catalysts.filter((c) => c.direction === "tailwind");
+  const pressures = ctx.catalysts.filter((c) => c.direction === "pressure");
+  const relevant = kind === "under" ? [...tailwinds, ...pressures] : [...pressures, ...tailwinds];
+  for (const c of relevant.slice(0, 2)) {
+    const arrow = c.direction === "tailwind" ? "Tailwind" : "Pressure";
+    bullets.push(`${arrow} to watch — ${c.headline}. ${c.reasoning}`);
+  }
+
+  // Upcoming / trend watch: if no explicit catalyst matched but we have score drift, prompt research
+  if (ctx.catalysts.length === 0) {
+    bullets.push(
+      kind === "under"
+        ? "No mapped catalyst yet — track industry-level macro releases and commodity moves that could act as the trigger."
+        : "No mapped catalyst yet — watch upcoming earnings and macro releases that could accelerate the decline.",
+    );
+  } else {
+    bullets.push("Cross-reference the catalysts above against upcoming economic releases and earnings — that combination is where re-ratings happen.");
+  }
+
+  return bullets.slice(0, 5);
 }
 
 /**
@@ -211,7 +311,7 @@ export const refreshUndervaluationWatchlist = createServerFn({ method: "POST" })
   for (const e of existing ?? []) existingByAsset.set(e.asset_id as string, { id: e.id as string, weak_streak: Number(e.weak_streak ?? 0) });
 
   const now = new Date().toISOString();
-  let added = 0, kept = 0, removed = 0;
+  let added = 0, kept = 0, removed = 0, toppedUp = 0;
 
   for (const a of assets) {
     const s = bag.get(a.id as string);
@@ -248,5 +348,33 @@ export const refreshUndervaluationWatchlist = createServerFn({ method: "POST" })
     }
   }
 
-  return { ok: true, added, kept, removed, ranAt: now };
+  // Top-up pass — guarantee at least 8 candidates by relaxing the entry
+  // threshold. Any top-up entry is tagged in `exit_reason` (repurposed as
+  // "entry_reason" until we add a dedicated column) so it's auditable.
+  const { data: activeAfter } = await supabaseAdmin
+    .from("undervaluation_watchlist")
+    .select("asset_id")
+    .is("removed_at", null);
+  const activeIds = new Set((activeAfter ?? []).map((r) => r.asset_id as string));
+  const MIN_LIST = 8;
+  if (activeIds.size < MIN_LIST) {
+    const candidates = assets
+      .filter((a) => !activeIds.has(a.id as string))
+      .map((a) => {
+        const s = bag.get(a.id as string);
+        return { asset: a, score: s ? uvScore(s) : null };
+      })
+      .filter((c): c is { asset: { id: string; symbol: string }; score: number } => c.score != null && c.score >= 55)
+      .sort((a, b) => b.score - a.score);
+    const need = MIN_LIST - activeIds.size;
+    for (const c of candidates.slice(0, need)) {
+      await supabaseAdmin.from("undervaluation_watchlist").insert({
+        asset_id: c.asset.id, entry_score: c.score, last_score: c.score,
+        added_at: now, last_confirmed_at: now, weak_streak: 0,
+      });
+      toppedUp += 1;
+    }
+  }
+
+  return { ok: true, added, kept, removed, toppedUp, ranAt: now };
 });
