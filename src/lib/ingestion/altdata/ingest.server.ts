@@ -101,7 +101,7 @@ export async function runAltDataIngest(): Promise<AltDataIngestSummary> {
         subject_id: subjectId,
         ts: new Date(`${r.date}T00:00:00Z`).toISOString(),
         value: r.views,
-        meta: { article, symbol } as Record<string, unknown>,
+        meta: { article, symbol } as unknown as import("@/integrations/supabase/types").Json,
         source_id: source.id,
       }));
       const { error: eDaily } = await supabaseAdmin
@@ -125,7 +125,7 @@ export async function runAltDataIngest(): Promise<AltDataIngestSummary> {
           article, symbol, latestViews: latest.views, baselineMean: Math.round(mean),
           baselineSd: Math.round(sd), spikePct: Number(spikePct.toFixed(1)),
           version: WIKIPEDIA_ATTENTION_VERSION,
-        } as Record<string, unknown>,
+        } as unknown as import("@/integrations/supabase/types").Json,
         source_id: source.id,
       };
       const { error: eAtt } = await supabaseAdmin
