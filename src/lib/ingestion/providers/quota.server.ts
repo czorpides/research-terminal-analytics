@@ -39,7 +39,7 @@ export async function recordCall(code: ProviderCode, status: "ok" | "rate_limit"
   const row = await getQuota(code);
   if (!row) return;
   const disabled_until =
-    status === "rate_limit" ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1)).toISOString() :
+    status === "rate_limit" ? new Date(Date.now() + 60 * 60_000).toISOString() :
     status === "auth" ? new Date(Date.now() + 3600_000).toISOString() : row.disabled_until;
   await supabaseAdmin.from("provider_quotas").update({
     calls_made: row.calls_made + 1,
