@@ -18,6 +18,8 @@ import { Route as AltDataRouteImport } from './routes/alt-data'
 import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
+import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
+import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
 
 const ScreenersRoute = ScreenersRouteImport.update({
@@ -65,6 +67,16 @@ const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
   path: '/api/public/verify/run',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicScoresRunRoute = ApiPublicScoresRunRouteImport.update({
+  id: '/api/public/scores/run',
+  path: '/api/public/scores/run',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
+  id: '/api/public/ingest/stooq',
+  path: '/api/public/ingest/stooq',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicIngestFredRoute = ApiPublicIngestFredRouteImport.update({
   id: '/api/public/ingest/fred',
   path: '/api/public/ingest/fred',
@@ -81,6 +93,8 @@ export interface FileRoutesByFullPath {
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +107,8 @@ export interface FileRoutesByTo {
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
 export interface FileRoutesById {
@@ -106,6 +122,8 @@ export interface FileRoutesById {
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +138,8 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
+    | '/api/public/ingest/stooq'
+    | '/api/public/scores/run'
     | '/api/public/verify/run'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +152,8 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
+    | '/api/public/ingest/stooq'
+    | '/api/public/scores/run'
     | '/api/public/verify/run'
   id:
     | '__root__'
@@ -144,6 +166,8 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
+    | '/api/public/ingest/stooq'
+    | '/api/public/scores/run'
     | '/api/public/verify/run'
   fileRoutesById: FileRoutesById
 }
@@ -157,6 +181,8 @@ export interface RootRouteChildren {
   RadarRoute: typeof RadarRoute
   ScreenersRoute: typeof ScreenersRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
+  ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
+  ApiPublicScoresRunRoute: typeof ApiPublicScoresRunRoute
   ApiPublicVerifyRunRoute: typeof ApiPublicVerifyRunRoute
 }
 
@@ -225,6 +251,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicVerifyRunRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/scores/run': {
+      id: '/api/public/scores/run'
+      path: '/api/public/scores/run'
+      fullPath: '/api/public/scores/run'
+      preLoaderRoute: typeof ApiPublicScoresRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/stooq': {
+      id: '/api/public/ingest/stooq'
+      path: '/api/public/ingest/stooq'
+      fullPath: '/api/public/ingest/stooq'
+      preLoaderRoute: typeof ApiPublicIngestStooqRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/fred': {
       id: '/api/public/ingest/fred'
       path: '/api/public/ingest/fred'
@@ -245,6 +285,8 @@ const rootRouteChildren: RootRouteChildren = {
   RadarRoute: RadarRoute,
   ScreenersRoute: ScreenersRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
+  ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
+  ApiPublicScoresRunRoute: ApiPublicScoresRunRoute,
   ApiPublicVerifyRunRoute: ApiPublicVerifyRunRoute,
 }
 export const routeTree = rootRouteImport
