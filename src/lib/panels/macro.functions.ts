@@ -11,6 +11,7 @@ import type { PanelData, Evidence, VerifyCheck } from "./contract";
 export const getMacroPanels = createServerFn({ method: "GET" }).handler(async (): Promise<PanelData[]> => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { checkAboveMovingAverage, checkSpreadSign, checkFreshness, pendingAiCheck } = await import("@/lib/verify/runners.server");
+  const { getLatestVerifyChecksForPanel } = await import("@/lib/verify/executor.server");
 
   // Load FRED source id + indicators
   const [{ data: source }, { data: indicators }] = await Promise.all([
@@ -43,11 +44,24 @@ export const getMacroPanels = createServerFn({ method: "GET" }).handler(async ()
     return placeholderPanels("No FRED data ingested yet. Trigger /api/public/ingest/fred to backfill.");
   }
 
-  return [
+  const panels = [
     yieldCurvePanel(byMetric, source.name, checkAboveMovingAverage, checkSpreadSign, checkFreshness, pendingAiCheck),
     inflationPanel(byMetric, source.name, checkAboveMovingAverage, checkFreshness, pendingAiCheck),
     laborPanel(byMetric, source.name, checkFreshness, pendingAiCheck),
   ];
+
+  // Overlay the latest recorded verify_runs (algo/api/ai) per panel so the UI
+  // reflects what the auto-verifier actually decided. Falls back to the
+  // inline runner output when no run has been recorded yet.
+  const overlaid = await Promise.all(panels.map(async (p) => {
+    const live = await getLatestVerifyChecksForPanel(p.id);
+    if (live.length === 0) return p;
+    const byId = new Map(live.map((c) => [c.id, c]));
+    const merged: VerifyCheck[] = p.verifyNext.map((c) => byId.get(c.id) ?? c);
+    live.forEach((c) => { if (!p.verifyNext.find((x) => x.id === c.id)) merged.push(c); });
+    return { ...p, verifyNext: merged };
+  }));
+  return overlaid;
 });
 
 function indicatorCodeFor(seriesCode: string): string {
