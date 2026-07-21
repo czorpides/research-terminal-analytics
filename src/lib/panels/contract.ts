@@ -85,6 +85,12 @@ export interface PanelData {
   metrics: Metric[];
   whatChanged: string;
   whyItMatters: string;
+  /**
+   * 4–5 short forward-looking research bullets. Deterministically built
+   * from current score components, active catalysts, and upcoming macro/
+   * commodity/alt-data trends. Rendered under "Why it matters".
+   */
+  whyBullets?: string[];
   evidence: Evidence[];
   positives: Point[];
   deductions: Point[];
