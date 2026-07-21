@@ -318,6 +318,7 @@ export const getHistoryPanels = createServerFn({ method: "GET" }).handler(async 
     title: "Current regime — analog library match",
     purpose: "Deterministic macro fingerprint of today's environment matched against the seeded event library.",
     metrics: fpMetrics,
+    background: REGIME_BACKGROUND,
     whatChanged: analogs.length > 0
       ? `Top match: ${analogs[0].event.name} (${analogs[0].matchPct.toFixed(0)}%). ${analogs.length} analogs above the threshold.`
       : "No analogs above the 40% match floor — fingerprint may be too sparse to compare.",
@@ -355,6 +356,7 @@ export const getHistoryPanels = createServerFn({ method: "GET" }).handler(async 
       title: `${cat.replace(/_/g, " ")} events (${list.length})`,
       purpose: `Seeded ${cat.replace(/_/g, " ")} episodes in the event library, most recent first.`,
       metrics: [{ label: "Events", value: `${list.length}` }, { label: "Latest", value: new Date(list[0].start_date).getFullYear().toString() }],
+      background: categoryBackground(cat, list),
       whatChanged: `${list.length} episodes indexed in this category.`,
       whyItMatters: "Browse the library directly when you want to research a class of regimes rather than the current fingerprint.",
       evidence: [], positives: list.map((e) => ({
