@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ScreenersRouteImport } from './routes/screeners'
 import { Route as RadarRouteImport } from './routes/radar'
+import { Route as OvervaluationRouteImport } from './routes/overvaluation'
 import { Route as MacroRouteImport } from './routes/macro'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as DataHealthRouteImport } from './routes/data-health'
@@ -31,6 +32,11 @@ const ScreenersRoute = ScreenersRouteImport.update({
 const RadarRoute = RadarRouteImport.update({
   id: '/radar',
   path: '/radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OvervaluationRoute = OvervaluationRouteImport.update({
+  id: '/overvaluation',
+  path: '/overvaluation',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MacroRoute = MacroRouteImport.update({
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/data-health': typeof DataHealthRoute
   '/history': typeof HistoryRoute
   '/macro': typeof MacroRoute
+  '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByTo {
   '/data-health': typeof DataHealthRoute
   '/history': typeof HistoryRoute
   '/macro': typeof MacroRoute
+  '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/data-health': typeof DataHealthRoute
   '/history': typeof HistoryRoute
   '/macro': typeof MacroRoute
+  '/overvaluation': typeof OvervaluationRoute
   '/radar': typeof RadarRoute
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/data-health'
     | '/history'
     | '/macro'
+    | '/overvaluation'
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
@@ -159,6 +169,7 @@ export interface FileRouteTypes {
     | '/data-health'
     | '/history'
     | '/macro'
+    | '/overvaluation'
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
@@ -174,6 +185,7 @@ export interface FileRouteTypes {
     | '/data-health'
     | '/history'
     | '/macro'
+    | '/overvaluation'
     | '/radar'
     | '/screeners'
     | '/api/public/ingest/fred'
@@ -190,6 +202,7 @@ export interface RootRouteChildren {
   DataHealthRoute: typeof DataHealthRoute
   HistoryRoute: typeof HistoryRoute
   MacroRoute: typeof MacroRoute
+  OvervaluationRoute: typeof OvervaluationRoute
   RadarRoute: typeof RadarRoute
   ScreenersRoute: typeof ScreenersRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
@@ -213,6 +226,13 @@ declare module '@tanstack/react-router' {
       path: '/radar'
       fullPath: '/radar'
       preLoaderRoute: typeof RadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/overvaluation': {
+      id: '/overvaluation'
+      path: '/overvaluation'
+      fullPath: '/overvaluation'
+      preLoaderRoute: typeof OvervaluationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/macro': {
@@ -302,6 +322,7 @@ const rootRouteChildren: RootRouteChildren = {
   DataHealthRoute: DataHealthRoute,
   HistoryRoute: HistoryRoute,
   MacroRoute: MacroRoute,
+  OvervaluationRoute: OvervaluationRoute,
   RadarRoute: RadarRoute,
   ScreenersRoute: ScreenersRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
