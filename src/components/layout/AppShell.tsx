@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutGrid,
   Globe2,
@@ -12,8 +12,17 @@ import {
   Bell,
   Activity,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const NAV = [
   { to: "/",            label: "Command Centre",  icon: LayoutGrid, code: "CC" },
@@ -69,8 +78,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="border-t border-border/70 p-2 font-mono text-[10px] text-muted-foreground">
-          <div>Phase 1 · Foundation</div>
-          <div className="text-[var(--warning)]">No live data wired</div>
+          <div>Phase 3 · Auth + Zones</div>
+          <div className="text-[var(--positive)]">Session active</div>
         </div>
       </aside>
 
@@ -87,8 +96,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span>calc v0.1</span>
             </div>
           </div>
-          <div className="font-mono text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
             <ClientClock />
+            <AccountMenu />
           </div>
         </header>
         <MobileNav pathname={pathname} />
