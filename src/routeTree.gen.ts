@@ -29,6 +29,7 @@ import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/in
 import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
 import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
+import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/ingest/altdata'
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
@@ -134,6 +135,11 @@ const ApiPublicIngestCommoditiesRoute =
     path: '/api/public/ingest/commodities',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicIngestAltdataRoute = ApiPublicIngestAltdataRouteImport.update({
+  id: '/api/public/ingest/altdata',
+  path: '/api/public/ingest/altdata',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHistoryVerifyNarrativesRoute =
   ApiPublicHistoryVerifyNarrativesRouteImport.update({
     id: '/api/public/history/verify-narratives',
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
+  '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security': typeof SecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
+  '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
@@ -211,6 +219,7 @@ export interface FileRoutesById {
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
+  '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
@@ -237,6 +246,7 @@ export interface FileRouteTypes {
     | '/security/$symbol'
     | '/security/'
     | '/api/public/history/verify-narratives'
+    | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
@@ -261,6 +271,7 @@ export interface FileRouteTypes {
     | '/security/$symbol'
     | '/security'
     | '/api/public/history/verify-narratives'
+    | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
@@ -285,6 +296,7 @@ export interface FileRouteTypes {
     | '/security/$symbol'
     | '/security/'
     | '/api/public/history/verify-narratives'
+    | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
@@ -309,6 +321,7 @@ export interface RootRouteChildren {
   SecuritySymbolRoute: typeof SecuritySymbolRoute
   SecurityIndexRoute: typeof SecurityIndexRoute
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
+  ApiPublicIngestAltdataRoute: typeof ApiPublicIngestAltdataRoute
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
   ApiPublicIngestFundamentalsRoute: typeof ApiPublicIngestFundamentalsRoute
@@ -461,6 +474,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicIngestCommoditiesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/altdata': {
+      id: '/api/public/ingest/altdata'
+      path: '/api/public/ingest/altdata'
+      fullPath: '/api/public/ingest/altdata'
+      preLoaderRoute: typeof ApiPublicIngestAltdataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/history/verify-narratives': {
       id: '/api/public/history/verify-narratives'
       path: '/api/public/history/verify-narratives'
@@ -503,6 +523,7 @@ const rootRouteChildren: RootRouteChildren = {
   SecuritySymbolRoute: SecuritySymbolRoute,
   SecurityIndexRoute: SecurityIndexRoute,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
+  ApiPublicIngestAltdataRoute: ApiPublicIngestAltdataRoute,
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
   ApiPublicIngestFundamentalsRoute: ApiPublicIngestFundamentalsRoute,
