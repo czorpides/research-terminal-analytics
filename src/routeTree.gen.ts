@@ -19,6 +19,7 @@ import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
+import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
 
@@ -72,6 +73,11 @@ const ApiPublicScoresRunRoute = ApiPublicScoresRunRouteImport.update({
   path: '/api/public/scores/run',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicProvidersPingRoute = ApiPublicProvidersPingRouteImport.update({
+  id: '/api/public/providers/ping',
+  path: '/api/public/providers/ping',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
   id: '/api/public/ingest/stooq',
   path: '/api/public/ingest/stooq',
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/screeners': typeof ScreenersRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
 }
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/stooq'
+    | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
   fileRoutesByTo: FileRoutesByTo
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/stooq'
+    | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
   id:
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/stooq'
+    | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
   fileRoutesById: FileRoutesById
@@ -182,6 +194,7 @@ export interface RootRouteChildren {
   ScreenersRoute: typeof ScreenersRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
+  ApiPublicProvidersPingRoute: typeof ApiPublicProvidersPingRoute
   ApiPublicScoresRunRoute: typeof ApiPublicScoresRunRoute
   ApiPublicVerifyRunRoute: typeof ApiPublicVerifyRunRoute
 }
@@ -258,6 +271,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicScoresRunRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/providers/ping': {
+      id: '/api/public/providers/ping'
+      path: '/api/public/providers/ping'
+      fullPath: '/api/public/providers/ping'
+      preLoaderRoute: typeof ApiPublicProvidersPingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/stooq': {
       id: '/api/public/ingest/stooq'
       path: '/api/public/ingest/stooq'
@@ -286,6 +306,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScreenersRoute: ScreenersRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
+  ApiPublicProvidersPingRoute: ApiPublicProvidersPingRoute,
   ApiPublicScoresRunRoute: ApiPublicScoresRunRoute,
   ApiPublicVerifyRunRoute: ApiPublicVerifyRunRoute,
 }

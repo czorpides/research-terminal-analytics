@@ -940,6 +940,48 @@ export type Database = {
           },
         ]
       }
+      provider_quotas: {
+        Row: {
+          calls_made: number
+          created_at: string
+          daily_limit: number
+          disabled_until: string | null
+          id: string
+          last_call_at: string | null
+          last_error: string | null
+          last_status: string | null
+          provider_code: string
+          quota_date: string
+          updated_at: string
+        }
+        Insert: {
+          calls_made?: number
+          created_at?: string
+          daily_limit: number
+          disabled_until?: string | null
+          id?: string
+          last_call_at?: string | null
+          last_error?: string | null
+          last_status?: string | null
+          provider_code: string
+          quota_date?: string
+          updated_at?: string
+        }
+        Update: {
+          calls_made?: number
+          created_at?: string
+          daily_limit?: number
+          disabled_until?: string | null
+          id?: string
+          last_call_at?: string | null
+          last_error?: string | null
+          last_status?: string | null
+          provider_code?: string
+          quota_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       regime_classifications: {
         Row: {
           as_of: string
