@@ -37,7 +37,7 @@ const CATEGORY_BACKGROUND: Record<string, NonNullable<PanelData["background"]>> 
       "Break-even inflation (5Y5Y) and Fed pricing (SOFR futures).",
     ],
   },
-  banking_crisis: {
+  financial_stress: {
     overview: "Banking crises are episodes when solvency or liquidity fears force deposit flight, credit contraction and (usually) central-bank intervention. They matter because credit is the transmission belt of the economy — when banks pull back, capex, hiring and asset prices follow within one to three quarters.",
     historicalContext: "The library covers the 1980s S&L crisis, LTCM 1998, the 2008 GFC (Bear/Lehman/AIG), the 2011 European sovereign–bank doom loop, and the 2023 US regional-bank run (SVB/Signature/First Republic). Each triggered emergency Fed/ECB facilities and repriced financials for years.",
     whatCauses: [
@@ -60,7 +60,7 @@ const CATEGORY_BACKGROUND: Record<string, NonNullable<PanelData["background"]>> 
       "SOFR–OIS spread and FRA-OIS as early stress indicators.",
     ],
   },
-  tariff_round: {
+  tariff: {
     overview: "Tariff rounds are step-changes in cross-border tax on goods, usually announced as trade policy. They matter because they immediately reprice input costs, corporate margins and currency pairs — and because retaliation escalates the impact beyond the initial industry.",
     historicalContext: "The library includes Smoot–Hawley 1930, Reagan's 1980s Japan auto/semiconductor tariffs, Bush 2002 steel tariffs, the 2018–19 US–China Section 301 rounds, and the 2025 reciprocal-tariff regime. Historically, tariffs compress importer margins first and lift domestic-producer share prices — but retaliation and supply-chain reroute costs erode the initial win.",
     whatCauses: [
@@ -83,7 +83,7 @@ const CATEGORY_BACKGROUND: Record<string, NonNullable<PanelData["background"]>> 
       "CNY fixings and EM currency reactions on tariff-news days.",
     ],
   },
-  rate_cycle: {
+  rate_shock: {
     overview: "Rate cycles are extended periods of Fed hiking or cutting. They matter because the policy rate anchors every other borrowing cost — mortgages, corporate debt, EM sovereign spreads — and reshapes equity sector leadership through the discount rate and credit channel.",
     historicalContext: "The library covers Volcker's 1979–82 disinflation, the 1994 bond massacre, the 2004–06 measured-pace tightening, the 2015–19 normalisation, and the 2022–23 fastest hiking cycle since Volcker. Each ended when something broke — LTCM, housing, SVB — and pivoted to cuts.",
     whatCauses: [
@@ -106,53 +106,7 @@ const CATEGORY_BACKGROUND: Record<string, NonNullable<PanelData["background"]>> 
       "SOFR & Fed-funds futures pricing for the next 12 months.",
     ],
   },
-  recession: {
-    overview: "Recessions are broad-based contractions in output, employment and income lasting at least two quarters (NBER dates them retrospectively using a wider set of indicators). They matter because earnings usually fall 20–40% peak-to-trough and equity multiples compress at the same time.",
-    historicalContext: "The library covers 1973–75 (oil + wage-price), 1980–82 (Volcker double-dip), 1990–91 (S&L + Gulf), 2001 (dot-com + 9/11), 2008–09 (GFC), and 2020 (COVID). Each had a different cause but the same rotation: defensives lead early, cyclicals lead the recovery.",
-    whatCauses: [
-      "Aggressive monetary tightening breaking a rate-sensitive sector (housing 2008, tech 2001).",
-      "External shocks: oil, war, pandemic.",
-      "Credit contraction after a banking crisis.",
-      "Fiscal drag or tariff-driven trade collapse.",
-    ],
-    assetsAffected: [
-      { label: "Consumer discretionary, industrials, small-caps", note: "cyclicals lead down" },
-      { label: "Staples, healthcare, utilities", note: "defensive earnings hold up relatively" },
-      { label: "High-yield credit", note: "spreads blow out well before official recession date" },
-      { label: "Long-dated Treasuries", note: "rally hard as Fed cuts" },
-      { label: "USD, JPY, gold", note: "safe-haven bid" },
-    ],
-    whatToWatch: [
-      "Sahm rule (3M unemployment vs 12M low), jobless claims trend.",
-      "ISM manufacturing & services below 50, new orders sub-index.",
-      "Yield-curve inversion and re-steepening (the re-steepen is the warning).",
-      "HY OAS above 500bp, LEI 6-month annualised change.",
-    ],
-  },
-  currency_crisis: {
-    overview: "Currency crises are rapid depreciations forced by capital flight, an unsustainable peg, or a sudden loss of reserves. They matter because they import inflation, blow up FX-mismatched corporate balance sheets and often trigger sovereign-debt or banking crises in sequence.",
-    historicalContext: "The library covers Black Wednesday 1992 (GBP/ERM), the 1994 Mexican Tequila crisis, the 1997 Asian crisis (THB→KRW→IDR contagion), Russia 1998, Argentina 2001, and the 2022 GBP LDI episode. Each ended in a policy regime change: rate hikes, IMF programme, or float.",
-    whatCauses: [
-      "Persistent current-account deficit financed by short-term hot money.",
-      "Peg incompatible with domestic policy needs (impossible trinity).",
-      "Fed hiking cycle draining EM dollar liquidity.",
-      "Political shock or sovereign-debt sustainability doubt.",
-    ],
-    assetsAffected: [
-      { label: "Local-currency sovereign & corporate bonds", note: "yields spike, prices collapse" },
-      { label: "Banks with FX-mismatched loan books", note: "solvency risk on depreciation" },
-      { label: "Import-heavy corporates", note: "margin compression on translated input costs" },
-      { label: "Commodity exporters", note: "boost from weaker currency if USD-priced revenue" },
-      { label: "USD, CHF, JPY, gold", note: "flight-to-quality" },
-    ],
-    whatToWatch: [
-      "FX reserves vs short-term external debt (Guidotti–Greenspan ratio).",
-      "Central-bank forward books and hidden intervention.",
-      "EMBI+ and CDS spreads for the sovereign.",
-      "Basis swaps (cross-currency) blowing out.",
-    ],
-  },
-  bubble: {
+  bubble_burst: {
     overview: "Bubbles are periods when asset prices decouple from any reasonable fundamental anchor, sustained by leverage, retail participation and narrative rather than cash flows. They matter because they end — and the unwind is usually violent, multi-year, and drags the real economy with it.",
     historicalContext: "The library covers the Japan asset bubble 1989, the dot-com bubble 1999–2000, the US housing bubble 2005–07, and the 2020–21 SPAC/meme/crypto complex. Common signals: retail margin debt at record highs, IPO/SPAC issuance surging, media saturation, and 'this time is different' valuation frameworks.",
     whatCauses: [
@@ -174,26 +128,74 @@ const CATEGORY_BACKGROUND: Record<string, NonNullable<PanelData["background"]>> 
       "Fed liquidity indicators (RRP, reserves, QT pace).",
     ],
   },
-  policy_shock: {
-    overview: "Policy shocks are unexpected fiscal, regulatory or geopolitical decisions large enough to reprice whole sectors or currencies within days. They matter because markets price the expected policy path — shocks are, by definition, what wasn't priced.",
-    historicalContext: "The library includes Nixon closing the gold window 1971, Reagan tax reform 1986, Brexit vote 2016, the 2018 US–China trade war, and the 2025 reciprocal-tariff regime. The move within 48 hours of the announcement is usually the most durable.",
+  crash: {
+    overview: "Equity crashes are compressed, high-volatility drawdowns — 20%+ in weeks rather than quarters — where liquidity evaporates and correlations across risk assets converge to one. They matter because the speed of the move triggers forced selling (margin, VaR, risk-parity de-leveraging) that overshoots fundamentals and creates the multi-year recovery setup.",
+    historicalContext: "The library covers 1929, October 1987 (Black Monday, ~22% in a single session), 2000 dot-com unwind, 2008 (Lehman week), the 2020 COVID crash (fastest bear on record), and shorter vol events like August 2015 and February 2018. Every crash bottomed only after a policy or liquidity backstop was announced.",
     whatCauses: [
-      "Election or referendum result outside consensus.",
-      "Executive order or regulatory ruling with immediate effect.",
-      "Central-bank surprise (rate move outside guidance).",
-      "Sanctions, export controls, or military action.",
+      "Leverage unwind: portfolio insurance (1987), quant de-grossing (Aug 2007, Feb 2018), risk-parity vol targeting.",
+      "Liquidity shock: dealer balance sheets full, market-makers step back, bid-ask blows out.",
+      "Fundamental catalyst on top of extended valuations: earnings shock, credit event, geopolitical surprise.",
+      "Reflexive options hedging (gamma): dealer short-gamma forces selling into weakness.",
     ],
     assetsAffected: [
-      { label: "The directly-targeted sector", note: "healthcare, energy, tech, defence depending on policy" },
-      { label: "Currencies tied to the policy area", note: "GBP on Brexit, CNY on trade, RUB on sanctions" },
-      { label: "Sovereign bonds", note: "credit-quality reassessment" },
-      { label: "Volatility products (VIX)", note: "typically spikes into and immediately after the shock" },
+      { label: "High-beta equities, small-caps, unprofitable growth", note: "worst drawdowns; last to recover" },
+      { label: "Credit (HY, leveraged loans)", note: "spreads gap 200–400bp in days" },
+      { label: "VIX & vol products", note: "spikes 3–5x; short-vol ETPs blow up (XIV 2018)" },
+      { label: "Treasuries, gold, USD, JPY, CHF", note: "flight-to-quality bid — with brief liquidation dips" },
+      { label: "Crypto & other risk assets", note: "correlation to 1 during the panic phase" },
     ],
     whatToWatch: [
-      "Prediction markets and betting-market odds ahead of the event.",
-      "Options-implied move in single names / currency pairs.",
-      "Legal/legislative calendar and executive-order pipeline.",
-      "Analyst downgrade waves in the 72 hours post-announcement.",
+      "VIX term structure inversion, MOVE index, cross-asset vol.",
+      "Dealer gamma positioning and 0DTE options flow.",
+      "Prime-broker balance / margin-call chatter, HY OAS gapping.",
+      "Fed/Treasury liquidity backstop language — the bottom rarely precedes it.",
+    ],
+  },
+  inflation_shock: {
+    overview: "Inflation shocks are episodes where the headline or core CPI print jumps meaningfully above trend and stays there long enough to force a central-bank reaction. They matter because they reprice the entire yield curve, compress equity multiples (especially long-duration), and rotate sector leadership toward real assets and cash-generative value.",
+    historicalContext: "The library covers the 1970s Great Inflation (two waves, ended by Volcker at 20% Fed funds), the 1988–90 pickup, the 2008 commodity-driven spike, and the 2021–23 post-COVID surge (peak CPI 9.1% in June 2022). Every episode ended only after real policy rates turned decisively positive.",
+    whatCauses: [
+      "Supply shocks: oil, food, war, pandemic supply-chain disruption.",
+      "Excess demand: fiscal transfers, negative real rates, pent-up consumption.",
+      "Wage-price feedback: unit labour costs rising faster than productivity.",
+      "Currency depreciation importing inflation via traded goods.",
+    ],
+    assetsAffected: [
+      { label: "Long-duration bonds (TLT, EDV)", note: "worst hit — duration risk repriced" },
+      { label: "Long-duration equities (unprofitable tech, biotech)", note: "multiple compression on discount rate" },
+      { label: "Energy, materials, commodities", note: "direct beneficiaries of the input-cost rise" },
+      { label: "Value, financials, defensives with pricing power", note: "outperform growth in high-inflation regimes" },
+      { label: "TIPS, floating-rate loans, real estate (initially)", note: "inflation-linked cash flows re-rate" },
+      { label: "Gold and hard assets", note: "hedge — but underperforms if real rates rise faster than inflation" },
+    ],
+    whatToWatch: [
+      "Core PCE and core CPI 3m/6m annualised — direction matters more than the level.",
+      "5Y5Y inflation break-evens, TIPS real yields.",
+      "Wage growth (ECI, AHE), unit labour costs, productivity.",
+      "Commodity leading indicators — oil, industrial metals, freight rates.",
+    ],
+  },
+  rate_pivot: {
+    overview: "Rate pivots are the moments the Fed shifts from hiking to cutting (or the reverse). They matter because the pivot itself is usually the single most important cross-asset event of a cycle — the yield curve re-steepens, the dollar tops, credit spreads reprice, and equity sector leadership rotates within weeks.",
+    historicalContext: "The library covers the 1995 soft-landing pivot, the 1998 emergency LTCM cuts, the 2001 aggressive easing cycle, the 2007 first cut before the GFC, and the 2019 mid-cycle insurance cuts. The pattern: pivots into a soft landing are bullish for risk; pivots into a hard landing precede the biggest drawdowns.",
+    whatCauses: [
+      "Inflation coming back to target (soft-landing pivot).",
+      "Financial-stability shock forcing emergency cuts (LTCM, GFC, COVID, 2023 SVB).",
+      "Labour-market deterioration triggering the Fed's dual-mandate reaction function.",
+      "Foreign-currency or funding stress (dollar liquidity backstop).",
+    ],
+    assetsAffected: [
+      { label: "Front-end rates (2Y)", note: "prices the pivot first — rallies hardest" },
+      { label: "Long-duration equities, gold, EM", note: "typical post-pivot leadership" },
+      { label: "USD", note: "usually tops within 3–6 months of the pivot signal" },
+      { label: "Banks", note: "NIM headwind — but credit re-rating dominates in soft landings" },
+      { label: "High-yield credit", note: "spreads tighten on soft-landing pivot; blow out on hard-landing pivot" },
+    ],
+    whatToWatch: [
+      "Fed dot plot revisions, SEP terminal-rate path, Powell tone shift.",
+      "SOFR & Fed-funds futures pricing (number of cuts in the next 12 months).",
+      "2s10s re-steepening — the classic pivot confirmation.",
+      "Labour market: unemployment vs SEP, jobless claims trend, JOLTS quits rate.",
     ],
   },
 };
