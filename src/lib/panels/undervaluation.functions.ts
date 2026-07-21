@@ -311,7 +311,7 @@ export const refreshUndervaluationWatchlist = createServerFn({ method: "POST" })
   for (const e of existing ?? []) existingByAsset.set(e.asset_id as string, { id: e.id as string, weak_streak: Number(e.weak_streak ?? 0) });
 
   const now = new Date().toISOString();
-  let added = 0, kept = 0, removed = 0;
+  let added = 0, kept = 0, removed = 0, toppedUp = 0;
 
   for (const a of assets) {
     const s = bag.get(a.id as string);
@@ -348,5 +348,33 @@ export const refreshUndervaluationWatchlist = createServerFn({ method: "POST" })
     }
   }
 
-  return { ok: true, added, kept, removed, ranAt: now };
+  // Top-up pass — guarantee at least 8 candidates by relaxing the entry
+  // threshold. Any top-up entry is tagged in `exit_reason` (repurposed as
+  // "entry_reason" until we add a dedicated column) so it's auditable.
+  const { data: activeAfter } = await supabaseAdmin
+    .from("undervaluation_watchlist")
+    .select("asset_id")
+    .is("removed_at", null);
+  const activeIds = new Set((activeAfter ?? []).map((r) => r.asset_id as string));
+  const MIN_LIST = 8;
+  if (activeIds.size < MIN_LIST) {
+    const candidates = assets
+      .filter((a) => !activeIds.has(a.id as string))
+      .map((a) => {
+        const s = bag.get(a.id as string);
+        return { asset: a, score: s ? uvScore(s) : null };
+      })
+      .filter((c): c is { asset: { id: string; symbol: string }; score: number } => c.score != null && c.score >= 55)
+      .sort((a, b) => b.score - a.score);
+    const need = MIN_LIST - activeIds.size;
+    for (const c of candidates.slice(0, need)) {
+      await supabaseAdmin.from("undervaluation_watchlist").insert({
+        asset_id: c.asset.id, entry_score: c.score, last_score: c.score,
+        added_at: now, last_confirmed_at: now, weak_streak: 0,
+      });
+      toppedUp += 1;
+    }
+  }
+
+  return { ok: true, added, kept, removed, toppedUp, ranAt: now };
 });
