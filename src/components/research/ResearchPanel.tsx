@@ -330,6 +330,13 @@ export function ResearchPanel({ data }: { data: PanelData }) {
       {/* Compact metrics */}
       <MetricGrid metrics={data.metrics} />
 
+      {/* Trend chart */}
+      {data.chart && (
+        <div className="rounded-md border border-border/60 bg-background/40 p-2">
+          <TrendChart series={data.chart} height={120} />
+        </div>
+      )}
+
       {/* Why */}
       <div className="space-y-1.5 border-t border-border/60 pt-2 text-[11px]">
         <div>
