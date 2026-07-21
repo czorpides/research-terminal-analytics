@@ -458,6 +458,77 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function BackgroundBlock({ bg }: { bg: NonNullable<PanelData["background"]> }) {
+  return (
+    <section className="rounded-md border border-border/70 bg-muted/20 p-3 space-y-3">
+      <div>
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--primary)]">
+          Background — what this panel measures
+        </div>
+        <p className="text-sm leading-relaxed">{bg.overview}</p>
+      </div>
+      {bg.historicalContext && (
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Historical context
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">{bg.historicalContext}</p>
+        </div>
+      )}
+      {bg.whatCauses && bg.whatCauses.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            What typically causes it
+          </div>
+          <ul className="space-y-0.5 text-xs list-disc pl-4 marker:text-[var(--primary)]">
+            {bg.whatCauses.map((c, i) => <li key={i} className="leading-snug">{c}</li>)}
+          </ul>
+        </div>
+      )}
+      {bg.assetsAffected && bg.assetsAffected.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Assets, sectors & markets most affected
+          </div>
+          <ul className="space-y-1 text-xs">
+            {bg.assetsAffected.map((a, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="font-mono text-[var(--primary)] shrink-0">›</span>
+                <span className="leading-snug"><span className="font-medium">{a.label}</span>{a.note && <span className="text-muted-foreground"> — {a.note}</span>}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {bg.whatToWatch && bg.whatToWatch.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            What to watch next
+          </div>
+          <ul className="space-y-0.5 text-xs list-disc pl-4 marker:text-[var(--warning)]">
+            {bg.whatToWatch.map((c, i) => <li key={i} className="leading-snug">{c}</li>)}
+          </ul>
+        </div>
+      )}
+      {bg.examples && bg.examples.length > 0 && (
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Historical examples
+          </div>
+          <ul className="space-y-1 text-xs">
+            {bg.examples.map((a, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="font-mono text-muted-foreground shrink-0">•</span>
+                <span className="leading-snug"><span className="font-medium">{a.label}</span>{a.note && <span className="text-muted-foreground"> — {a.note}</span>}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function CatalystRow({ c, dense = false }: { c: Catalyst; dense?: boolean }) {
   const tone = c.direction === "tailwind" ? "text-[var(--positive)]" : "text-[var(--negative)]";
   const bg   = c.direction === "tailwind" ? "border-[color:var(--positive)]/30 bg-[color:var(--positive)]/5"
