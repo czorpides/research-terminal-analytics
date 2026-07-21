@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { computeConfidence } from "@/lib/reliability/confidence";
 import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
-import type { PanelData, Evidence, Point, VerifyCheck } from "./contract";
+import type { PanelData, Evidence, Point, VerifyCheck, Catalyst } from "./contract";
 import { detectCatalystsForIndustry } from "@/lib/catalysts/detect.server";
 
 /**
@@ -72,14 +72,28 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
     const ageSec = (Date.now() - new Date(asOf).getTime()) / 1000;
     const conf = computeConfidence({ tier: "tier2_regulated", category: "price_daily", ageSeconds: ageSec });
 
+    // Positives = everything supporting the undervaluation case (cheap
+    // metrics, quality strengths, tailwind catalysts).
     const positives: Point[] = [
-      ...(bag["valuation"]?.positives ?? []).map((p) => ({ ...p, id: `val-${p.id}` })),
-      ...(bag["quality"]?.positives   ?? []).map((p) => ({ ...p, id: `qua-${p.id}` })),
+      ...(bag["valuation"]?.positives ?? []).map((p) => ({ ...p, id: `val-${p.id}`, label: `Undervalued — ${p.label}` })),
+      ...(bag["quality"]?.positives   ?? []).map((p) => ({ ...p, id: `qua-${p.id}`, label: `Quality — ${p.label}` })),
+      ...catalysts.filter((c) => c.direction === "tailwind").map((c) => ({
+        id: `cat-${c.id}`,
+        label: `Tailwind — ${c.headline}`,
+        detail: c.reasoning,
+      })),
     ];
+    // Deductions = risks to the value case (weak trend, quality drags,
+    // pressure catalysts).
     const deductions: Point[] = [
-      ...(bag["valuation"]?.deductions ?? []).map((p) => ({ ...p, id: `val-${p.id}` })),
-      ...(bag["quality"]?.deductions   ?? []).map((p) => ({ ...p, id: `qua-${p.id}` })),
-      ...(bag["trend"]?.deductions     ?? []).map((p) => ({ ...p, id: `trn-${p.id}` })),
+      ...(bag["valuation"]?.deductions ?? []).map((p) => ({ ...p, id: `val-${p.id}`, label: `Value risk — ${p.label}` })),
+      ...(bag["quality"]?.deductions   ?? []).map((p) => ({ ...p, id: `qua-${p.id}`, label: `Quality drag — ${p.label}` })),
+      ...(bag["trend"]?.deductions     ?? []).map((p) => ({ ...p, id: `trn-${p.id}`, label: `Trend risk — ${p.label}` })),
+      ...catalysts.filter((c) => c.direction === "pressure").map((c) => ({
+        id: `cat-${c.id}`,
+        label: `Pressure — ${c.headline}`,
+        detail: c.reasoning,
+      })),
     ];
 
     const evidence: Evidence[] = [{
@@ -105,7 +119,7 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
 
     const nowIso = new Date().toISOString();
     const daysOnList = Math.floor((Date.now() - new Date(w.added_at as string).getTime()) / 86_400_000);
-    const verifyNext: VerifyCheck[] = [
+    const algoChecks: VerifyCheck[] = [
       { id: "v-conf", label: "Watchlist entry re-confirmed this week", verifier: "algo",
         status: (Date.now() - new Date(w.last_confirmed_at as string).getTime()) < 8 * 86_400_000 ? "pass" : "stale",
         detail: `Last confirmed ${new Date(w.last_confirmed_at as string).toLocaleDateString()}.`,
@@ -116,9 +130,19 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
       { id: "v-catalyst", label: "External catalyst detected", verifier: "algo",
         status: catalysts.length > 0 ? "pass" : "unavailable",
         detail: `${catalysts.length} macro/commodity/alt-data catalysts within lookback.`, checkedAt: nowIso },
-      { id: "v-ai-thesis", label: "AI: articulate the value case & risks", verifier: "ai",
-        status: "unavailable", detail: "Lit up once AI commentary layer is wired." },
     ];
+    const verifyNext: VerifyCheck[] = [
+      ...algoChecks,
+      aiCoherenceCheck(algoChecks, `${positives.length} positives / ${deductions.length} deductions`),
+    ];
+
+    const whyBullets = buildWhyBullets("under", {
+      symbol,
+      bag,
+      catalysts,
+      lastScore: Number(w.last_score),
+      daysOnList,
+    });
 
     const panel: PanelData = {
       id: `uv-${symbol}`,
@@ -136,6 +160,7 @@ export const getUndervaluationPanels = createServerFn({ method: "GET" }).handler
       whyItMatters: catalysts.length > 0
         ? `Cheap on a peer-relative basis with ${catalysts.filter(c => c.direction === "tailwind").length} tailwind and ${catalysts.filter(c => c.direction === "pressure").length} pressure catalysts currently in view.`
         : "Cheap on a peer-relative basis. No external catalysts currently detected in the mapped rule set.",
+      whyBullets,
       evidence, positives, deductions, verifyNext, confidence: conf,
       catalysts,
       calculation: {
