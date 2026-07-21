@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedUndervaluationRouteImport } from './routes/_authenticated/undervaluation'
 import { Route as AuthenticatedScreenersRouteImport } from './routes/_authenticated/screeners'
@@ -34,69 +35,73 @@ import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
-const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
-  id: '/_authenticated/',
-  path: '/',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedUndervaluationRoute =
   AuthenticatedUndervaluationRouteImport.update({
-    id: '/_authenticated/undervaluation',
+    id: '/undervaluation',
     path: '/undervaluation',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedScreenersRoute = AuthenticatedScreenersRouteImport.update({
-  id: '/_authenticated/screeners',
+  id: '/screeners',
   path: '/screeners',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedRadarRoute = AuthenticatedRadarRouteImport.update({
-  id: '/_authenticated/radar',
+  id: '/radar',
   path: '/radar',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedOvervaluationRoute =
   AuthenticatedOvervaluationRouteImport.update({
-    id: '/_authenticated/overvaluation',
+    id: '/overvaluation',
     path: '/overvaluation',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedMacroRoute = AuthenticatedMacroRouteImport.update({
-  id: '/_authenticated/macro',
+  id: '/macro',
   path: '/macro',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
-  id: '/_authenticated/history',
+  id: '/history',
   path: '/history',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDataHealthRoute = AuthenticatedDataHealthRouteImport.update({
-  id: '/_authenticated/data-health',
+  id: '/data-health',
   path: '/data-health',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAltDataRoute = AuthenticatedAltDataRouteImport.update({
-  id: '/_authenticated/alt-data',
+  id: '/alt-data',
   path: '/alt-data',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAlertsRoute = AuthenticatedAlertsRouteImport.update({
-  id: '/_authenticated/alerts',
+  id: '/alerts',
   path: '/alerts',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSecurityIndexRoute =
   AuthenticatedSecurityIndexRouteImport.update({
-    id: '/_authenticated/security/',
+    id: '/security/',
     path: '/security/',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSecuritySymbolRoute =
   AuthenticatedSecuritySymbolRouteImport.update({
-    id: '/_authenticated/security/$symbol',
+    id: '/security/$symbol',
     path: '/security/$symbol',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedHistoryEventIdRoute =
   AuthenticatedHistoryEventIdRouteImport.update({
@@ -166,6 +171,7 @@ const ApiPublicRadarsUndervaluationRefreshRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof AuthenticatedIndexRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRoute
   '/data-health': typeof AuthenticatedDataHealthRoute
@@ -175,7 +181,6 @@ export interface FileRoutesByFullPath {
   '/radar': typeof AuthenticatedRadarRoute
   '/screeners': typeof AuthenticatedScreenersRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
-  '/': typeof AuthenticatedIndexRoute
   '/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
@@ -219,6 +224,7 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/_authenticated/alerts': typeof AuthenticatedAlertsRoute
   '/_authenticated/alt-data': typeof AuthenticatedAltDataRoute
   '/_authenticated/data-health': typeof AuthenticatedDataHealthRoute
@@ -247,6 +253,7 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/'
     | '/alerts'
     | '/alt-data'
     | '/data-health'
@@ -256,7 +263,6 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/undervaluation'
-    | '/'
     | '/history/$eventId'
     | '/security/$symbol'
     | '/security/'
@@ -299,6 +305,7 @@ export interface FileRouteTypes {
     | '/api/public/radars/undervaluation/refresh'
   id:
     | '__root__'
+    | '/_authenticated'
     | '/_authenticated/alerts'
     | '/_authenticated/alt-data'
     | '/_authenticated/data-health'
@@ -326,18 +333,7 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  AuthenticatedAlertsRoute: typeof AuthenticatedAlertsRoute
-  AuthenticatedAltDataRoute: typeof AuthenticatedAltDataRoute
-  AuthenticatedDataHealthRoute: typeof AuthenticatedDataHealthRoute
-  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
-  AuthenticatedMacroRoute: typeof AuthenticatedMacroRoute
-  AuthenticatedOvervaluationRoute: typeof AuthenticatedOvervaluationRoute
-  AuthenticatedRadarRoute: typeof AuthenticatedRadarRoute
-  AuthenticatedScreenersRoute: typeof AuthenticatedScreenersRoute
-  AuthenticatedUndervaluationRoute: typeof AuthenticatedUndervaluationRoute
-  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
-  AuthenticatedSecuritySymbolRoute: typeof AuthenticatedSecuritySymbolRoute
-  AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
   ApiPublicIngestAltdataRoute: typeof ApiPublicIngestAltdataRoute
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
@@ -353,89 +349,96 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/': {
       id: '/_authenticated/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/undervaluation': {
       id: '/_authenticated/undervaluation'
       path: '/undervaluation'
       fullPath: '/undervaluation'
       preLoaderRoute: typeof AuthenticatedUndervaluationRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/screeners': {
       id: '/_authenticated/screeners'
       path: '/screeners'
       fullPath: '/screeners'
       preLoaderRoute: typeof AuthenticatedScreenersRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/radar': {
       id: '/_authenticated/radar'
       path: '/radar'
       fullPath: '/radar'
       preLoaderRoute: typeof AuthenticatedRadarRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/overvaluation': {
       id: '/_authenticated/overvaluation'
       path: '/overvaluation'
       fullPath: '/overvaluation'
       preLoaderRoute: typeof AuthenticatedOvervaluationRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/macro': {
       id: '/_authenticated/macro'
       path: '/macro'
       fullPath: '/macro'
       preLoaderRoute: typeof AuthenticatedMacroRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/history': {
       id: '/_authenticated/history'
       path: '/history'
       fullPath: '/history'
       preLoaderRoute: typeof AuthenticatedHistoryRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/data-health': {
       id: '/_authenticated/data-health'
       path: '/data-health'
       fullPath: '/data-health'
       preLoaderRoute: typeof AuthenticatedDataHealthRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/alt-data': {
       id: '/_authenticated/alt-data'
       path: '/alt-data'
       fullPath: '/alt-data'
       preLoaderRoute: typeof AuthenticatedAltDataRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/alerts': {
       id: '/_authenticated/alerts'
       path: '/alerts'
       fullPath: '/alerts'
       preLoaderRoute: typeof AuthenticatedAlertsRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/security/': {
       id: '/_authenticated/security/'
       path: '/security'
       fullPath: '/security/'
       preLoaderRoute: typeof AuthenticatedSecurityIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/security/$symbol': {
       id: '/_authenticated/security/$symbol'
       path: '/security/$symbol'
       fullPath: '/security/$symbol'
       preLoaderRoute: typeof AuthenticatedSecuritySymbolRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/history/$eventId': {
       id: '/_authenticated/history/$eventId'
@@ -535,7 +538,22 @@ const AuthenticatedHistoryRouteChildren: AuthenticatedHistoryRouteChildren = {
 const AuthenticatedHistoryRouteWithChildren =
   AuthenticatedHistoryRoute._addFileChildren(AuthenticatedHistoryRouteChildren)
 
-const rootRouteChildren: RootRouteChildren = {
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAlertsRoute: typeof AuthenticatedAlertsRoute
+  AuthenticatedAltDataRoute: typeof AuthenticatedAltDataRoute
+  AuthenticatedDataHealthRoute: typeof AuthenticatedDataHealthRoute
+  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
+  AuthenticatedMacroRoute: typeof AuthenticatedMacroRoute
+  AuthenticatedOvervaluationRoute: typeof AuthenticatedOvervaluationRoute
+  AuthenticatedRadarRoute: typeof AuthenticatedRadarRoute
+  AuthenticatedScreenersRoute: typeof AuthenticatedScreenersRoute
+  AuthenticatedUndervaluationRoute: typeof AuthenticatedUndervaluationRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedSecuritySymbolRoute: typeof AuthenticatedSecuritySymbolRoute
+  AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAlertsRoute: AuthenticatedAlertsRoute,
   AuthenticatedAltDataRoute: AuthenticatedAltDataRoute,
   AuthenticatedDataHealthRoute: AuthenticatedDataHealthRoute,
@@ -548,6 +566,13 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedSecuritySymbolRoute: AuthenticatedSecuritySymbolRoute,
   AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
+const rootRouteChildren: RootRouteChildren = {
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
   ApiPublicIngestAltdataRoute: ApiPublicIngestAltdataRoute,
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
