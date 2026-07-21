@@ -42,6 +42,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SOURCE_TIER_META, type SourceTier } from "@/lib/reliability/tiers";
+import { TrendChart } from "./TrendChart";
 import type {
   PanelData,
   Evidence,
