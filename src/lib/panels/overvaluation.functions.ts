@@ -5,6 +5,7 @@ import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck } from "./contract";
 import { riskScore } from "@/lib/scoring/composite";
 import { detectCatalystsForIndustry } from "@/lib/catalysts/detect.server";
+import { aiCoherenceCheck, buildWhyBullets } from "./undervaluation.functions";
 
 interface LatestScore {
   asset_id: string; score_type: string; value: number; confidence: number;
@@ -112,17 +113,33 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
       agrees: true,
     }];
 
-    // Invert the semantics: positives from the score become "risk mitigants"
-    // (kept as deductions of the risk case) and deductions become elevated risks.
+    // Semantics for Overvaluation:
+    //   Deductions = things pulling the name DOWN (decline drivers, pressure
+    //     catalysts, weak factors) — these are the "bad" signals.
+    //   Positives  = mitigants — factors that argue AGAINST the decline case.
+    // This mirrors the Undervaluation panel so users read positives/deductions
+    // consistently: positives = "supports the panel thesis being wrong",
+    // deductions = "supports the panel thesis being right".
     const positives: Point[] = [];
     const deductions: Point[] = [];
     for (const t of ["momentum", "trend", "volatility", "valuation", "quality"] as const) {
       const s = bag[t];
       if (!s) continue;
-      // deductions from underlying score = reasons the risk is high
-      positives.push(...s.deductions.map((p) => ({ ...p, id: `risk-${t}-${p.id}` })));
-      // positives from underlying score = reasons the risk case is weaker
-      deductions.push(...s.positives.map((p) => ({ ...p, id: `mit-${t}-${p.id}`, label: `Mitigant — ${p.label}` })));
+      // Score deductions on the underlying factor → decline drivers
+      deductions.push(...s.deductions.map((p) => ({
+        ...p, id: `risk-${t}-${p.id}`, label: `${t[0].toUpperCase()}${t.slice(1)} risk — ${p.label}`,
+      })));
+      // Score positives on the underlying factor → mitigants against decline
+      positives.push(...s.positives.map((p) => ({
+        ...p, id: `mit-${t}-${p.id}`, label: `Mitigant — ${p.label}`,
+      })));
+    }
+    for (const c of catalysts) {
+      if (c.direction === "pressure") {
+        deductions.push({ id: `cat-${c.id}`, label: `Pressure — ${c.headline}`, detail: c.reasoning });
+      } else {
+        positives.push({ id: `cat-${c.id}`, label: `Tailwind (mitigant) — ${c.headline}`, detail: c.reasoning });
+      }
     }
 
     const nowIso = new Date().toISOString();
@@ -156,10 +173,9 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
       status: ageSec <= DEFAULT_FRESHNESS.price_daily.maxAgeSeconds ? "pass" : "stale",
       detail: `Age ${(ageSec / 3600).toFixed(1)}h`, checkedAt: nowIso,
     });
-    verifyNext.push({
-      id: "v-ai-thesis", label: "AI: articulate the overvaluation case", verifier: "ai",
-      status: "unavailable", detail: "Lit up once AI commentary layer is wired.",
-    });
+    verifyNext.push(aiCoherenceCheck(verifyNext, `${positives.length} mitigants / ${deductions.length} decline drivers`));
+
+    const whyBullets = buildWhyBullets("over", { symbol, bag, catalysts });
 
     return {
       id: `ov-${symbol}`,
@@ -175,6 +191,7 @@ export const getOvervaluationPanels = createServerFn({ method: "GET" }).handler(
       ],
       whatChanged: price ? `Last close ${price.close.toFixed(2)} on ${price.trade_date}.` : "No price data yet.",
       whyItMatters: "Cross-factor risk score highlights names where the failure case is corroborated across momentum, trend and vol regime — a research prompt, never a short recommendation.",
+      whyBullets,
       evidence, positives, deductions, verifyNext, confidence: conf,
       catalysts,
       calculation: {
