@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ingestAllFredSeries, ingestFredSeries } from "@/lib/ingestion/fred/ingest.functions";
+import { runAllFredIngest, runFredIngest } from "@/lib/ingestion/fred/ingest.server";
 
 /**
  * Public HTTP endpoint hit by pg_cron (via pg_net). Auth uses the Supabase
@@ -24,11 +24,11 @@ export const Route = createFileRoute("/api/public/ingest/fred")({
 
         try {
           if (series) {
-            const r = await ingestFredSeries({ data: { seriesCode: series } });
+            const r = await runFredIngest(series);
             return Response.json(r);
           }
-          const r = await ingestAllFredSeries();
-          return Response.json(r);
+          const results = await runAllFredIngest();
+          return Response.json({ results });
         } catch (e) {
           return new Response(`Ingestion error: ${(e as Error).message}`, { status: 500 });
         }
