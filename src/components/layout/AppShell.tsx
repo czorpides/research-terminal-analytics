@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutGrid,
   Globe2,
@@ -12,8 +12,17 @@ import {
   Bell,
   Activity,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const NAV = [
   { to: "/",            label: "Command Centre",  icon: LayoutGrid, code: "CC" },
@@ -69,8 +78,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="border-t border-border/70 p-2 font-mono text-[10px] text-muted-foreground">
-          <div>Phase 1 · Foundation</div>
-          <div className="text-[var(--warning)]">No live data wired</div>
+          <div>Phase 3 · Auth + Zones</div>
+          <div className="text-[var(--positive)]">Session active</div>
         </div>
       </aside>
 
@@ -87,8 +96,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span>calc v0.1</span>
             </div>
           </div>
-          <div className="font-mono text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
             <ClientClock />
+            <AccountMenu />
           </div>
         </header>
         <MobileNav pathname={pathname} />
@@ -125,4 +135,44 @@ function ClientClock() {
   if (typeof window === "undefined") return <span>—</span>;
   const t = new Date();
   return <span>{t.toLocaleTimeString()} · UTC{-t.getTimezoneOffset() / 60 >= 0 ? "+" : ""}{-t.getTimezoneOffset() / 60}</span>;
+}
+
+function AccountMenu() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setEmail(s?.user?.email ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function onSignOut() {
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
+  if (!email) return null;
+  const initial = email[0]?.toUpperCase() ?? "?";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-sidebar font-mono text-[10px] text-foreground hover:border-[var(--primary)]"
+          aria-label="Account menu"
+        >
+          {initial}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="truncate text-xs">{email}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onSignOut} className="text-xs">Sign out</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }

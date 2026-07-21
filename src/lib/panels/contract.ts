@@ -70,6 +70,12 @@ export interface TrendSeries {
   format?: ChartFormat;
   /** Optional secondary comparison series (e.g. peer / target line). */
   compare?: { label: string; points: ChartPoint[] };
+  /**
+   * Optional stable key (usually indicator_id) used to look up + persist
+   * per-user zone overrides via `public.user_zone_overrides`. When set, the
+   * chart shows an "Edit zones" affordance.
+   */
+  overrideKey?: string;
 }
 
 /**

@@ -10,7 +10,7 @@ const ovQueryOptions = queryOptions({
   queryFn: () => getOvervaluationPanels(),
 });
 
-export const Route = createFileRoute("/overvaluation")({
+export const Route = createFileRoute("/_authenticated/overvaluation")({
   head: () => ({ meta: [
     { title: "Overvaluation Radar — Research Terminal" },
     { name: "description", content: "Risk-ranked equities where momentum, trend and volatility all point the wrong way." },

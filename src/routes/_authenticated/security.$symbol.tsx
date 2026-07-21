@@ -11,7 +11,7 @@ const detailQuery = (symbol: string) => queryOptions({
   queryFn: () => getSecurityDetail({ data: { symbol } }),
 });
 
-export const Route = createFileRoute("/security/$symbol")({
+export const Route = createFileRoute("/_authenticated/security/$symbol")({
   head: ({ params }) => ({ meta: [
     { title: `${params.symbol.toUpperCase()} — Security research` },
     { name: "description", content: `Auditable research deep dive for ${params.symbol.toUpperCase()}.` },

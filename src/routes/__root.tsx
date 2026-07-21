@@ -115,7 +115,25 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-
+  const router = useRouter();
+  useEffect(() => {
+    let mounted = true;
+    import("@/integrations/supabase/client").then(({ supabase }) => {
+      if (!mounted) return;
+      const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+        if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+        router.invalidate();
+        if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+      });
+      // store cleanup on module-level closure via ref
+      cleanupRef = () => sub.subscription.unsubscribe();
+    });
+    return () => {
+      mounted = false;
+      cleanupRef?.();
+      cleanupRef = null;
+    };
+  }, [router, queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
@@ -123,3 +141,5 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+
+let cleanupRef: (() => void) | null = null;

@@ -10,7 +10,7 @@ const ccQueryOptions = queryOptions({
   queryFn: () => getCommandCentrePanels(),
 });
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   head: () => ({ meta: [
     { title: "Command Centre — Research Terminal" },
     { name: "description", content: "Regime, top opportunities, top risks, data health and verifier activity — the one screen for what deserves attention right now." },

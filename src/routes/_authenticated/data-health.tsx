@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-export const Route = createFileRoute("/data-health")({
+export const Route = createFileRoute("/_authenticated/data-health")({
   head: () => ({ meta: [
     { title: "Data Health — Research Terminal" },
     { name: "description", content: "Source tiers, freshness policies, ingestion runs and model governance." },

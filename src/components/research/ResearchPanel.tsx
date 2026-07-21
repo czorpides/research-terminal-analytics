@@ -268,7 +268,7 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                 {data.chart && (
                   <Section title="Trend">
                     <div className="rounded-md border border-border/60 bg-background/40 p-2">
-                      <TrendChart series={data.chart} height={220} />
+                      <TrendChart series={{ ...data.chart, overrideKey: data.chart.overrideKey ?? data.id }} height={220} />
                     </div>
                   </Section>
                 )}
@@ -340,7 +340,7 @@ export function ResearchPanel({ data }: { data: PanelData }) {
       {/* Trend chart */}
       {data.chart && (
         <div className="rounded-md border border-border/60 bg-background/40 p-2">
-          <TrendChart series={data.chart} height={120} />
+          <TrendChart series={data.chart} height={120} compact />
         </div>
       )}
 
