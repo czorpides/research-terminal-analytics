@@ -593,10 +593,10 @@ async function buildComparePanels(): Promise<PanelData[]> {
   };
 
   return [
-    build("Policy rates", "Fed Funds vs ECB deposit rate vs BoE bank rate.", [
+    build("Policy rates", "Fed Funds vs ECB deposit rate vs UK SONIA (BoE proxy).", [
       { label: "US Fed Funds",  obs: us.byMetric.get("DFF") },
       { label: "EA ECB DFR",    obs: ez.byMetric.get("ECBDFR") },
-      { label: "UK BoE rate",   obs: uk.byMetric.get("IUDBEDR") },
+      { label: "UK SONIA",      obs: uk.byMetric.get("IUDSOIA") },
     ], "percent"),
     build("10Y sovereign yields", "US 10Y vs EA 10Y vs UK 10Y.", [
       { label: "US 10Y", obs: us.byMetric.get("DGS10") },
