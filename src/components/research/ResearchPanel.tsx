@@ -264,7 +264,14 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                   <MetricGrid metrics={data.metrics} large />
                 </Section>
                 <Section title="What changed"><p className="text-sm">{data.whatChanged}</p></Section>
-                <Section title="Why it matters"><p className="text-sm">{data.whyItMatters}</p></Section>
+                <Section title="Why it matters">
+                  <p className="text-sm">{data.whyItMatters}</p>
+                  {data.whyBullets && data.whyBullets.length > 0 && (
+                    <ul className="mt-2 space-y-1 text-sm list-disc pl-4 marker:text-[var(--primary)]">
+                      {data.whyBullets.map((b, i) => <li key={i} className="leading-snug">{b}</li>)}
+                    </ul>
+                  )}
+                </Section>
                 <Section title={`Evidence (${data.evidence.length})`}>
                   {data.evidence.length === 0
                     ? <div className="text-xs text-muted-foreground">— no evidence wired —</div>
@@ -330,6 +337,11 @@ export function ResearchPanel({ data }: { data: PanelData }) {
         <div>
           <div className="uppercase tracking-wider text-muted-foreground">Why it matters</div>
           <p className="mt-0.5 leading-snug">{data.whyItMatters}</p>
+          {data.whyBullets && data.whyBullets.length > 0 && (
+            <ul className="mt-1 space-y-0.5 list-disc pl-4 marker:text-[var(--primary)]">
+              {data.whyBullets.map((b, i) => <li key={i} className="leading-snug">{b}</li>)}
+            </ul>
+          )}
         </div>
       </div>
 
