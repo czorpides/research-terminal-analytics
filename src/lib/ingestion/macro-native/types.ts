@@ -1,0 +1,1 @@
+export interface NativeObs { date: string; value: number }

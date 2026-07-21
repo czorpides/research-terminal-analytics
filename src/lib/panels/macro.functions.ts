@@ -6,6 +6,7 @@ import { stampCalculation } from "@/lib/reliability/version";
 import { linearProjection } from "@/components/research/TrendChart";
 import type { PanelData, Evidence, VerifyCheck, ChartZone, TrendSeries, Metric } from "./contract";
 import { FRED_SERIES } from "@/lib/ingestion/fred/series";
+import { NATIVE_SERIES } from "@/lib/ingestion/macro-native/registry";
 
 export type MacroRegion = "US" | "EZ" | "UK";
 
@@ -43,8 +44,14 @@ async function loadPoints(region: MacroRegion): Promise<{ byMetric: ByMetric; so
   ]);
 
   const wanted = new Set(FRED_SERIES.filter((s) => s.region === region).map((s) => s.seriesCode));
+  const nativeWanted = new Set(
+    NATIVE_SERIES.filter((s) => s.region === region).map((s) => s.seriesCode),
+  );
   const ids = (indicators ?? [])
-    .filter((i) => i.provider_series_code && wanted.has(i.provider_series_code as string))
+    .filter((i) => {
+      const code = i.provider_series_code as string | null;
+      return !!code && (wanted.has(code) || nativeWanted.has(code));
+    })
     .map((i) => i.id);
 
   const byMetric: ByMetric = new Map();
@@ -65,6 +72,19 @@ async function loadPoints(region: MacroRegion): Promise<{ byMetric: ByMetric; so
     arr.push({ asOf: p.as_of as string, value: Number(p.value_num) });
     byMetric.set(p.metric_code as string, arr);
   });
+
+  // Prefer native provider data (ECB / ONS / BoE / HMRC) over the FRED mirror
+  // when both are present. Native ingest populates a distinct metric_code —
+  // when it has points we transparently swap it into the FRED-keyed slot the
+  // panels read from.
+  for (const spec of NATIVE_SERIES) {
+    if (spec.region !== region) continue;
+    const native = byMetric.get(spec.seriesCode);
+    if (native && native.length > 0 && spec.fredFallback) {
+      byMetric.set(spec.fredFallback, native);
+    }
+  }
+
   return { byMetric, sourceName: source?.name ?? "FRED", regionLabel: REGION_LABEL[region] };
 }
 
@@ -97,6 +117,7 @@ async function buildRegionPanels(region: MacroRegion): Promise<PanelData[]> {
     panels.push(genericRatesPanel(region, byMetric, sourceName, "IUDSOIA", "IRLTLT01GBM156N", "UK SONIA (BoE proxy)", "UK 10Y gilt", checkFreshness, pendingAiCheck));
     panels.push(inflationPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(laborPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
+    panels.push(ukBusinessPanel(byMetric, checkFreshness, pendingAiCheck));
   }
 
   // Overlay any recorded verify_runs (algo/api/ai) per panel.
@@ -561,6 +582,88 @@ function businessGrowthPanel(
 }
 
 async function buildComparePanels(): Promise<PanelData[]> {
+  // placeholder anchor
+  return _buildComparePanels();
+}
+
+function ukBusinessPanel(
+  byMetric: ByMetric,
+  checkFresh: typeof import("@/lib/verify/runners.server").checkFreshness,
+  pendingAi: typeof import("@/lib/verify/runners.server").pendingAiCheck,
+): PanelData {
+  const vat = byMetric.get("hmrc-tax-and-nics-receipts/vat");
+  const paye = byMetric.get("hmrc-tax-and-nics-receipts/paye_it");
+  const sa   = byMetric.get("hmrc-tax-and-nics-receipts/sa_it");
+  const lV = latest(vat), lP = latest(paye), lS = latest(sa);
+  const vatYoY = pctChangeYoY(vat), payeYoY = pctChangeYoY(paye), saYoY = pctChangeYoY(sa);
+
+  const evidence: Evidence[] = [];
+  const now = Date.now();
+  const hmrcEvidence = (code: string, label: string, asOf: string): Evidence => {
+    const ageSec = (now - new Date(asOf).getTime()) / 1000;
+    return {
+      id: `ev-hmrc-${code}`, label,
+      sourceName: "HMRC Tax & Duty Bulletins", tier: "tier1_official",
+      asOf, freshness: freshnessState(ageSec, DEFAULT_FRESHNESS.macro_release),
+      agrees: true,
+      url: "https://www.gov.uk/government/collections/hm-revenue-and-customs-receipts",
+    };
+  };
+  if (lV) evidence.push(hmrcEvidence("vat",     "HMRC VAT receipts monthly bulletin", lV.asOf));
+  if (lP) evidence.push(hmrcEvidence("paye_it", "HMRC PAYE Income Tax bulletin",      lP.asOf));
+  if (lS) evidence.push(hmrcEvidence("sa_it",   "HMRC Self-Assessment bulletin",      lS.asOf));
+
+  const ageSec = lV ? (Date.now() - new Date(lV.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
+  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+
+  const positives = [], deductions = [];
+  if (vatYoY !== null && vatYoY > 3)  positives.push({ id: "vat-up",   label: "VAT receipts growing YoY",  detail: `${vatYoY.toFixed(1)}%` });
+  if (vatYoY !== null && vatYoY < 0)  deductions.push({ id: "vat-dn",  label: "VAT receipts contracting YoY", detail: `${vatYoY.toFixed(1)}%` });
+  if (payeYoY !== null && payeYoY < 0) deductions.push({ id: "paye-dn", label: "PAYE receipts contracting YoY", detail: `${payeYoY.toFixed(1)}%` });
+
+  const verifyNext: VerifyCheck[] = [];
+  if (lV) verifyNext.push(checkFresh("v-hmrc-vat", "HMRC VAT bulletin fresh", lV.asOf, 60 * 60 * 24 * 45));
+  verifyNext.push(pendingAi("v-hmrc-ai", "Interpret UK business tax receipts vs consumer & payroll signals"));
+
+  const chartZones: ChartZone[] = [
+    { from: -50, to: -5, kind: "bad",  label: "Sharp contraction" },
+    { from: -5,  to: 0,  kind: "warn", label: "Contracting" },
+    { from: 0,   to: 100, kind: "good", label: "Expanding" },
+  ];
+  const vatYoySeries: Obs[] = [];
+  if (vat && vat.length > 13) {
+    for (let i = 12; i < vat.length; i++) {
+      const prev = vat[i - 12].value;
+      if (prev !== 0) vatYoySeries.push({ asOf: vat[i].asOf, value: ((vat[i].value - prev) / prev) * 100 });
+    }
+  }
+
+  return {
+    id: "macro-uk-business",
+    title: "UK business payments (HMRC)",
+    purpose: "VAT, PAYE and Self-Assessment receipts — real-time signal of UK business activity.",
+    background: {
+      overview: "HMRC's monthly receipts bulletin captures VAT collected on turnover, PAYE income tax withheld from wages and self-assessment liabilities. Together they read business activity, wage bills and self-employed income within weeks of the underlying month.",
+      whatCauses: ["Consumer spending (VAT)", "Wage & employment trends (PAYE)", "Small-business income (SA)", "Rate/threshold changes"],
+      whatToWatch: ["VAT YoY vs retail sales", "PAYE YoY vs wage growth", "Self-assessment vs freelance economy indicators"],
+    },
+    metrics: [
+      { label: "VAT receipts (£m)",  value: lV ? Math.round(lV.value).toLocaleString() : "—", tone: vatYoY !== null ? tone(vatYoY, true) : "neutral" },
+      { label: "VAT YoY",             value: vatYoY !== null ? `${vatYoY.toFixed(1)}%` : "—", tone: vatYoY !== null ? tone(vatYoY, true) : "neutral" },
+      { label: "PAYE receipts (£m)",  value: lP ? Math.round(lP.value).toLocaleString() : "—", tone: payeYoY !== null ? tone(payeYoY, true) : "neutral" },
+      { label: "SA receipts (£m)",    value: lS ? Math.round(lS.value).toLocaleString() : "—", tone: saYoY !== null ? tone(saYoY, true) : "neutral" },
+    ],
+    chart: vatYoySeries.length > 0
+      ? { points: toChartPoints(vatYoySeries, 60), zones: chartZones, format: "percent", yLabel: "VAT YoY %" }
+      : undefined,
+    whatChanged: lV ? `Latest VAT print: £${Math.round(lV.value).toLocaleString()}m for ${new Date(lV.asOf).toLocaleDateString(undefined, { month: "long", year: "numeric" })}.` : "No HMRC data yet.",
+    whyItMatters: "HMRC receipts are one of the fastest official reads on UK business activity — often available before ONS GDP prints.",
+    evidence, positives, deductions, verifyNext,
+    confidence: { value: conf.value, penalties: conf.penalties },
+  };
+}
+
+async function _buildComparePanels(): Promise<PanelData[]> {
   const [us, ez, uk] = await Promise.all([loadPoints("US"), loadPoints("EZ"), loadPoints("UK")]);
 
   const build = (title: string, purpose: string, series: Array<{ label: string; obs?: Obs[] }>, format: TrendSeries["format"], zones?: ChartZone[]): PanelData => {

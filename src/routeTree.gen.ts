@@ -26,6 +26,7 @@ import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/veri
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
+import { Route as ApiPublicIngestMacroNativeRouteImport } from './routes/api/public/ingest/macro-native'
 import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
 import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
@@ -118,6 +119,12 @@ const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
   path: '/api/public/ingest/stooq',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIngestMacroNativeRoute =
+  ApiPublicIngestMacroNativeRouteImport.update({
+    id: '/api/public/ingest/macro-native',
+    path: '/api/public/ingest/macro-native',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicIngestFundamentalsRoute =
   ApiPublicIngestFundamentalsRouteImport.update({
     id: '/api/public/ingest/fundamentals',
@@ -172,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
+  '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
@@ -197,6 +205,7 @@ export interface FileRoutesByTo {
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
+  '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
@@ -223,6 +232,7 @@ export interface FileRoutesById {
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
+  '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
+    | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
@@ -275,6 +286,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
+    | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
@@ -300,6 +312,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
+    | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
@@ -325,6 +338,7 @@ export interface RootRouteChildren {
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
   ApiPublicIngestFundamentalsRoute: typeof ApiPublicIngestFundamentalsRoute
+  ApiPublicIngestMacroNativeRoute: typeof ApiPublicIngestMacroNativeRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
   ApiPublicProvidersPingRoute: typeof ApiPublicProvidersPingRoute
   ApiPublicScoresRunRoute: typeof ApiPublicScoresRunRoute
@@ -453,6 +467,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicIngestStooqRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/macro-native': {
+      id: '/api/public/ingest/macro-native'
+      path: '/api/public/ingest/macro-native'
+      fullPath: '/api/public/ingest/macro-native'
+      preLoaderRoute: typeof ApiPublicIngestMacroNativeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/fundamentals': {
       id: '/api/public/ingest/fundamentals'
       path: '/api/public/ingest/fundamentals'
@@ -527,6 +548,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
   ApiPublicIngestFundamentalsRoute: ApiPublicIngestFundamentalsRoute,
+  ApiPublicIngestMacroNativeRoute: ApiPublicIngestMacroNativeRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
   ApiPublicProvidersPingRoute: ApiPublicProvidersPingRoute,
   ApiPublicScoresRunRoute: ApiPublicScoresRunRoute,
@@ -537,13 +559,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
