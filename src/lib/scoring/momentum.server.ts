@@ -38,7 +38,8 @@ export function computeMomentum(bars: Bar[]): MomentumResult {
   const vol = Math.sqrt(v) * Math.sqrt(252);
   const adj = vol > 0 ? raw / vol : raw;
 
-  const positives = [], deductions = [];
+  const positives: Array<{ id: string; label: string; detail?: string }> = [];
+  const deductions: Array<{ id: string; label: string; detail?: string }> = [];
   if (raw > 0.15) positives.push({ id: "momo-strong", label: "12-1 momentum > +15%", detail: `${(raw * 100).toFixed(1)}%` });
   if (raw < -0.15) deductions.push({ id: "momo-weak", label: "12-1 momentum < -15%", detail: `${(raw * 100).toFixed(1)}%` });
   if (vol > 0.6) deductions.push({ id: "momo-highvol", label: "Realised vol > 60%", detail: `${(vol * 100).toFixed(0)}%` });
