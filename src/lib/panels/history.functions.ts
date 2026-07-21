@@ -15,8 +15,20 @@ export const getHistoryPanels = createServerFn({ method: "GET" }).handler(async 
 
   const [{ analogs, fingerprint, computedAt }, { data: events }] = await Promise.all([
     findAnalogs({ limit: 6, minMatchPct: 40 }),
-    supabaseAdmin.from("historical_events").select("id, code, name, start_date, category, tags"),
+    supabaseAdmin.from("historical_events").select("id, code, name, start_date, category, tags, causes, what_happened_next, key_takeaway, narrative_status, narrative_confidence"),
   ]);
+
+  // index narrative by code so we can enrich analog cards
+  const narrativeByCode = new Map<string, { causes: string | null; what_happened_next: string | null; key_takeaway: string | null; narrative_status: string; narrative_confidence: number | null }>();
+  for (const e of events ?? []) {
+    narrativeByCode.set(e.code as string, {
+      causes: (e as { causes: string | null }).causes,
+      what_happened_next: (e as { what_happened_next: string | null }).what_happened_next,
+      key_takeaway: (e as { key_takeaway: string | null }).key_takeaway,
+      narrative_status: ((e as { narrative_status: string }).narrative_status) ?? "unverified",
+      narrative_confidence: ((e as { narrative_confidence: number | null }).narrative_confidence) ?? null,
+    });
+  }
 
   const nowIso = new Date().toISOString();
 
@@ -30,11 +42,25 @@ export const getHistoryPanels = createServerFn({ method: "GET" }).handler(async 
     { label: "Coverage", value: `${(fingerprint.coverage * 100).toFixed(0)}%`, tone: fingerprint.coverage >= 0.66 ? "positive" : "warning" },
   ];
 
-  const positives: Point[] = analogs.slice(0, 5).map((a) => ({
-    id: `an-${a.event.code}`,
-    label: `${a.event.name} — ${a.matchPct.toFixed(0)}% match`,
-    detail: `${new Date(a.event.start_date).getFullYear()} · ${a.event.category} · ${a.dimsMatched}/${a.dimsCompared} dims. ${a.event.summary}`,
-  }));
+  const positives: Point[] = analogs.slice(0, 5).map((a) => {
+    const n = narrativeByCode.get(a.event.code);
+    const yr = new Date(a.event.start_date).getFullYear();
+    const badge = n?.narrative_status === "verified" ? "✓ AI-verified"
+                : n?.narrative_status === "needs_review" ? "⚠ Needs review"
+                : "· Unverified narrative";
+    const cause = n?.causes ? `Cause: ${n.causes}` : "";
+    const next  = n?.what_happened_next ? `What happened next: ${n.what_happened_next}` : "";
+    const detail = [
+      `${yr} · ${a.event.category} · ${a.dimsMatched}/${a.dimsCompared} dims matched · ${badge}`,
+      cause, next,
+      `→ open /history/${a.event.code} for citations + forward returns`,
+    ].filter(Boolean).join("\n");
+    return {
+      id: `an-${a.event.code}`,
+      label: `${a.event.name} — ${a.matchPct.toFixed(0)}% match`,
+      detail,
+    };
+  });
 
   const evidence: Evidence[] = [{
     id: "ev-fp", label: `Macro fingerprint (${(fingerprint.coverage * 100).toFixed(0)}% coverage)`,
@@ -68,9 +94,12 @@ export const getHistoryPanels = createServerFn({ method: "GET" }).handler(async 
     whyItMatters: "History does not repeat, but rate/inflation/oil regimes recur. Analogs answer 'when did we last see this, and what happened next?' with an auditable evidence chain.",
     whyBullets: [
       analogs[0] ? `Closest analog: ${analogs[0].event.name} (${analogs[0].matchPct.toFixed(0)}% fingerprint match).` : "No strong analog — either the fingerprint is thin or the current regime is genuinely novel.",
-      "Match weights emphasise rate direction and inflation regime — the two dimensions with the strongest cross-cycle signal.",
+      analogs[0] && narrativeByCode.get(analogs[0].event.code)?.what_happened_next
+        ? `Last time (${new Date(analogs[0].event.start_date).getFullYear()}): ${narrativeByCode.get(analogs[0].event.code)!.what_happened_next}`
+        : "Open the closest analog for the sourced narrative and forward returns.",
+      "How to read the metrics: hover any dimension for its plain-English meaning. Rate direction and inflation regime carry the highest weight — they're the strongest cross-cycle signals.",
       `Fingerprint coverage ${(fingerprint.coverage * 100).toFixed(0)}% — thicker coverage = higher-confidence match.`,
-      "Click through any analog to see per-sector forward returns and the underlying source.",
+      `Narratives verified by algo (structure + citation allowlist) → API (link liveness) → AI (coherence). If AI can't verify, the loop rewrites the narrative grounded in the citations and re-checks (max 2 passes) before marking 'needs review'.`,
     ].filter(Boolean) as string[],
     evidence, positives, deductions: [], verifyNext,
     confidence: computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: 0 }),

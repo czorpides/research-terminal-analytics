@@ -768,42 +768,75 @@ export type Database = {
       historical_events: {
         Row: {
           category: string
+          causes: string | null
+          citations: Json
           code: string
           created_at: string
           end_date: string | null
           fingerprint: Json
           id: string
+          key_takeaway: string | null
+          mechanism: string | null
           name: string
+          narrative_attempts: number
+          narrative_confidence: number | null
+          narrative_issues: Json
+          narrative_status: string
+          narrative_verified_at: string | null
+          narrative_verifier: string | null
           source_url: string | null
           start_date: string
           summary: string
           tags: string[]
+          what_happened_next: string | null
         }
         Insert: {
           category: string
+          causes?: string | null
+          citations?: Json
           code: string
           created_at?: string
           end_date?: string | null
           fingerprint?: Json
           id?: string
+          key_takeaway?: string | null
+          mechanism?: string | null
           name: string
+          narrative_attempts?: number
+          narrative_confidence?: number | null
+          narrative_issues?: Json
+          narrative_status?: string
+          narrative_verified_at?: string | null
+          narrative_verifier?: string | null
           source_url?: string | null
           start_date: string
           summary: string
           tags?: string[]
+          what_happened_next?: string | null
         }
         Update: {
           category?: string
+          causes?: string | null
+          citations?: Json
           code?: string
           created_at?: string
           end_date?: string | null
           fingerprint?: Json
           id?: string
+          key_takeaway?: string | null
+          mechanism?: string | null
           name?: string
+          narrative_attempts?: number
+          narrative_confidence?: number | null
+          narrative_issues?: Json
+          narrative_status?: string
+          narrative_verified_at?: string | null
+          narrative_verifier?: string | null
           source_url?: string | null
           start_date?: string
           summary?: string
           tags?: string[]
+          what_happened_next?: string | null
         }
         Relationships: []
       }
