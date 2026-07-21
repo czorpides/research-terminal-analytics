@@ -37,6 +37,33 @@ export interface Metric {
   value: string;
   delta?: string;
   tone?: "positive" | "negative" | "neutral" | "warning";
+  /** Optional inline sparkline for this metric. */
+  trend?: TrendSeries;
+}
+
+/**
+ * Chart primitives — deterministic point series used to render trend
+ * charts and sparklines across panels. Zones colour bands drive the
+ * "goldilocks / warning / danger" shading; projection is a dotted
+ * forward path (linear or otherwise pre-computed server-side).
+ */
+export interface ChartPoint { t: string; v: number }
+export type ChartZoneKind = "good" | "warn" | "bad";
+export interface ChartZone {
+  from?: number;
+  to?: number;
+  kind: ChartZoneKind;
+  label?: string;
+}
+export type ChartFormat = "percent" | "number" | "index" | "bp";
+export interface TrendSeries {
+  points: ChartPoint[];
+  projection?: ChartPoint[];
+  zones?: ChartZone[];
+  yLabel?: string;
+  format?: ChartFormat;
+  /** Optional secondary comparison series (e.g. peer / target line). */
+  compare?: { label: string; points: ChartPoint[] };
 }
 
 /**
@@ -109,6 +136,8 @@ export interface PanelData {
   deductions: Point[];
   verifyNext: VerifyCheck[];
   catalysts?: Catalyst[];
+  /** Optional larger trend chart rendered under the metrics grid. */
+  chart?: TrendSeries;
   confidence: {
     value: number;
     penalties: ConfidencePenalty[];
