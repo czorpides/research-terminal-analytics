@@ -2,6 +2,7 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { fetchStooqDaily } from "./client.server";
 import { STOOQ_UNIVERSE, toStooqSymbol } from "./universe";
+import { validateStooqBars, type QualityReport } from "./quality";
 
 export interface StooqIngestResult {
   status: "success" | "failed";
@@ -9,6 +10,7 @@ export interface StooqIngestResult {
   runId: string;
   symbol: string;
   error?: string;
+  quality?: QualityReport;
 }
 
 async function stooqSourceId(): Promise<string> {
@@ -42,12 +44,24 @@ export async function runStooqIngest(symbol: string): Promise<StooqIngestResult>
       : new Date(Date.now() - 3 * 365 * 86400_000).toISOString().slice(0, 10);
 
     const bars = await fetchStooqDaily(toStooqSymbol(symbol), { from });
-    const fresh = bars.filter((b) => b.close !== null);
+    const quality = validateStooqBars(bars, { existingLatest: (last?.trade_date as string) ?? null });
+    const fresh = bars.filter((b) => b.close !== null && b.open !== null && b.high !== null && b.low !== null && (b.close ?? 0) > 0);
+
+    if (quality.blocked) {
+      await supabaseAdmin.from("ingestion_runs").update({
+        status: "failed", finished_at: new Date().toISOString(), rows_ingested: 0,
+        error: `Quality gate blocked: ${quality.issues.filter(i => i.severity === "block").map(i => i.code).join(", ")}`,
+        details: { symbol, quality } as any,
+      }).eq("id", runId);
+      return { status: "failed", rowsInserted: 0, runId, symbol, quality, error: "quality_gate_blocked" };
+    }
+
     if (fresh.length === 0) {
       await supabaseAdmin.from("ingestion_runs").update({
         status: "success", finished_at: new Date().toISOString(), rows_ingested: 0,
+        details: { symbol, quality } as any,
       }).eq("id", runId);
-      return { status: "success", rowsInserted: 0, runId, symbol };
+      return { status: "success", rowsInserted: 0, runId, symbol, quality };
     }
 
     const rows = fresh.map((b) => ({
@@ -69,6 +83,7 @@ export async function runStooqIngest(symbol: string): Promise<StooqIngestResult>
 
     await supabaseAdmin.from("ingestion_runs").update({
       status: "success", finished_at: new Date().toISOString(), rows_ingested: inserted,
+      details: { symbol, quality } as any,
     }).eq("id", runId);
 
     // Confidence for the latest bar → surfaced later by scorer.

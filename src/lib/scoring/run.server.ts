@@ -6,6 +6,7 @@ import { computeVolatility, VOL_CALC_VERSION } from "./volatility.server";
 import type { Bar } from "./series";
 
 export interface ScoreRunResult { assetsScored: number; failures: number }
+export interface ScoreRunResultDetailed extends ScoreRunResult { blocked: number; blockedAssets: string[] }
 
 async function loadBars(assetId: string): Promise<Bar[]> {
   const { data } = await supabaseAdmin
@@ -21,6 +22,31 @@ async function loadBars(assetId: string): Promise<Bar[]> {
 
 export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean; error?: string }> {
   try {
+    // Quality gate: block scoring if the latest Stooq ingestion run for this
+    // asset's symbol was blocked by QC.
+    const { data: asset } = await supabaseAdmin.from("assets").select("symbol").eq("id", assetId).maybeSingle();
+    const symbol = asset?.symbol as string | undefined;
+    if (symbol) {
+      const { data: stooqSource } = await supabaseAdmin
+        .from("data_sources").select("id").eq("provider_code", "stooq").maybeSingle();
+      if (stooqSource?.id) {
+        const { data: recent } = await supabaseAdmin
+          .from("ingestion_runs")
+          .select("status, error, details, started_at")
+          .eq("source_id", stooqSource.id as string)
+          .eq("data_category", "price_daily")
+          .order("started_at", { ascending: false })
+          .limit(200);
+        const match = (recent ?? []).find((r) => {
+          const d = r.details as { symbol?: string } | null;
+          return d?.symbol === symbol;
+        });
+        if (match && match.status === "failed") {
+          return { ok: false, error: `quality_gate_blocked: ${match.error ?? "unknown"}` };
+        }
+      }
+    }
+
     const bars = await loadBars(assetId);
     if (bars.length === 0) return { ok: false, error: "no prices" };
     const latest = bars[bars.length - 1];
@@ -54,12 +80,15 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
-export async function runScoresForAllAssets(): Promise<ScoreRunResult> {
+export async function runScoresForAllAssets(): Promise<ScoreRunResultDetailed> {
   const { data: assets } = await supabaseAdmin.from("assets").select("id").eq("active", true);
-  let ok = 0, failed = 0;
+  let ok = 0, failed = 0, blocked = 0;
+  const blockedAssets: string[] = [];
   for (const a of assets ?? []) {
     const r = await runScoresForAsset(a.id as string);
-    if (r.ok) ok++; else failed++;
+    if (r.ok) ok++;
+    else if (r.error?.startsWith("quality_gate_blocked")) { blocked++; blockedAssets.push(a.id as string); }
+    else failed++;
   }
-  return { assetsScored: ok, failures: failed };
+  return { assetsScored: ok, failures: failed, blocked, blockedAssets };
 }
