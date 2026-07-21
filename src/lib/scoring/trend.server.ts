@@ -11,8 +11,11 @@ export interface TrendResult {
   penalties: Array<{ code: string; points: number; reason: string }>;
 }
 
+type Point = { id: string; label: string; detail?: string };
+
 export function computeTrend(bars: Bar[]): TrendResult {
-  const positives = [], deductions = [];
+  const positives: Point[] = [];
+  const deductions: Point[] = [];
   if (bars.length < 60) {
     return {
       value: 50, inputs: { bars: bars.length, needed: 200 },
