@@ -338,6 +338,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          provider_code: string | null
           tier: Database["public"]["Enums"]["source_tier"]
           updated_at: string
         }
@@ -349,6 +350,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          provider_code?: string | null
           tier: Database["public"]["Enums"]["source_tier"]
           updated_at?: string
         }
@@ -360,6 +362,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          provider_code?: string | null
           tier?: Database["public"]["Enums"]["source_tier"]
           updated_at?: string
         }
@@ -415,30 +418,39 @@ export type Database = {
       }
       economic_indicators: {
         Row: {
+          category: string | null
           code: string
           country_id: string | null
           created_at: string
           frequency: string | null
           id: string
           name: string
+          provider_series_code: string | null
+          provider_source_id: string | null
           unit: string | null
         }
         Insert: {
+          category?: string | null
           code: string
           country_id?: string | null
           created_at?: string
           frequency?: string | null
           id?: string
           name: string
+          provider_series_code?: string | null
+          provider_source_id?: string | null
           unit?: string | null
         }
         Update: {
+          category?: string | null
           code?: string
           country_id?: string | null
           created_at?: string
           frequency?: string | null
           id?: string
           name?: string
+          provider_series_code?: string | null
+          provider_source_id?: string | null
           unit?: string | null
         }
         Relationships: [
@@ -447,6 +459,13 @@ export type Database = {
             columns: ["country_id"]
             isOneToOne: false
             referencedRelation: "countries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "economic_indicators_provider_source_id_fkey"
+            columns: ["provider_source_id"]
+            isOneToOne: false
+            referencedRelation: "data_sources"
             referencedColumns: ["id"]
           },
         ]
