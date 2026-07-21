@@ -11,6 +11,8 @@ import {
   Satellite,
   Bell,
   Activity,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -40,17 +42,33 @@ const NAV = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("rt.sidebar.collapsed") === "1";
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("rt.sidebar.collapsed", collapsed ? "1" : "0");
+  }, [collapsed]);
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
-      <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-border/70 bg-sidebar">
+      <aside
+        className={cn(
+          "hidden md:flex shrink-0 flex-col border-r border-border/70 bg-sidebar sticky top-0 h-screen transition-[width] duration-200",
+          collapsed ? "w-12" : "w-56",
+        )}
+      >
         <div className="flex h-12 items-center gap-2 border-b border-border/70 px-3">
           <div className="h-2 w-2 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)]" />
-          <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            Research Terminal
-          </div>
+          {!collapsed && (
+            <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+              Research Terminal
+            </div>
+          )}
         </div>
-        <nav className="flex-1 p-2">
+        <nav className="flex-1 overflow-y-auto p-2">
           {NAV.map((item) => {
             const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
             const Icon = item.icon;
@@ -58,6 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.to}
                 to={item.to}
+                title={collapsed ? item.label : undefined}
                 className={cn(
                   "group flex items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] transition-colors",
                   active
@@ -65,27 +84,40 @@ export function AppShell({ children }: { children: ReactNode }) {
                     : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground",
                 )}
               >
-                <span className={cn(
-                  "font-mono text-[9px] tracking-wider",
-                  active ? "text-[var(--primary)]" : "text-muted-foreground/60",
-                )}>
-                  {item.code}
-                </span>
-                <Icon className="h-3.5 w-3.5" />
-                <span>{item.label}</span>
+                {!collapsed && (
+                  <span className={cn(
+                    "font-mono text-[9px] tracking-wider",
+                    active ? "text-[var(--primary)]" : "text-muted-foreground/60",
+                  )}>
+                    {item.code}
+                  </span>
+                )}
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
               </Link>
             );
           })}
         </nav>
-        <div className="border-t border-border/70 p-2 font-mono text-[10px] text-muted-foreground">
-          <div>Phase 3 · Auth + Zones</div>
-          <div className="text-[var(--positive)]">Session active</div>
-        </div>
+        {!collapsed && (
+          <div className="border-t border-border/70 p-2 font-mono text-[10px] text-muted-foreground">
+            <div>Phase 3 · Auth + Zones</div>
+            <div className="text-[var(--positive)]">Session active</div>
+          </div>
+        )}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 items-center justify-between border-b border-border/70 px-4">
+        <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-background/95 backdrop-blur px-4">
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className="hidden md:inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
             <div className="md:hidden font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
               Research Terminal
             </div>
