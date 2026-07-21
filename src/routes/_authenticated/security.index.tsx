@@ -10,7 +10,7 @@ const universeQuery = queryOptions({
   queryFn: () => getSecurityUniverse(),
 });
 
-export const Route = createFileRoute("/_authenticated/security/index")({
+export const Route = createFileRoute("/_authenticated/security/")({
   head: () => ({ meta: [
     { title: "Security Master — Research Terminal" },
     { name: "description", content: "Full equity universe with latest scores. Drill into any name for the auditable research deep dive." },
