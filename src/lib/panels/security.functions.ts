@@ -124,7 +124,7 @@ export const getSecurityDetail = createServerFn({ method: "GET" })
 
     const assetId = asset.id as string;
 
-    const [{ data: ind }, { data: ctry }, { data: prices }, { data: rawScores }, { data: verifyRuns }, { data: stooqSource }] = await Promise.all([
+    const [{ data: ind }, { data: ctry }, { data: prices }, { data: rawScores }, { data: stooqSource }] = await Promise.all([
       asset.industry_id
         ? supabaseAdmin.from("industries").select("name").eq("id", asset.industry_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -142,12 +142,6 @@ export const getSecurityDetail = createServerFn({ method: "GET" })
         .eq("subject_id", assetId)
         .order("computed_at", { ascending: false })
         .limit(60),
-      supabaseAdmin.from("verify_runs")
-        .select("id, check_id, verifier, status, detail, evidence, calc_version, ran_at")
-        .eq("subject_type", "asset")
-        .eq("subject_id", assetId)
-        .order("ran_at", { ascending: false })
-        .limit(25),
       supabaseAdmin.from("data_sources").select("name").eq("provider_code", "stooq").maybeSingle(),
     ]);
 
@@ -313,33 +307,21 @@ export const getSecurityDetail = createServerFn({ method: "GET" })
       confidence: { value: 0, penalties: [{ code: "no_data", points: 100, reason: "Fundamentals not ingested." }] },
     });
 
-    // 7. Verifier audit
-    const runs = verifyRuns ?? [];
+    // 7. Verifier audit hook — per-asset audit lands once verify_runs is keyed by subject.
     panels.push({
       id: `sec-verify-${symbol}`,
       title: "Verifier audit trail",
-      purpose: "Every algo / api / ai check that ran against this security, most recent first.",
-      metrics: [
-        { label: "Runs (25 max)", value: String(runs.length) },
-        { label: "Passes", value: String(runs.filter((r) => r.status === "pass").length), tone: "positive" },
-        { label: "Fails", value: String(runs.filter((r) => r.status === "fail").length), tone: "negative" },
-      ],
-      whatChanged: runs.length > 0
-        ? `Most recent: ${runs[0].check_id} → ${runs[0].status} (${runs[0].verifier}) at ${new Date(runs[0].ran_at as string).toLocaleString()}.`
-        : "No verifier runs recorded for this security yet.",
-      whyItMatters: "Auditable proof that scores were checked. Every run captures verifier, calc version and evidence.",
+      purpose: "Per-security audit of algo / api / ai checks. Global audit is live on the Data Health page.",
+      metrics: [{ label: "Per-asset runs", value: "—" }],
+      whatChanged: "Global verifier activity is recorded; per-asset keying is scheduled with the next scoring runner upgrade.",
+      whyItMatters: "Every check captures verifier, calc version and evidence so results are reproducible.",
       evidence: [],
       positives: [],
-      deductions: [],
-      verifyNext: runs.slice(0, 6).map<VerifyCheck>((r) => ({
-        id: `run-${r.id}`,
-        label: r.check_id as string,
-        verifier: r.verifier as VerifyCheck["verifier"],
-        status: r.status as VerifyCheck["status"],
-        detail: (r.detail as string) ?? undefined,
-        checkedAt: r.ran_at as string,
-      })),
-      confidence: { value: runs.length > 0 ? 80 : 30, penalties: runs.length > 0 ? [] : [{ code: "no_runs", points: 70, reason: "No verifier runs yet." }] },
+      deductions: [{ id: "no-per-asset", label: "verify_runs not yet keyed to subject; see Data Health for the global trail." }],
+      verifyNext: [
+        { id: "v-audit-schema", label: "Extend verify_runs with subject_type/subject_id", verifier: "algo", status: "pending" },
+      ],
+      confidence: { value: 40, penalties: [{ code: "schema", points: 60, reason: "Per-asset audit trail pending schema extension." }] },
     });
 
     return {
