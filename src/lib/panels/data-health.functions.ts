@@ -22,6 +22,21 @@ export interface RunRow {
   error: string | null;
 }
 
+export interface VerifyRunRow {
+  id: string;
+  checkId: string;
+  panelId: string;
+  verifier: string;
+  status: string;
+  detail: string | null;
+  runnerKey: string | null;
+  calcVersion: string | null;
+  trigger: string | null;
+  confidence: number | null;
+  startedAt: string;
+  durationMs: number | null;
+}
+
 export const getDataHealthOverview = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
