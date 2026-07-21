@@ -3,6 +3,7 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck } from "./contract";
+import { compositeScore } from "@/lib/scoring/composite";
 
 interface LatestScore {
   asset_id: string; score_type: string; value: number; confidence: number;
@@ -65,16 +66,20 @@ export const getRadarPanels = createServerFn({ method: "GET" }).handler(async ()
   const ranked = assets
     .map((a) => {
       const bag = byAsset.get(a.id as string) ?? {};
-      const m = bag["momentum"]?.value ?? 50;
-      const t = bag["trend"]?.value ?? 50;
-      const v = bag["volatility"]?.value ?? 50;
-      return { asset: a, bag, composite: (m + t) / 2 + (v - 50) * 0.1 };
+      const c = compositeScore({
+        momentum:   bag["momentum"]?.value   ?? null,
+        trend:      bag["trend"]?.value      ?? null,
+        volatility: bag["volatility"]?.value ?? null,
+        valuation:  bag["valuation"]?.value  ?? null,
+        quality:    bag["quality"]?.value    ?? null,
+      });
+      return { asset: a, bag, composite: c.value ?? -Infinity, components: c.components };
     })
     .filter((x) => Object.keys(x.bag).length > 0)
     .sort((a, b) => b.composite - a.composite)
     .slice(0, 12);
 
-  return ranked.map(({ asset, bag, composite }) => {
+  return ranked.map(({ asset, bag, composite, components }) => {
     const symbol = asset.symbol as string;
     const price = priceByAsset.get(asset.id as string);
     const asOf = price ? new Date(`${price.trade_date}T21:00:00Z`).toISOString() : new Date().toISOString();
@@ -94,7 +99,7 @@ export const getRadarPanels = createServerFn({ method: "GET" }).handler(async ()
 
     const positives: Point[] = [];
     const deductions: Point[] = [];
-    for (const t of ["momentum", "trend", "volatility"] as const) {
+    for (const t of ["momentum", "trend", "volatility", "valuation", "quality"] as const) {
       const s = bag[t];
       if (!s) continue;
       positives.push(...s.positives);
@@ -146,17 +151,21 @@ export const getRadarPanels = createServerFn({ method: "GET" }).handler(async ()
         { label: "Momentum", value: bag["momentum"] ? bag["momentum"].value.toFixed(0) : "—" },
         { label: "Trend", value: bag["trend"] ? bag["trend"].value.toFixed(0) : "—" },
         { label: "Vol regime", value: bag["volatility"] ? bag["volatility"].value.toFixed(0) : "—" },
+        { label: "Valuation", value: bag["valuation"] ? bag["valuation"].value.toFixed(0) : "—" },
+        { label: "Quality", value: bag["quality"] ? bag["quality"].value.toFixed(0) : "—" },
       ],
       whatChanged: price ? `Last close ${price.close.toFixed(2)} on ${price.trade_date}.` : "No price data yet.",
       whyItMatters: "Cross-factor composite highlights names where price action, trend regime and vol backdrop all agree.",
       evidence, positives, deductions, verifyNext, confidence: conf,
       calculation: {
-        formula: "composite = (momentum + trend)/2 + (volatility − 50) × 0.1",
-        ...stampCalculation("radar.composite.v0.1", { symbol, m: bag["momentum"]?.value, t: bag["trend"]?.value, v: bag["volatility"]?.value }),
+        formula: "composite = Σ(score × weight) / Σ(weight)  over available components",
+        ...stampCalculation("radar.composite.v0.2", { symbol, components }),
         inputs: {
           momentum: bag["momentum"]?.value ?? null,
           trend: bag["trend"]?.value ?? null,
           volatility: bag["volatility"]?.value ?? null,
+          valuation: bag["valuation"]?.value ?? null,
+          quality: bag["quality"]?.value ?? null,
           composite,
         },
       },

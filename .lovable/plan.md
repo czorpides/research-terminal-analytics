@@ -1,51 +1,54 @@
-## Scope for this prompt
+## Phase: Prompt 7 — Fundamentals, Valuation & Quality scoring
 
-Finish the small remaining pieces of Prompts 4 + 8, then build **Prompt 5 — Command Centre synthesis** as the major new area. Deliberately deferring the big items (fundamentals/valuation scoring, broad AI commentary, security master deep-dive) so quality stays high.
+Next major area. Adds the first non-price signal layer so scores stop being pure technicals and Security Master gets real fundamentals to display.
 
----
+### 1. Fundamentals ingestion (FMP as Tier 2 primary)
 
-### 1. Finish Prompt 4 — Equity data pool (minor)
+- New module `src/lib/ingestion/fundamentals/ingest.server.ts` pulling from FMP `/stable/`:
+  - `key-metrics-ttm` (P/E, P/B, P/S, EV/EBITDA, ROE, ROIC, debt/equity, current ratio, FCF yield)
+  - `ratios-ttm` (margins, turnover)
+  - `profile` (marketCap, beta, sector cross-check)
+- Persist into existing `data_points` keyed by `subject_id = asset.id` with `metric_code` per fundamental. Reuses reliability framework — no schema change.
+- Quality gates: reject negative-where-impossible, stale > 120d, missing marketCap. Failed rows counted in `ingestion_runs`.
+- Cross-verify marketCap against Tiingo/Twelve Data when available (secondary evidence).
+- Public endpoint `/api/public/ingest/fundamentals` + pg_cron daily.
 
-- Repoint the ingestion pipeline from Stooq (blocked by anti-bot) to the provider pool via `fetchWithFailover`, keeping the existing `prices_daily` schema and quality gate.
-- Kick off the first backfill for the seeded ~65 US assets (Tiingo primary → Twelve Data → FMP failover), with cross-verification on the latest close.
-- Immediately run the scoring job so Radar and Screeners show live data.
-- Update the Stooq cron to call the new multi-provider entry point (keep name for continuity).
+### 2. Valuation scoring
 
-### 2. Finish Prompt 8 — Overvaluation Radar (minor)
+- `src/lib/scoring/valuation.server.ts` — deterministic composite:
+  - Rank each asset within its industry on P/E, P/B, EV/EBITDA, FCF yield (percentile-based, lower multiple = better, higher FCF yield = better).
+  - Emit `scores.score_type = 'valuation'` with full input trace + calc version.
+- Confidence penalties for missing metrics, stale data, thin industry peer group (< 5 peers).
 
-- Add a symmetric `/overvaluation` route using the existing scoring outputs (inverted momentum + volatility + extreme trend deviation).
-- Reuse `PanelGrid` + universal panel contract; every candidate ships with visible positives/deductions and verify-next chain — same discipline as Opportunity Radar.
-- Add nav entry.
+### 3. Quality scoring
 
-### 3. Prompt 5 — Command Centre synthesis (major)
+- `src/lib/scoring/quality.server.ts`:
+  - ROE, ROIC, gross margin, net margin, debt/equity, current ratio → industry percentile composite.
+  - `scores.score_type = 'quality'`.
 
-The Command Centre is the "one screen that answers *what deserves attention right now*". Build it as composed panels, each satisfying the universal contract:
+### 4. Wire into existing surfaces
 
-- **Regime panel** — current macro regime read (yield curve sign, inflation trend, unemployment trend) sourced from live FRED data + verify_runs.
-- **Top opportunities** — top 5 from Opportunity Radar with score, confidence, freshness.
-- **Top overvaluation risks** — top 5 from the new Overvaluation Radar.
-- **Data health summary** — count of stale/failed sources, latest verifier runs, provider quota status.
-- **Verifier activity** — most recent `verify_runs` across all panels (algo/api/ai badges).
-- **What changed today** — deterministic diff: new score entries, freshness state transitions, verifier status flips vs previous day.
+- **Security detail** (`/security/$symbol`): add Valuation panel + Quality panel with metric tables, industry rank, positives/deductions, verify-next (algo peer-rank check, api freshness check, ai "explain the multiple" pending).
+- **Security universe** (`/security`): add Val + Qual score columns alongside composite; extend composite to weight technicals + valuation + quality.
+- **Opportunity Radar / Overvaluation Radar**: extend ranking to blend valuation (cheap = opportunity, expensive = risk) and quality (high quality = confidence bonus).
+- **Command Centre**: no new panels; existing Top Opportunities / Risks auto-reflect the richer composite.
 
-All panels are read-only aggregations over existing tables (`scores`, `verify_runs`, `data_points`, `ingestion_runs`, `provider_quotas`). No new scoring math, no AI narrative — pure synthesis with full audit trail. The existing `/` route becomes the Command Centre.
+### 5. Verify-next runners
 
----
+- Extend `src/lib/verify/runners.server.ts` with `checkPeerRankStable` (algo: valuation percentile within ±10 vs 30d ago) and `checkFundamentalsFresh` (api: last fundamentals point < 120d).
+- Seed `verify_check_definitions` rows for valuation + quality panels.
 
-### Explicitly out of scope (next prompts)
+### Explicitly out of scope
 
-- Fundamentals / valuation / catalyst scoring (Prompt 7 rest)
-- Security Master deep-dive pages (Prompt 6)
-- Historical Event Engine (Prompt 9)
-- Alternative data ingestion (Prompt 10)
-- Broad AI commentary beyond existing verifier (Prompt 11 rest)
-- Alert firing engine (Prompt 12)
+- Catalyst / earnings-surprise scoring (later)
+- Multi-quarter fundamentals history (only TTM for now)
+- Non-US fundamentals
+- New AI narrative beyond existing pending-AI hooks
 
 ### Technical notes
 
-- New server function `getCommandCentrePanels` in `src/lib/panels/command-centre.functions.ts`, mirroring `radar.functions.ts` shape.
-- Multi-provider ingest lives in `src/lib/ingestion/equities/ingest.server.ts` (keeps Stooq module intact but unused).
-- Backfill triggered via existing `/api/public/ingest/stooq` endpoint repointed, or a new `/api/public/ingest/equities` alias — will pick during implementation to avoid breaking cron.
-- Overvaluation scoring reuses existing score rows; no new `scores.score_type`, just a different ranking view.
+- FMP quota is the binding constraint (~250/day free). Backfill sequenced by market cap, ~65 assets = one endpoint call each = well within budget.
+- No new tables — all fundamentals ride `data_points`, all scores ride `scores`.
+- Composite weight defaults: momentum 25 / trend 20 / volatility 15 / valuation 25 / quality 15 (documented in calc version stamp).
 
 Ready to build on your go.

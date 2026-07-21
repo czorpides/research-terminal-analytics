@@ -58,3 +58,31 @@ export function pendingApiCheck(id: string, label: string, detail?: string): Ver
 export function pendingAiCheck(id: string, label: string, detail?: string): VerifyCheck {
   return { id, label, verifier: "ai", status: "unavailable", detail: detail ?? "AI commentary layer arrives in a later phase." };
 }
+
+/** Fundamentals ingest recency check. */
+export function checkFundamentalsFresh(id: string, label: string, asOf: string | null): VerifyCheck {
+  if (!asOf) return { id, label, verifier: "api", status: "unavailable", detail: "No fundamentals ingested yet.", checkedAt: new Date().toISOString() };
+  const ageDays = (Date.now() - new Date(asOf).getTime()) / 86_400_000;
+  const pass = ageDays <= 120;
+  return {
+    id, label, verifier: "api",
+    status: pass ? "pass" : "stale",
+    detail: `Age ${ageDays.toFixed(0)}d vs 120d policy.`,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+/** Peer-rank stability — flags when the current percentile moves > tolerance vs the prior run. */
+export function checkPeerRankStable(id: string, label: string, current: number | null, previous: number | null, tolerance = 10): VerifyCheck {
+  if (current === null || previous === null) {
+    return { id, label, verifier: "algo", status: "unavailable", detail: "Need at least two peer-rank runs.", checkedAt: new Date().toISOString() };
+  }
+  const drift = Math.abs(current - previous);
+  const pass = drift <= tolerance;
+  return {
+    id, label, verifier: "algo",
+    status: pass ? "pass" : "fail",
+    detail: `Drift ${drift.toFixed(1)} pts vs ±${tolerance} tolerance (was ${previous.toFixed(0)}, now ${current.toFixed(0)}).`,
+    checkedAt: new Date().toISOString(),
+  };
+}

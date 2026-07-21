@@ -24,6 +24,7 @@ import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/veri
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
+import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
 
 const ScreenersRoute = ScreenersRouteImport.update({
@@ -101,6 +102,12 @@ const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
   path: '/api/public/ingest/stooq',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIngestFundamentalsRoute =
+  ApiPublicIngestFundamentalsRouteImport.update({
+    id: '/api/public/ingest/fundamentals',
+    path: '/api/public/ingest/fundamentals',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicIngestFredRoute = ApiPublicIngestFredRouteImport.update({
   id: '/api/public/ingest/fred',
   path: '/api/public/ingest/fred',
@@ -120,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
@@ -138,6 +146,7 @@ export interface FileRoutesByTo {
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security': typeof SecurityIndexRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
@@ -157,6 +166,7 @@ export interface FileRoutesById {
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
+  '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/security/$symbol'
     | '/security/'
     | '/api/public/ingest/fred'
+    | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
@@ -195,6 +206,7 @@ export interface FileRouteTypes {
     | '/security/$symbol'
     | '/security'
     | '/api/public/ingest/fred'
+    | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
@@ -213,6 +225,7 @@ export interface FileRouteTypes {
     | '/security/$symbol'
     | '/security/'
     | '/api/public/ingest/fred'
+    | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
@@ -232,6 +245,7 @@ export interface RootRouteChildren {
   SecuritySymbolRoute: typeof SecuritySymbolRoute
   SecurityIndexRoute: typeof SecurityIndexRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
+  ApiPublicIngestFundamentalsRoute: typeof ApiPublicIngestFundamentalsRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
   ApiPublicProvidersPingRoute: typeof ApiPublicProvidersPingRoute
   ApiPublicScoresRunRoute: typeof ApiPublicScoresRunRoute
@@ -345,6 +359,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicIngestStooqRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/fundamentals': {
+      id: '/api/public/ingest/fundamentals'
+      path: '/api/public/ingest/fundamentals'
+      fullPath: '/api/public/ingest/fundamentals'
+      preLoaderRoute: typeof ApiPublicIngestFundamentalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/fred': {
       id: '/api/public/ingest/fred'
       path: '/api/public/ingest/fred'
@@ -368,6 +389,7 @@ const rootRouteChildren: RootRouteChildren = {
   SecuritySymbolRoute: SecuritySymbolRoute,
   SecurityIndexRoute: SecurityIndexRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
+  ApiPublicIngestFundamentalsRoute: ApiPublicIngestFundamentalsRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
   ApiPublicProvidersPingRoute: ApiPublicProvidersPingRoute,
   ApiPublicScoresRunRoute: ApiPublicScoresRunRoute,
@@ -376,13 +398,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

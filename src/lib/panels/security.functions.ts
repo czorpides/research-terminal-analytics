@@ -4,6 +4,8 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck, Metric } from "./contract";
+import { compositeScore } from "@/lib/scoring/composite";
+import { FUNDAMENTAL_METRICS } from "@/lib/ingestion/fundamentals/metrics";
 
 export interface UniverseRow {
   symbol: string;
@@ -17,6 +19,8 @@ export interface UniverseRow {
   momentum: number | null;
   trend: number | null;
   volatility: number | null;
+  valuation: number | null;
+  quality: number | null;
   composite: number | null;
 }
 
@@ -72,9 +76,9 @@ export const getSecurityUniverse = createServerFn({ method: "GET" }).handler(asy
     const m = s["momentum"] ?? null;
     const t = s["trend"] ?? null;
     const v = s["volatility"] ?? null;
-    const composite = m !== null && t !== null && v !== null
-      ? (m + t) / 2 + (v - 50) * 0.1
-      : null;
+    const val = s["valuation"] ?? null;
+    const qua = s["quality"] ?? null;
+    const composite = compositeScore({ momentum: m, trend: t, volatility: v, valuation: val, quality: qua }).value;
     return {
       symbol: a.symbol as string,
       name: a.name as string,
@@ -87,6 +91,8 @@ export const getSecurityUniverse = createServerFn({ method: "GET" }).handler(asy
       momentum: m,
       trend: t,
       volatility: v,
+      valuation: val,
+      quality: qua,
       composite,
     };
   });
@@ -113,6 +119,7 @@ export const getSecurityDetail = createServerFn({ method: "GET" })
   .inputValidator((d: { symbol: string }) => z.object({ symbol: z.string().min(1).max(20) }).parse(d))
   .handler(async ({ data }): Promise<SecurityDetail | null> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { checkFundamentalsFresh, pendingAiCheck } = await import("@/lib/verify/runners.server");
     const symbol = data.symbol.toUpperCase();
 
     const { data: asset } = await supabaseAdmin
@@ -253,7 +260,7 @@ export const getSecurityDetail = createServerFn({ method: "GET" })
     }
 
     // 3-5. Score breakdown panels
-    for (const type of ["momentum", "trend", "volatility"] as const) {
+    for (const type of ["momentum", "trend", "volatility", "valuation", "quality"] as const) {
       const s = latestScores.get(type);
       if (!s) continue;
       const scoreAge = (Date.now() - new Date(s.computedAt).getTime()) / 1000;
@@ -287,24 +294,67 @@ export const getSecurityDetail = createServerFn({ method: "GET" })
       });
     }
 
-    // 6. Fundamentals placeholder
+    // 6. Fundamentals snapshot panel — raw TTM metrics as they landed from FMP.
+    const { data: fundRows } = await supabaseAdmin.from("data_points")
+      .select("metric_code, value_num, as_of")
+      .eq("subject_type", "asset").eq("subject_id", assetId)
+      .in("metric_code", [
+        FUNDAMENTAL_METRICS.pe, FUNDAMENTAL_METRICS.pb, FUNDAMENTAL_METRICS.ps,
+        FUNDAMENTAL_METRICS.evEbitda, FUNDAMENTAL_METRICS.fcfYield,
+        FUNDAMENTAL_METRICS.roe, FUNDAMENTAL_METRICS.roic,
+        FUNDAMENTAL_METRICS.grossMargin, FUNDAMENTAL_METRICS.netMargin,
+        FUNDAMENTAL_METRICS.debtEquity, FUNDAMENTAL_METRICS.currentRatio,
+        FUNDAMENTAL_METRICS.marketCap, FUNDAMENTAL_METRICS.beta,
+      ])
+      .order("as_of", { ascending: false })
+      .limit(200);
+
+    const latestFund = new Map<string, { value: number; asOf: string }>();
+    for (const r of fundRows ?? []) {
+      const code = r.metric_code as string;
+      if (r.value_num === null) continue;
+      if (!latestFund.has(code)) latestFund.set(code, { value: Number(r.value_num), asOf: r.as_of as string });
+    }
+    const fundAsOf = [...latestFund.values()].map((v) => v.asOf).sort().pop() ?? null;
+
+    const fmt = (v: number | null | undefined, pct = false, digits = 2) =>
+      v === null || v === undefined ? "—" : pct ? `${(v * 100).toFixed(digits)}%` : v.toFixed(digits);
+    const fundMetric = (code: string) => latestFund.get(code)?.value ?? null;
+
+    const fundEvidence: Evidence[] = fundAsOf ? [{
+      id: `ev-fund-${symbol}`,
+      label: `TTM fundamentals — ${symbol}`,
+      sourceName: "Financial Modeling Prep",
+      tier: "tier2_regulated",
+      asOf: fundAsOf,
+      freshness: freshnessState((Date.now() - new Date(fundAsOf).getTime()) / 1000, DEFAULT_FRESHNESS.fundamentals),
+      agrees: true,
+    }] : [];
+
     panels.push({
       id: `sec-fund-${symbol}`,
-      title: "Fundamentals",
-      purpose: "Annual and quarterly line items. Wired to fundamentals_annual / fundamentals_quarterly.",
-      metrics: [{ label: "Statements loaded", value: "0" }],
-      whatChanged: "No fundamentals provider ingested for this symbol yet.",
-      whyItMatters: "Fundamentals unlock the valuation and balance-sheet scorers (Prompt 7).",
-      evidence: [],
-      positives: [],
-      deductions: [{ id: "no-fund", label: "Fundamentals ingestion not yet wired." }],
-      verifyNext: [
-        {
-          id: "v-fund-avail", label: "At least one annual statement available", verifier: "algo",
-          status: "unavailable", detail: "Awaiting fundamentals ingestion.",
-        },
+      title: "Fundamentals snapshot",
+      purpose: "Latest TTM key metrics as ingested. Feeds the valuation and quality scorers below.",
+      metrics: [
+        { label: "Market cap", value: (() => { const v = fundMetric(FUNDAMENTAL_METRICS.marketCap); return v === null ? "—" : v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : `$${(v/1e6).toFixed(0)}M`; })() },
+        { label: "P/E", value: fmt(fundMetric(FUNDAMENTAL_METRICS.pe)) },
+        { label: "EV/EBITDA", value: fmt(fundMetric(FUNDAMENTAL_METRICS.evEbitda)) },
+        { label: "FCF yield", value: fmt(fundMetric(FUNDAMENTAL_METRICS.fcfYield), true) },
+        { label: "ROE", value: fmt(fundMetric(FUNDAMENTAL_METRICS.roe), true) },
+        { label: "Debt/Equity", value: fmt(fundMetric(FUNDAMENTAL_METRICS.debtEquity)) },
       ],
-      confidence: { value: 0, penalties: [{ code: "no_data", points: 100, reason: "Fundamentals not ingested." }] },
+      whatChanged: fundAsOf ? `Ingested ${new Date(fundAsOf).toLocaleString()}.` : "No fundamentals ingested for this symbol yet.",
+      whyItMatters: "Every valuation / quality decision below anchors to these raw fields.",
+      evidence: fundEvidence,
+      positives: [],
+      deductions: latestFund.size === 0 ? [{ id: "no-fund", label: "Fundamentals not ingested — POST /api/public/ingest/fundamentals?ticker=" + symbol }] : [],
+      verifyNext: [
+        checkFundamentalsFresh("v-fund-fresh", "Fundamentals last refreshed within 120 days", fundAsOf),
+        pendingAiCheck("v-fund-ai", "AI: cross-read TTM against latest 10-Q footnotes"),
+      ],
+      confidence: latestFund.size > 0
+        ? computeConfidence({ tier: "tier2_regulated", category: "fundamentals", ageSeconds: fundAsOf ? (Date.now() - new Date(fundAsOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER })
+        : { value: 0, penalties: [{ code: "no_data", points: 100, reason: "Fundamentals not ingested." }] },
     });
 
     // 7. Verifier audit hook — per-asset audit lands once verify_runs is keyed by subject.

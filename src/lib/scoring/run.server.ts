@@ -3,10 +3,11 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { computeMomentum, MOMENTUM_CALC_VERSION } from "./momentum.server";
 import { computeTrend, TREND_CALC_VERSION } from "./trend.server";
 import { computeVolatility, VOL_CALC_VERSION } from "./volatility.server";
+import { loadLatestFundamentals, computeValuationScore, computeQualityScore } from "./valuation.server";
 import type { Bar } from "./series";
 
 export interface ScoreRunResult { assetsScored: number; failures: number }
-export interface ScoreRunResultDetailed extends ScoreRunResult { blocked: number; blockedAssets: string[] }
+export interface ScoreRunResultDetailed extends ScoreRunResult { blocked: number; blockedAssets: string[]; fundamentalsScored: number }
 
 async function loadBars(assetId: string): Promise<Bar[]> {
   const { data } = await supabaseAdmin
@@ -81,8 +82,8 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
 }
 
 export async function runScoresForAllAssets(): Promise<ScoreRunResultDetailed> {
-  const { data: assets } = await supabaseAdmin.from("assets").select("id").eq("active", true);
-  let ok = 0, failed = 0, blocked = 0;
+  const { data: assets } = await supabaseAdmin.from("assets").select("id, industry_id").eq("active", true);
+  let ok = 0, failed = 0, blocked = 0, fundOk = 0;
   const blockedAssets: string[] = [];
   for (const a of assets ?? []) {
     const r = await runScoresForAsset(a.id as string);
@@ -90,5 +91,41 @@ export async function runScoresForAllAssets(): Promise<ScoreRunResultDetailed> {
     else if (r.error?.startsWith("quality_gate_blocked")) { blocked++; blockedAssets.push(a.id as string); }
     else failed++;
   }
-  return { assetsScored: ok, failures: failed, blocked, blockedAssets };
+
+  // Second pass — deterministic valuation + quality scoring across the whole
+  // universe. Runs once per invocation because it needs the full peer set.
+  const all = (assets ?? []).map((a) => ({ id: a.id as string, industry_id: (a.industry_id as string) ?? null }));
+  const peersByIndustry = new Map<string | null, typeof all>();
+  for (const a of all) {
+    const arr = peersByIndustry.get(a.industry_id) ?? [];
+    arr.push(a); peersByIndustry.set(a.industry_id, arr);
+  }
+  const latest = await loadLatestFundamentals();
+  const now = new Date().toISOString();
+  const fundRows: Array<Record<string, unknown>> = [];
+  for (const a of all) {
+    const val = computeValuationScore(a, latest, peersByIndustry, all);
+    const qua = computeQualityScore(a, latest, peersByIndustry, all);
+    if (val) {
+      fundRows.push({
+        subject_type: "asset", subject_id: a.id, score_type: "valuation",
+        value: val.value, confidence: val.confidence, calc_version: val.calcVersion, computed_at: now,
+        inputs: val.inputs, weights: val.weights, positives: val.positives, deductions: val.deductions,
+      });
+      fundOk++;
+    }
+    if (qua) {
+      fundRows.push({
+        subject_type: "asset", subject_id: a.id, score_type: "quality",
+        value: qua.value, confidence: qua.confidence, calc_version: qua.calcVersion, computed_at: now,
+        inputs: qua.inputs, weights: qua.weights, positives: qua.positives, deductions: qua.deductions,
+      });
+    }
+  }
+  if (fundRows.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabaseAdmin.from("scores").insert(fundRows as any);
+  }
+
+  return { assetsScored: ok, failures: failed, blocked, blockedAssets, fundamentalsScored: fundOk };
 }
