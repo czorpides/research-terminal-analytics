@@ -136,3 +136,43 @@ function ClientClock() {
   const t = new Date();
   return <span>{t.toLocaleTimeString()} · UTC{-t.getTimezoneOffset() / 60 >= 0 ? "+" : ""}{-t.getTimezoneOffset() / 60}</span>;
 }
+
+function AccountMenu() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setEmail(s?.user?.email ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function onSignOut() {
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
+  if (!email) return null;
+  const initial = email[0]?.toUpperCase() ?? "?";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-sidebar font-mono text-[10px] text-foreground hover:border-[var(--primary)]"
+          aria-label="Account menu"
+        >
+          {initial}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="truncate text-xs">{email}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onSignOut} className="text-xs">Sign out</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
