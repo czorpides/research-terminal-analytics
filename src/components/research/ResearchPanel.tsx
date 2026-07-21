@@ -265,6 +265,13 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                 <Section title="Metrics">
                   <MetricGrid metrics={data.metrics} large />
                 </Section>
+                {data.chart && (
+                  <Section title="Trend">
+                    <div className="rounded-md border border-border/60 bg-background/40 p-2">
+                      <TrendChart series={data.chart} height={220} />
+                    </div>
+                  </Section>
+                )}
                 <Section title="What changed"><p className="text-sm">{data.whatChanged}</p></Section>
                 <Section title="Why it matters">
                   <p className="text-sm">{data.whyItMatters}</p>
