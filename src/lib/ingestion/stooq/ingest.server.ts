@@ -51,7 +51,7 @@ export async function runStooqIngest(symbol: string): Promise<StooqIngestResult>
       await supabaseAdmin.from("ingestion_runs").update({
         status: "failed", finished_at: new Date().toISOString(), rows_ingested: 0,
         error: `Quality gate blocked: ${quality.issues.filter(i => i.severity === "block").map(i => i.code).join(", ")}`,
-        details: { symbol, quality } as unknown as Record<string, unknown>,
+        details: { symbol, quality } as any,
       }).eq("id", runId);
       return { status: "failed", rowsInserted: 0, runId, symbol, quality, error: "quality_gate_blocked" };
     }
@@ -59,7 +59,7 @@ export async function runStooqIngest(symbol: string): Promise<StooqIngestResult>
     if (fresh.length === 0) {
       await supabaseAdmin.from("ingestion_runs").update({
         status: "success", finished_at: new Date().toISOString(), rows_ingested: 0,
-        details: { symbol, quality } as unknown as Record<string, unknown>,
+        details: { symbol, quality } as any,
       }).eq("id", runId);
       return { status: "success", rowsInserted: 0, runId, symbol, quality };
     }
@@ -83,7 +83,7 @@ export async function runStooqIngest(symbol: string): Promise<StooqIngestResult>
 
     await supabaseAdmin.from("ingestion_runs").update({
       status: "success", finished_at: new Date().toISOString(), rows_ingested: inserted,
-      details: { symbol, quality } as unknown as Record<string, unknown>,
+      details: { symbol, quality } as any,
     }).eq("id", runId);
 
     // Confidence for the latest bar → surfaced later by scorer.
