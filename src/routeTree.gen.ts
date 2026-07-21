@@ -26,6 +26,7 @@ import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
 import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
+import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
 
 const ScreenersRoute = ScreenersRouteImport.update({
   id: '/screeners',
@@ -113,6 +114,12 @@ const ApiPublicIngestFredRoute = ApiPublicIngestFredRouteImport.update({
   path: '/api/public/ingest/fred',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIngestCommoditiesRoute =
+  ApiPublicIngestCommoditiesRouteImport.update({
+    id: '/api/public/ingest/commodities',
+    path: '/api/public/ingest/commodities',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/screeners': typeof ScreenersRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
+  '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
@@ -145,6 +153,7 @@ export interface FileRoutesByTo {
   '/screeners': typeof ScreenersRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security': typeof SecurityIndexRoute
+  '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
@@ -165,6 +174,7 @@ export interface FileRoutesById {
   '/screeners': typeof ScreenersRoute
   '/security/$symbol': typeof SecuritySymbolRoute
   '/security/': typeof SecurityIndexRoute
+  '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/security/$symbol'
     | '/security/'
+    | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/security/$symbol'
     | '/security'
+    | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
@@ -224,6 +236,7 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/security/$symbol'
     | '/security/'
+    | '/api/public/ingest/commodities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/stooq'
@@ -244,6 +257,7 @@ export interface RootRouteChildren {
   ScreenersRoute: typeof ScreenersRoute
   SecuritySymbolRoute: typeof SecuritySymbolRoute
   SecurityIndexRoute: typeof SecurityIndexRoute
+  ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
   ApiPublicIngestFundamentalsRoute: typeof ApiPublicIngestFundamentalsRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
@@ -373,6 +387,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicIngestFredRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/commodities': {
+      id: '/api/public/ingest/commodities'
+      path: '/api/public/ingest/commodities'
+      fullPath: '/api/public/ingest/commodities'
+      preLoaderRoute: typeof ApiPublicIngestCommoditiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -388,6 +409,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScreenersRoute: ScreenersRoute,
   SecuritySymbolRoute: SecuritySymbolRoute,
   SecurityIndexRoute: SecurityIndexRoute,
+  ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
   ApiPublicIngestFundamentalsRoute: ApiPublicIngestFundamentalsRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
@@ -398,13 +420,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
