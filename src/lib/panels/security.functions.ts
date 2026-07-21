@@ -119,6 +119,7 @@ export const getSecurityDetail = createServerFn({ method: "GET" })
   .inputValidator((d: { symbol: string }) => z.object({ symbol: z.string().min(1).max(20) }).parse(d))
   .handler(async ({ data }): Promise<SecurityDetail | null> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { checkFundamentalsFresh, pendingAiCheck } = await import("@/lib/verify/runners.server");
     const symbol = data.symbol.toUpperCase();
 
     const { data: asset } = await supabaseAdmin
