@@ -260,6 +260,7 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                 <SheetDescription>{data.purpose}</SheetDescription>
               </SheetHeader>
               <div className="mt-4 space-y-5">
+                {data.background && <BackgroundBlock bg={data.background} />}
                 <Section title="Metrics">
                   <MetricGrid metrics={data.metrics} large />
                 </Section>
