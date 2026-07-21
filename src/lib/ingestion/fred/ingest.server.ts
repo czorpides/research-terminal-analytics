@@ -2,6 +2,7 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { FRED_SERIES, findSeries } from "./series";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { fetchSeriesObservations } from "./client.server";
+import { runVerificationForSeries } from "@/lib/verify/executor.server";
 
 export interface IngestResult {
   status: "success" | "partial" | "failed";
@@ -101,6 +102,10 @@ export async function runFredIngest(seriesCode: string): Promise<IngestResult> {
     await supabaseAdmin.from("ingestion_runs").update({
       status: "success", finished_at: new Date().toISOString(), rows_ingested: inserted,
     }).eq("id", runId);
+
+    // Auto-verify: now that fresh data has landed for this series, walk any
+    // check definitions that depend on it (algo → api → ai).
+    try { await runVerificationForSeries([spec.seriesCode], "ingest"); } catch { /* non-fatal */ }
 
     return { status: "success", rowsInserted: inserted, runId, seriesCode };
   } catch (e) {
