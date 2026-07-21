@@ -4,6 +4,9 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import type { PanelData, Evidence, Point, VerifyCheck, Metric } from "./contract";
+import { compositeScore } from "@/lib/scoring/composite";
+import { FUNDAMENTAL_METRICS, VALUATION_LOWER_IS_BETTER, QUALITY_METRICS } from "@/lib/ingestion/fundamentals/metrics";
+import { checkFundamentalsFresh, checkPeerRankStable, pendingAiCheck } from "@/lib/verify/runners.server";
 
 export interface UniverseRow {
   symbol: string;
@@ -17,6 +20,8 @@ export interface UniverseRow {
   momentum: number | null;
   trend: number | null;
   volatility: number | null;
+  valuation: number | null;
+  quality: number | null;
   composite: number | null;
 }
 
@@ -72,9 +77,9 @@ export const getSecurityUniverse = createServerFn({ method: "GET" }).handler(asy
     const m = s["momentum"] ?? null;
     const t = s["trend"] ?? null;
     const v = s["volatility"] ?? null;
-    const composite = m !== null && t !== null && v !== null
-      ? (m + t) / 2 + (v - 50) * 0.1
-      : null;
+    const val = s["valuation"] ?? null;
+    const qua = s["quality"] ?? null;
+    const composite = compositeScore({ momentum: m, trend: t, volatility: v, valuation: val, quality: qua }).value;
     return {
       symbol: a.symbol as string,
       name: a.name as string,
@@ -87,6 +92,8 @@ export const getSecurityUniverse = createServerFn({ method: "GET" }).handler(asy
       momentum: m,
       trend: t,
       volatility: v,
+      valuation: val,
+      quality: qua,
       composite,
     };
   });
