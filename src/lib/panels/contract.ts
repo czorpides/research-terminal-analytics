@@ -47,7 +47,16 @@ export interface Metric {
  * "goldilocks / warning / danger" shading; projection is a dotted
  * forward path (linear or otherwise pre-computed server-side).
  */
-export interface ChartPoint { t: string; v: number }
+export interface ChartPoint {
+  t: string;
+  v: number;
+  /**
+   * When true, this point was forward-filled by `extendSeriesToToday` because
+   * no fresh observation exists yet. Rendered as a dashed muted segment so the
+   * chart line extends to today without lying about freshness.
+   */
+  stale?: boolean;
+}
 export type ChartZoneKind = "good" | "warn" | "bad";
 export interface ChartZone {
   from?: number;

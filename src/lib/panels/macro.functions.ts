@@ -4,6 +4,7 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { freshnessState, DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
 import { stampCalculation } from "@/lib/reliability/version";
 import { ensembleForecast } from "@/lib/forecasting/ensemble";
+import { extendSeriesToToday, type Cadence } from "@/lib/freshness/extend";
 import type { PanelData, Evidence, VerifyCheck, ChartZone, TrendSeries, Metric } from "./contract";
 import { FRED_SERIES } from "@/lib/ingestion/fred/series";
 import { NATIVE_SERIES } from "@/lib/ingestion/macro-native/registry";
@@ -137,8 +138,10 @@ async function buildRegionPanels(region: MacroRegion): Promise<PanelData[]> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function latest(arr?: Obs[]) { return arr && arr.length > 0 ? arr[arr.length - 1] : undefined; }
-function toChartPoints(arr?: Obs[], tail = 120): { t: string; v: number }[] {
-  return (arr ?? []).slice(-tail).map((p) => ({ t: p.asOf, v: p.value }));
+function toChartPoints(arr?: Obs[], tail = 120, cadence: Cadence = "monthly"): { t: string; v: number; stale?: boolean }[] {
+  const pts = (arr ?? []).slice(-tail).map((p) => ({ t: p.asOf, v: p.value }));
+  // Guarantee every macro chart extends to today so lines don't stop in 2024.
+  return extendSeriesToToday(pts, cadence);
 }
 function pctChangeYoY(arr?: Obs[]): number | null {
   if (!arr || arr.length < 13) return null;

@@ -55,7 +55,16 @@ export function TrendChart({
     return () => { cancelled = true; };
   }, [series.overrideKey, series.zones]);
 
-  const historical = series.points.map((p) => ({ t: p.t, v: p.v, kind: "hist" as const }));
+  const historicalReal = series.points
+    .filter((p) => !p.stale)
+    .map((p) => ({ t: p.t, v: p.v, kind: "hist" as const }));
+  const staleTail = series.points
+    .filter((p) => p.stale)
+    .map((p) => ({ t: p.t, v: p.v, kind: "stale" as const }));
+  // Bridge: repeat the last real point so the dashed stale segment connects visually.
+  const lastReal = historicalReal[historicalReal.length - 1];
+  const staleBridged = lastReal && staleTail.length > 0 ? [lastReal, ...staleTail] : staleTail;
+  const historical = [...historicalReal, ...staleTail];
   const projection = (series.projection ?? []).map((p) => ({ t: p.t, v: p.v, kind: "proj" as const }));
   const band = series.projectionBand;
   const bandData = band
@@ -166,8 +175,20 @@ export function TrendChart({
             strokeWidth={1.5}
             fill="url(#trend-fill)"
             isAnimationActive={false}
-            data={historical}
+            data={historicalReal}
           />
+          {staleBridged.length > 1 && (
+            <Line
+              type="monotone"
+              dataKey="v"
+              data={staleBridged}
+              stroke="var(--muted-foreground)"
+              strokeWidth={1.25}
+              strokeDasharray="2 3"
+              dot={false}
+              isAnimationActive={false}
+            />
+          )}
           {projection.length > 0 && (
             <Line
               type="monotone"

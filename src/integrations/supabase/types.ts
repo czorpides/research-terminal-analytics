@@ -276,6 +276,21 @@ export type Database = {
         }
         Relationships: []
       }
+      cron_heartbeat: {
+        Row: {
+          beat_at: string
+          id: string
+        }
+        Insert: {
+          beat_at?: string
+          id?: string
+        }
+        Update: {
+          beat_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       data_points: {
         Row: {
           as_of: string
@@ -1269,6 +1284,30 @@ export type Database = {
           subject_type?: Database["public"]["Enums"]["subject_type"]
           window_end?: string | null
           window_start?: string | null
+        }
+        Relationships: []
+      }
+      source_freshness_expectations: {
+        Row: {
+          cadence: string
+          max_lag_minutes: number
+          notes: string | null
+          source_code: string
+          updated_at: string
+        }
+        Insert: {
+          cadence: string
+          max_lag_minutes: number
+          notes?: string | null
+          source_code: string
+          updated_at?: string
+        }
+        Update: {
+          cadence?: string
+          max_lag_minutes?: number
+          notes?: string | null
+          source_code?: string
+          updated_at?: string
         }
         Relationships: []
       }
