@@ -90,11 +90,11 @@ async function buildRegionPanels(region: MacroRegion): Promise<PanelData[]> {
     panels.push(creditPanel(byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(businessGrowthPanel(byMetric, sourceName, checkFreshness, pendingAiCheck));
   } else if (region === "EZ") {
-    panels.push(genericRatesPanel(region, byMetric, sourceName, "EZ_DFR", "EZ_10Y", "ECB deposit rate", "EA 10Y yield", checkFreshness, pendingAiCheck));
+    panels.push(genericRatesPanel(region, byMetric, sourceName, "ECBDFR", "IRLTLT01EZM156N", "ECB deposit rate", "EA 10Y yield", checkFreshness, pendingAiCheck));
     panels.push(inflationPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(laborPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
   } else {
-    panels.push(genericRatesPanel(region, byMetric, sourceName, "UK_BANK_RATE", "UK_10Y", "BoE bank rate", "UK 10Y gilt", checkFreshness, pendingAiCheck));
+    panels.push(genericRatesPanel(region, byMetric, sourceName, "IUDSOIA", "IRLTLT01GBM156N", "UK SONIA (BoE proxy)", "UK 10Y gilt", checkFreshness, pendingAiCheck));
     panels.push(inflationPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(laborPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
   }
