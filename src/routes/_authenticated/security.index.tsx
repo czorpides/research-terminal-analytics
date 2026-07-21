@@ -4,6 +4,74 @@ import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { getSecurityUniverse } from "@/lib/panels/security.functions";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+const COLUMN_HELP: Record<string, { title: string; source: string; good: string; bad: string }> = {
+  Symbol: { title: "Ticker symbol", source: "Assets master (curated universe).", good: "—", bad: "—" },
+  Name: { title: "Company name", source: "Assets master.", good: "—", bad: "—" },
+  Industry: { title: "GICS-style industry classification", source: "Assets master → industries table.", good: "—", bad: "—" },
+  Mo: {
+    title: "Momentum score (0–100)",
+    source: "Deterministic scorer over daily closes from the equity price pool (Stooq / Tiingo / Twelve Data / FMP). See src/lib/scoring/momentum.server.ts.",
+    good: "≥ 60 — strong trailing returns across 1M / 3M / 6M windows.",
+    bad: "≤ 40 — weak or negative trailing returns; losing relative strength.",
+  },
+  Tr: {
+    title: "Trend score (0–100)",
+    source: "Deterministic scorer using moving-average structure and slope on daily closes. See src/lib/scoring/trend.server.ts.",
+    good: "≥ 60 — price above rising long-term MAs; clean uptrend.",
+    bad: "≤ 40 — price below falling MAs; broken or choppy structure.",
+  },
+  Vol: {
+    title: "Volatility score (0–100, inverted)",
+    source: "Realised daily-return volatility from the price pool. See src/lib/scoring/volatility.server.ts.",
+    good: "≥ 60 — calmer than peers; lower realised vol.",
+    bad: "≤ 40 — noisier than peers; elevated realised vol.",
+  },
+  Val: {
+    title: "Valuation score (0–100)",
+    source: "Industry-relative percentiles of TTM P/E, EV/EBITDA, P/S, P/B and FCF yield from FMP fundamentals. See src/lib/scoring/valuation.server.ts.",
+    good: "≥ 60 — cheap vs. industry peers on multiple ratios.",
+    bad: "≤ 40 — expensive vs. industry peers.",
+  },
+  Qual: {
+    title: "Quality score (0–100)",
+    source: "Industry-relative percentiles of ROE, ROIC, gross/net margin, debt/equity, current ratio from FMP fundamentals.",
+    good: "≥ 60 — high returns on capital, healthy margins, sensible leverage.",
+    bad: "≤ 40 — thin margins, weak returns, or stretched balance sheet.",
+  },
+  Comp: {
+    title: "Composite score",
+    source: "Weighted blend: 60% technicals (momentum, trend, volatility) + 40% fundamentals (valuation, quality). See src/lib/scoring/composite.ts.",
+    good: "Higher = stronger all-round setup; drives Radar ranking.",
+    bad: "Lower = weak setup; drives Overvaluation Radar candidacy.",
+  },
+  Last: {
+    title: "Last close price",
+    source: "Most recent daily bar from prices_daily (equity price pool).",
+    good: "—",
+    bad: "—",
+  },
+};
+
+function HeaderCell({ label, align = "left" }: { label: string; align?: "left" | "right" }) {
+  const help = COLUMN_HELP[label];
+  const cls = align === "right" ? "text-right" : "";
+  if (!help) return <div className={cls}>{label}</div>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className={cn(cls, "cursor-help underline decoration-dotted decoration-border underline-offset-4")}>{label}</div>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-xs space-y-1.5 text-[11px] leading-relaxed">
+        <div className="font-semibold text-foreground">{help.title}</div>
+        <div><span className="text-muted-foreground">Source: </span>{help.source}</div>
+        {help.good !== "—" && <div><span className="text-[var(--positive)]">Good: </span>{help.good}</div>}
+        {help.bad !== "—" && <div><span className="text-[var(--negative)]">Bad: </span>{help.bad}</div>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 const universeQuery = queryOptions({
   queryKey: ["security", "universe"],
@@ -37,18 +105,19 @@ function SecurityIndex() {
         title="The equity universe, one row per instrument."
         purpose="Reference identity plus latest deterministic scores. Click any row for the auditable deep dive."
       />
+      <TooltipProvider delayDuration={150}>
       <div className="rounded-md border border-border/70 bg-card/40">
         <div className="grid grid-cols-[80px_minmax(0,1fr)_110px_50px_50px_50px_50px_50px_70px_90px] items-center border-b border-border/70 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          <div>Symbol</div>
-          <div>Name</div>
-          <div>Industry</div>
-          <div className="text-right">Mo</div>
-          <div className="text-right">Tr</div>
-          <div className="text-right">Vol</div>
-          <div className="text-right">Val</div>
-          <div className="text-right">Qual</div>
-          <div className="text-right">Comp</div>
-          <div className="text-right">Last</div>
+          <HeaderCell label="Symbol" />
+          <HeaderCell label="Name" />
+          <HeaderCell label="Industry" />
+          <HeaderCell label="Mo" align="right" />
+          <HeaderCell label="Tr" align="right" />
+          <HeaderCell label="Vol" align="right" />
+          <HeaderCell label="Val" align="right" />
+          <HeaderCell label="Qual" align="right" />
+          <HeaderCell label="Comp" align="right" />
+          <HeaderCell label="Last" align="right" />
         </div>
         {rows.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
@@ -74,6 +143,7 @@ function SecurityIndex() {
           </Link>
         ))}
       </div>
+      </TooltipProvider>
       <div className="mt-3 font-mono text-[10px] text-muted-foreground">
         {rows.length} securities · sorted by composite (momentum, trend, volatility, valuation, quality)
       </div>
