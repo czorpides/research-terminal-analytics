@@ -42,10 +42,22 @@ export function TrendChart({
 }) {
   const historical = series.points.map((p) => ({ t: p.t, v: p.v, kind: "hist" as const }));
   const projection = (series.projection ?? []).map((p) => ({ t: p.t, v: p.v, kind: "proj" as const }));
+  const band = series.projectionBand;
+  const bandData = band
+    ? band.upper.map((u, i) => ({
+        t: u.t,
+        upper: u.v,
+        lower: band.lower[i]?.v ?? u.v,
+        span: [band.lower[i]?.v ?? u.v, u.v] as [number, number],
+      }))
+    : [];
   const data = [...historical, ...projection];
   if (data.length === 0) return null;
 
-  const values = data.map((d) => d.v).filter((v) => Number.isFinite(v));
+  const values = [
+    ...data.map((d) => d.v),
+    ...bandData.flatMap((d) => [d.upper, d.lower]),
+  ].filter((v) => Number.isFinite(v));
   const min = Math.min(...values);
   const max = Math.max(...values);
   const pad = (max - min) * 0.15 || Math.abs(max) * 0.05 || 1;
@@ -110,6 +122,18 @@ export function TrendChart({
             }}
             formatter={(val: unknown) => [fmt(Number(val), series.format), series.yLabel ?? "value"]}
           />
+
+          {bandData.length > 0 && (
+            <Area
+              type="monotone"
+              dataKey="span"
+              data={bandData}
+              stroke="none"
+              fill="var(--primary)"
+              fillOpacity={0.1}
+              isAnimationActive={false}
+            />
+          )}
 
           <Area
             type="monotone"
