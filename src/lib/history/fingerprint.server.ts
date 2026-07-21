@@ -60,9 +60,9 @@ export async function computeCurrentFingerprint(): Promise<FingerprintDetail> {
   let wtiSeries: Array<{ asOf: string; value: number }> = [];
   if (wti) {
     const { data: cp } = await supabaseAdmin.from("commodity_prices")
-      .select("as_of, close").eq("commodity_id", wti.id)
-      .order("as_of", { ascending: true }).limit(400);
-    wtiSeries = (cp ?? []).map((r) => ({ asOf: r.as_of as string, value: Number(r.close) }));
+      .select("ts, price").eq("commodity_id", wti.id)
+      .order("ts", { ascending: true }).limit(400);
+    wtiSeries = (cp ?? []).map((r) => ({ asOf: r.ts as string, value: Number(r.price) }));
   }
 
   const last = (s?: Array<{ asOf: string; value: number }>) => s && s.length ? s[s.length - 1] : undefined;
