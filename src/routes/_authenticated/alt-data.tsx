@@ -10,7 +10,7 @@ const altDataQuery = queryOptions({
   queryFn: () => getAltDataPanels(),
 });
 
-export const Route = createFileRoute("/alt-data")({
+export const Route = createFileRoute("/_authenticated/alt-data")({
   head: () => ({ meta: [
     { title: "Alternative Data — Research Terminal" },
     { name: "description", content: "Web, satellite, hiring, patents and other alt signals — always penalised for provenance and freshness." },

@@ -9,19 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UndervaluationRouteImport } from './routes/undervaluation'
-import { Route as ScreenersRouteImport } from './routes/screeners'
-import { Route as RadarRouteImport } from './routes/radar'
-import { Route as OvervaluationRouteImport } from './routes/overvaluation'
-import { Route as MacroRouteImport } from './routes/macro'
-import { Route as HistoryRouteImport } from './routes/history'
-import { Route as DataHealthRouteImport } from './routes/data-health'
-import { Route as AltDataRouteImport } from './routes/alt-data'
-import { Route as AlertsRouteImport } from './routes/alerts'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as SecurityIndexRouteImport } from './routes/security.index'
-import { Route as SecuritySymbolRouteImport } from './routes/security.$symbol'
-import { Route as HistoryEventIdRouteImport } from './routes/history.$eventId'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedUndervaluationRouteImport } from './routes/_authenticated/undervaluation'
+import { Route as AuthenticatedScreenersRouteImport } from './routes/_authenticated/screeners'
+import { Route as AuthenticatedRadarRouteImport } from './routes/_authenticated/radar'
+import { Route as AuthenticatedOvervaluationRouteImport } from './routes/_authenticated/overvaluation'
+import { Route as AuthenticatedMacroRouteImport } from './routes/_authenticated/macro'
+import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
+import { Route as AuthenticatedDataHealthRouteImport } from './routes/_authenticated/data-health'
+import { Route as AuthenticatedAltDataRouteImport } from './routes/_authenticated/alt-data'
+import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
+import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security.index'
+import { Route as AuthenticatedSecuritySymbolRouteImport } from './routes/_authenticated/security.$symbol'
+import { Route as AuthenticatedHistoryEventIdRouteImport } from './routes/_authenticated/history.$eventId'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
@@ -34,71 +34,76 @@ import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
-const UndervaluationRoute = UndervaluationRouteImport.update({
-  id: '/undervaluation',
-  path: '/undervaluation',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ScreenersRoute = ScreenersRouteImport.update({
-  id: '/screeners',
-  path: '/screeners',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RadarRoute = RadarRouteImport.update({
-  id: '/radar',
-  path: '/radar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OvervaluationRoute = OvervaluationRouteImport.update({
-  id: '/overvaluation',
-  path: '/overvaluation',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MacroRoute = MacroRouteImport.update({
-  id: '/macro',
-  path: '/macro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HistoryRoute = HistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DataHealthRoute = DataHealthRouteImport.update({
-  id: '/data-health',
-  path: '/data-health',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AltDataRoute = AltDataRouteImport.update({
-  id: '/alt-data',
-  path: '/alt-data',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AlertsRoute = AlertsRouteImport.update({
-  id: '/alerts',
-  path: '/alerts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/_authenticated/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SecurityIndexRoute = SecurityIndexRouteImport.update({
-  id: '/security/',
-  path: '/security/',
+const AuthenticatedUndervaluationRoute =
+  AuthenticatedUndervaluationRouteImport.update({
+    id: '/_authenticated/undervaluation',
+    path: '/undervaluation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AuthenticatedScreenersRoute = AuthenticatedScreenersRouteImport.update({
+  id: '/_authenticated/screeners',
+  path: '/screeners',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SecuritySymbolRoute = SecuritySymbolRouteImport.update({
-  id: '/security/$symbol',
-  path: '/security/$symbol',
+const AuthenticatedRadarRoute = AuthenticatedRadarRouteImport.update({
+  id: '/_authenticated/radar',
+  path: '/radar',
   getParentRoute: () => rootRouteImport,
 } as any)
-const HistoryEventIdRoute = HistoryEventIdRouteImport.update({
-  id: '/$eventId',
-  path: '/$eventId',
-  getParentRoute: () => HistoryRoute,
+const AuthenticatedOvervaluationRoute =
+  AuthenticatedOvervaluationRouteImport.update({
+    id: '/_authenticated/overvaluation',
+    path: '/overvaluation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AuthenticatedMacroRoute = AuthenticatedMacroRouteImport.update({
+  id: '/_authenticated/macro',
+  path: '/macro',
+  getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
+  id: '/_authenticated/history',
+  path: '/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedDataHealthRoute = AuthenticatedDataHealthRouteImport.update({
+  id: '/_authenticated/data-health',
+  path: '/data-health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAltDataRoute = AuthenticatedAltDataRouteImport.update({
+  id: '/_authenticated/alt-data',
+  path: '/alt-data',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAlertsRoute = AuthenticatedAlertsRouteImport.update({
+  id: '/_authenticated/alerts',
+  path: '/alerts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedSecurityIndexRoute =
+  AuthenticatedSecurityIndexRouteImport.update({
+    id: '/_authenticated/security/',
+    path: '/security/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AuthenticatedSecuritySymbolRoute =
+  AuthenticatedSecuritySymbolRouteImport.update({
+    id: '/_authenticated/security/$symbol',
+    path: '/security/$symbol',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AuthenticatedHistoryEventIdRoute =
+  AuthenticatedHistoryEventIdRouteImport.update({
+    id: '/$eventId',
+    path: '/$eventId',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
 const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
   id: '/api/public/verify/run',
   path: '/api/public/verify/run',
@@ -161,19 +166,19 @@ const ApiPublicRadarsUndervaluationRefreshRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/alerts': typeof AlertsRoute
-  '/alt-data': typeof AltDataRoute
-  '/data-health': typeof DataHealthRoute
-  '/history': typeof HistoryRouteWithChildren
-  '/macro': typeof MacroRoute
-  '/overvaluation': typeof OvervaluationRoute
-  '/radar': typeof RadarRoute
-  '/screeners': typeof ScreenersRoute
-  '/undervaluation': typeof UndervaluationRoute
-  '/history/$eventId': typeof HistoryEventIdRoute
-  '/security/$symbol': typeof SecuritySymbolRoute
-  '/security/': typeof SecurityIndexRoute
+  '/alerts': typeof AuthenticatedAlertsRoute
+  '/alt-data': typeof AuthenticatedAltDataRoute
+  '/data-health': typeof AuthenticatedDataHealthRoute
+  '/history': typeof AuthenticatedHistoryRouteWithChildren
+  '/macro': typeof AuthenticatedMacroRoute
+  '/overvaluation': typeof AuthenticatedOvervaluationRoute
+  '/radar': typeof AuthenticatedRadarRoute
+  '/screeners': typeof AuthenticatedScreenersRoute
+  '/undervaluation': typeof AuthenticatedUndervaluationRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
+  '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
+  '/security/': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -187,19 +192,19 @@ export interface FileRoutesByFullPath {
   '/api/public/radars/undervaluation/refresh': typeof ApiPublicRadarsUndervaluationRefreshRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/alerts': typeof AlertsRoute
-  '/alt-data': typeof AltDataRoute
-  '/data-health': typeof DataHealthRoute
-  '/history': typeof HistoryRouteWithChildren
-  '/macro': typeof MacroRoute
-  '/overvaluation': typeof OvervaluationRoute
-  '/radar': typeof RadarRoute
-  '/screeners': typeof ScreenersRoute
-  '/undervaluation': typeof UndervaluationRoute
-  '/history/$eventId': typeof HistoryEventIdRoute
-  '/security/$symbol': typeof SecuritySymbolRoute
-  '/security': typeof SecurityIndexRoute
+  '/alerts': typeof AuthenticatedAlertsRoute
+  '/alt-data': typeof AuthenticatedAltDataRoute
+  '/data-health': typeof AuthenticatedDataHealthRoute
+  '/history': typeof AuthenticatedHistoryRouteWithChildren
+  '/macro': typeof AuthenticatedMacroRoute
+  '/overvaluation': typeof AuthenticatedOvervaluationRoute
+  '/radar': typeof AuthenticatedRadarRoute
+  '/screeners': typeof AuthenticatedScreenersRoute
+  '/undervaluation': typeof AuthenticatedUndervaluationRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
+  '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
+  '/security': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -214,19 +219,19 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/alerts': typeof AlertsRoute
-  '/alt-data': typeof AltDataRoute
-  '/data-health': typeof DataHealthRoute
-  '/history': typeof HistoryRouteWithChildren
-  '/macro': typeof MacroRoute
-  '/overvaluation': typeof OvervaluationRoute
-  '/radar': typeof RadarRoute
-  '/screeners': typeof ScreenersRoute
-  '/undervaluation': typeof UndervaluationRoute
-  '/history/$eventId': typeof HistoryEventIdRoute
-  '/security/$symbol': typeof SecuritySymbolRoute
-  '/security/': typeof SecurityIndexRoute
+  '/_authenticated/alerts': typeof AuthenticatedAlertsRoute
+  '/_authenticated/alt-data': typeof AuthenticatedAltDataRoute
+  '/_authenticated/data-health': typeof AuthenticatedDataHealthRoute
+  '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
+  '/_authenticated/macro': typeof AuthenticatedMacroRoute
+  '/_authenticated/overvaluation': typeof AuthenticatedOvervaluationRoute
+  '/_authenticated/radar': typeof AuthenticatedRadarRoute
+  '/_authenticated/screeners': typeof AuthenticatedScreenersRoute
+  '/_authenticated/undervaluation': typeof AuthenticatedUndervaluationRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
+  '/_authenticated/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
+  '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -242,7 +247,6 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
     | '/alerts'
     | '/alt-data'
     | '/data-health'
@@ -252,6 +256,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/undervaluation'
+    | '/'
     | '/history/$eventId'
     | '/security/$symbol'
     | '/security/'
@@ -268,7 +273,6 @@ export interface FileRouteTypes {
     | '/api/public/radars/undervaluation/refresh'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/alerts'
     | '/alt-data'
     | '/data-health'
@@ -278,6 +282,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/undervaluation'
+    | '/'
     | '/history/$eventId'
     | '/security/$symbol'
     | '/security'
@@ -294,19 +299,19 @@ export interface FileRouteTypes {
     | '/api/public/radars/undervaluation/refresh'
   id:
     | '__root__'
-    | '/'
-    | '/alerts'
-    | '/alt-data'
-    | '/data-health'
-    | '/history'
-    | '/macro'
-    | '/overvaluation'
-    | '/radar'
-    | '/screeners'
-    | '/undervaluation'
-    | '/history/$eventId'
-    | '/security/$symbol'
-    | '/security/'
+    | '/_authenticated/alerts'
+    | '/_authenticated/alt-data'
+    | '/_authenticated/data-health'
+    | '/_authenticated/history'
+    | '/_authenticated/macro'
+    | '/_authenticated/overvaluation'
+    | '/_authenticated/radar'
+    | '/_authenticated/screeners'
+    | '/_authenticated/undervaluation'
+    | '/_authenticated/'
+    | '/_authenticated/history/$eventId'
+    | '/_authenticated/security/$symbol'
+    | '/_authenticated/security/'
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
@@ -321,18 +326,18 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AlertsRoute: typeof AlertsRoute
-  AltDataRoute: typeof AltDataRoute
-  DataHealthRoute: typeof DataHealthRoute
-  HistoryRoute: typeof HistoryRouteWithChildren
-  MacroRoute: typeof MacroRoute
-  OvervaluationRoute: typeof OvervaluationRoute
-  RadarRoute: typeof RadarRoute
-  ScreenersRoute: typeof ScreenersRoute
-  UndervaluationRoute: typeof UndervaluationRoute
-  SecuritySymbolRoute: typeof SecuritySymbolRoute
-  SecurityIndexRoute: typeof SecurityIndexRoute
+  AuthenticatedAlertsRoute: typeof AuthenticatedAlertsRoute
+  AuthenticatedAltDataRoute: typeof AuthenticatedAltDataRoute
+  AuthenticatedDataHealthRoute: typeof AuthenticatedDataHealthRoute
+  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
+  AuthenticatedMacroRoute: typeof AuthenticatedMacroRoute
+  AuthenticatedOvervaluationRoute: typeof AuthenticatedOvervaluationRoute
+  AuthenticatedRadarRoute: typeof AuthenticatedRadarRoute
+  AuthenticatedScreenersRoute: typeof AuthenticatedScreenersRoute
+  AuthenticatedUndervaluationRoute: typeof AuthenticatedUndervaluationRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedSecuritySymbolRoute: typeof AuthenticatedSecuritySymbolRoute
+  AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
   ApiPublicIngestAltdataRoute: typeof ApiPublicIngestAltdataRoute
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
@@ -348,96 +353,96 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/undervaluation': {
-      id: '/undervaluation'
-      path: '/undervaluation'
-      fullPath: '/undervaluation'
-      preLoaderRoute: typeof UndervaluationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/screeners': {
-      id: '/screeners'
-      path: '/screeners'
-      fullPath: '/screeners'
-      preLoaderRoute: typeof ScreenersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/radar': {
-      id: '/radar'
-      path: '/radar'
-      fullPath: '/radar'
-      preLoaderRoute: typeof RadarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/overvaluation': {
-      id: '/overvaluation'
-      path: '/overvaluation'
-      fullPath: '/overvaluation'
-      preLoaderRoute: typeof OvervaluationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/macro': {
-      id: '/macro'
-      path: '/macro'
-      fullPath: '/macro'
-      preLoaderRoute: typeof MacroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/history': {
-      id: '/history'
-      path: '/history'
-      fullPath: '/history'
-      preLoaderRoute: typeof HistoryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/data-health': {
-      id: '/data-health'
-      path: '/data-health'
-      fullPath: '/data-health'
-      preLoaderRoute: typeof DataHealthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/alt-data': {
-      id: '/alt-data'
-      path: '/alt-data'
-      fullPath: '/alt-data'
-      preLoaderRoute: typeof AltDataRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/alerts': {
-      id: '/alerts'
-      path: '/alerts'
-      fullPath: '/alerts'
-      preLoaderRoute: typeof AlertsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/security/': {
-      id: '/security/'
+    '/_authenticated/undervaluation': {
+      id: '/_authenticated/undervaluation'
+      path: '/undervaluation'
+      fullPath: '/undervaluation'
+      preLoaderRoute: typeof AuthenticatedUndervaluationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/screeners': {
+      id: '/_authenticated/screeners'
+      path: '/screeners'
+      fullPath: '/screeners'
+      preLoaderRoute: typeof AuthenticatedScreenersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/radar': {
+      id: '/_authenticated/radar'
+      path: '/radar'
+      fullPath: '/radar'
+      preLoaderRoute: typeof AuthenticatedRadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/overvaluation': {
+      id: '/_authenticated/overvaluation'
+      path: '/overvaluation'
+      fullPath: '/overvaluation'
+      preLoaderRoute: typeof AuthenticatedOvervaluationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/macro': {
+      id: '/_authenticated/macro'
+      path: '/macro'
+      fullPath: '/macro'
+      preLoaderRoute: typeof AuthenticatedMacroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/history': {
+      id: '/_authenticated/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof AuthenticatedHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/data-health': {
+      id: '/_authenticated/data-health'
+      path: '/data-health'
+      fullPath: '/data-health'
+      preLoaderRoute: typeof AuthenticatedDataHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/alt-data': {
+      id: '/_authenticated/alt-data'
+      path: '/alt-data'
+      fullPath: '/alt-data'
+      preLoaderRoute: typeof AuthenticatedAltDataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/alerts': {
+      id: '/_authenticated/alerts'
+      path: '/alerts'
+      fullPath: '/alerts'
+      preLoaderRoute: typeof AuthenticatedAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/security/': {
+      id: '/_authenticated/security/'
       path: '/security'
       fullPath: '/security/'
-      preLoaderRoute: typeof SecurityIndexRouteImport
+      preLoaderRoute: typeof AuthenticatedSecurityIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/security/$symbol': {
-      id: '/security/$symbol'
+    '/_authenticated/security/$symbol': {
+      id: '/_authenticated/security/$symbol'
       path: '/security/$symbol'
       fullPath: '/security/$symbol'
-      preLoaderRoute: typeof SecuritySymbolRouteImport
+      preLoaderRoute: typeof AuthenticatedSecuritySymbolRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/history/$eventId': {
-      id: '/history/$eventId'
+    '/_authenticated/history/$eventId': {
+      id: '/_authenticated/history/$eventId'
       path: '/$eventId'
       fullPath: '/history/$eventId'
-      preLoaderRoute: typeof HistoryEventIdRouteImport
-      parentRoute: typeof HistoryRoute
+      preLoaderRoute: typeof AuthenticatedHistoryEventIdRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
     '/api/public/verify/run': {
       id: '/api/public/verify/run'
@@ -519,30 +524,30 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface HistoryRouteChildren {
-  HistoryEventIdRoute: typeof HistoryEventIdRoute
+interface AuthenticatedHistoryRouteChildren {
+  AuthenticatedHistoryEventIdRoute: typeof AuthenticatedHistoryEventIdRoute
 }
 
-const HistoryRouteChildren: HistoryRouteChildren = {
-  HistoryEventIdRoute: HistoryEventIdRoute,
+const AuthenticatedHistoryRouteChildren: AuthenticatedHistoryRouteChildren = {
+  AuthenticatedHistoryEventIdRoute: AuthenticatedHistoryEventIdRoute,
 }
 
-const HistoryRouteWithChildren =
-  HistoryRoute._addFileChildren(HistoryRouteChildren)
+const AuthenticatedHistoryRouteWithChildren =
+  AuthenticatedHistoryRoute._addFileChildren(AuthenticatedHistoryRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  AlertsRoute: AlertsRoute,
-  AltDataRoute: AltDataRoute,
-  DataHealthRoute: DataHealthRoute,
-  HistoryRoute: HistoryRouteWithChildren,
-  MacroRoute: MacroRoute,
-  OvervaluationRoute: OvervaluationRoute,
-  RadarRoute: RadarRoute,
-  ScreenersRoute: ScreenersRoute,
-  UndervaluationRoute: UndervaluationRoute,
-  SecuritySymbolRoute: SecuritySymbolRoute,
-  SecurityIndexRoute: SecurityIndexRoute,
+  AuthenticatedAlertsRoute: AuthenticatedAlertsRoute,
+  AuthenticatedAltDataRoute: AuthenticatedAltDataRoute,
+  AuthenticatedDataHealthRoute: AuthenticatedDataHealthRoute,
+  AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
+  AuthenticatedMacroRoute: AuthenticatedMacroRoute,
+  AuthenticatedOvervaluationRoute: AuthenticatedOvervaluationRoute,
+  AuthenticatedRadarRoute: AuthenticatedRadarRoute,
+  AuthenticatedScreenersRoute: AuthenticatedScreenersRoute,
+  AuthenticatedUndervaluationRoute: AuthenticatedUndervaluationRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedSecuritySymbolRoute: AuthenticatedSecuritySymbolRoute,
+  AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
   ApiPublicIngestAltdataRoute: ApiPublicIngestAltdataRoute,
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,

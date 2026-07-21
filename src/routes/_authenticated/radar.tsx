@@ -10,7 +10,7 @@ const radarQueryOptions = queryOptions({
   queryFn: () => getRadarPanels(),
 });
 
-export const Route = createFileRoute("/radar")({
+export const Route = createFileRoute("/_authenticated/radar")({
   head: () => ({ meta: [
     { title: "Opportunity Radar — Research Terminal" },
     { name: "description", content: "Ranked research candidates. Every positive point and every deduction is visible." },

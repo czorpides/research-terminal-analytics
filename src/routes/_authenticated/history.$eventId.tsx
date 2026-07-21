@@ -10,7 +10,7 @@ const detailQueryOptions = (code: string) => queryOptions({
   queryFn: () => getEventDetail({ data: { code } }),
 });
 
-export const Route = createFileRoute("/history/$eventId")({
+export const Route = createFileRoute("/_authenticated/history/$eventId")({
   loader: async ({ context, params }) => {
     const data = await context.queryClient.ensureQueryData(detailQueryOptions(params.eventId));
     if (!data.event) throw notFound();

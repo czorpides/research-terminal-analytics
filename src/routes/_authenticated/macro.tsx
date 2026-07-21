@@ -9,7 +9,7 @@ import { getMacroPanelsForRegion, getMacroCompare, type MacroRegion } from "@/li
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/macro")({
+export const Route = createFileRoute("/_authenticated/macro")({
   head: () => ({ meta: [
     { title: "Macro — Research Terminal" },
     { name: "description", content: "US, Euro area and UK rates, inflation, labour, housing, credit and business activity — with trend charts and goldilocks zones." },

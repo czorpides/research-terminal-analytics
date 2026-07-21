@@ -10,7 +10,7 @@ const screenersQueryOptions = queryOptions({
   queryFn: () => getScreenerPanels(),
 });
 
-export const Route = createFileRoute("/screeners")({
+export const Route = createFileRoute("/_authenticated/screeners")({
   head: () => ({ meta: [
     { title: "Screeners — Research Terminal" },
     { name: "description", content: "Filter stocks, industries, commodities and assets against the validated analytics layer." },

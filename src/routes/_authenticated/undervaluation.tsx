@@ -10,7 +10,7 @@ const uvQueryOptions = queryOptions({
   queryFn: () => getUndervaluationPanels(),
 });
 
-export const Route = createFileRoute("/undervaluation")({
+export const Route = createFileRoute("/_authenticated/undervaluation")({
   head: () => ({ meta: [
     { title: "Undervaluation Radar — Research Terminal" },
     { name: "description", content: "Weekly stable watchlist of value candidates paired with macro, commodity and alt-data catalysts." },

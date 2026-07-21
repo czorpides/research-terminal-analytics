@@ -10,7 +10,7 @@ const historyQueryOptions = queryOptions({
   queryFn: () => getHistoryPanels(),
 });
 
-export const Route = createFileRoute("/history")({
+export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({ meta: [
     { title: "Historical Events — Research Terminal" },
     { name: "description", content: "Deterministic macro-fingerprint match against a seeded library of rate cycles, oil shocks, tariff rounds, banking stress and recessions." },
