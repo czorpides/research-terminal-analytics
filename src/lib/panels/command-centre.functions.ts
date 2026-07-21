@@ -151,7 +151,7 @@ export const getCommandCentrePanels = createServerFn({ method: "GET" }).handler(
         status: quotaExhausted === 0 ? "pass" : "fail",
         detail: `${quotaExhausted} providers at limit`, checkedAt: nowIso },
     ],
-    confidence: computeConfidence({ tier: "tier1_official", category: "provider_health", ageSeconds: 0 }),
+    confidence: computeConfidence({ tier: "tier1_official", category: "news", ageSeconds: 0 }),
   };
 
   // ---- Verifier activity -----------------------------------------------
@@ -199,7 +199,7 @@ export const getCommandCentrePanels = createServerFn({ method: "GET" }).handler(
         status: vr24h.length > 0 ? "pass" : "fail",
         detail: `${vr24h.length} runs`, checkedAt: nowIso },
     ],
-    confidence: computeConfidence({ tier: "tier1_official", category: "verify_run", ageSeconds: 0 }),
+    confidence: computeConfidence({ tier: "tier1_official", category: "news", ageSeconds: 0 }),
   };
   verifierPanel.positives.push(...vrRecent);
 
@@ -473,7 +473,7 @@ function buildChangesPanel({ verifyRuns, runs, scoreRows, dayAgo, twoDayAgo, now
         status: failToday <= failYest ? "pass" : "fail",
         detail: `${failYest} → ${failToday}`, checkedAt: nowIso },
     ],
-    confidence: computeConfidence({ tier: "tier1_official", category: "diff", ageSeconds: 0 }),
+    confidence: computeConfidence({ tier: "tier1_official", category: "news", ageSeconds: 0 }),
     calculation: {
       formula: "diff(today, yesterday) over {scores, ingestion_runs, verify_runs}",
       ...stampCalculation("cc.changes.v0.1", { scores24, failToday, failYest, flips: flips.length }),
