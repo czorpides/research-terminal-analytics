@@ -1056,6 +1056,30 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       provider_quotas: {
         Row: {
           calls_made: number
@@ -1415,6 +1439,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_zone_overrides: {
+        Row: {
+          created_at: string
+          id: string
+          indicator_id: string
+          updated_at: string
+          user_id: string
+          zones: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          indicator_id: string
+          updated_at?: string
+          user_id: string
+          zones: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          indicator_id?: string
+          updated_at?: string
+          user_id?: string
+          zones?: Json
+        }
+        Relationships: []
       }
       verify_check_definitions: {
         Row: {
