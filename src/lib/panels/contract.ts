@@ -86,6 +86,19 @@ export interface PanelData {
   whatChanged: string;
   whyItMatters: string;
   /**
+   * Long-form background surfaced only in the expanded sheet. Explains what
+   * the panel is measuring, the historical context behind it, which
+   * assets/industries are typically affected, and what to watch next.
+   */
+  background?: {
+    overview: string;
+    historicalContext?: string;
+    whatCauses?: string[];
+    assetsAffected?: Array<{ label: string; note?: string }>;
+    whatToWatch?: string[];
+    examples?: Array<{ label: string; note?: string }>;
+  };
+  /**
    * 4–5 short forward-looking research bullets. Deterministically built
    * from current score components, active catalysts, and upcoming macro/
    * commodity/alt-data trends. Rendered under "Why it matters".
