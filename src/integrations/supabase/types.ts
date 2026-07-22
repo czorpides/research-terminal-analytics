@@ -136,41 +136,62 @@ export type Database = {
         Row: {
           active: boolean
           asset_class: Database["public"]["Enums"]["asset_class"]
+          commodity_input_sensitivity: number | null
           country_id: string | null
           created_at: string
           currency: string | null
+          duration_sensitivity: number | null
           exchange: string | null
+          geographic_inflation_exposure: Json | null
           id: string
           industry_id: string | null
+          inflation_sensitivity: number | null
+          interest_rate_sensitivity: number | null
           name: string
+          pricing_power: number | null
           symbol: string
           updated_at: string
+          wage_cost_sensitivity: number | null
         }
         Insert: {
           active?: boolean
           asset_class: Database["public"]["Enums"]["asset_class"]
+          commodity_input_sensitivity?: number | null
           country_id?: string | null
           created_at?: string
           currency?: string | null
+          duration_sensitivity?: number | null
           exchange?: string | null
+          geographic_inflation_exposure?: Json | null
           id?: string
           industry_id?: string | null
+          inflation_sensitivity?: number | null
+          interest_rate_sensitivity?: number | null
           name: string
+          pricing_power?: number | null
           symbol: string
           updated_at?: string
+          wage_cost_sensitivity?: number | null
         }
         Update: {
           active?: boolean
           asset_class?: Database["public"]["Enums"]["asset_class"]
+          commodity_input_sensitivity?: number | null
           country_id?: string | null
           created_at?: string
           currency?: string | null
+          duration_sensitivity?: number | null
           exchange?: string | null
+          geographic_inflation_exposure?: Json | null
           id?: string
           industry_id?: string | null
+          inflation_sensitivity?: number | null
+          interest_rate_sensitivity?: number | null
           name?: string
+          pricing_power?: number | null
           symbol?: string
           updated_at?: string
+          wage_cost_sensitivity?: number | null
         }
         Relationships: [
           {
@@ -1090,10 +1111,12 @@ export type Database = {
           seasonal_adj: boolean
           series_code_native: string
           source_id: string | null
+          target_range: Json | null
           transform_default: string | null
           unit: string | null
           updated_at: string
           vintage_policy: string
+          vintage_quality: string | null
         }
         Insert: {
           allowed_transformations?: string[] | null
@@ -1113,10 +1136,12 @@ export type Database = {
           seasonal_adj?: boolean
           series_code_native: string
           source_id?: string | null
+          target_range?: Json | null
           transform_default?: string | null
           unit?: string | null
           updated_at?: string
           vintage_policy?: string
+          vintage_quality?: string | null
         }
         Update: {
           allowed_transformations?: string[] | null
@@ -1136,10 +1161,12 @@ export type Database = {
           seasonal_adj?: boolean
           series_code_native?: string
           source_id?: string | null
+          target_range?: Json | null
           transform_default?: string | null
           unit?: string | null
           updated_at?: string
           vintage_policy?: string
+          vintage_quality?: string | null
         }
         Relationships: [
           {
@@ -2061,6 +2088,60 @@ export type Database = {
             columns: ["thesis_id"]
             isOneToOne: false
             referencedRelation: "theses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transform_outputs: {
+        Row: {
+          as_of_date: string
+          calc_version: string
+          created_at: string
+          id: string
+          indicator_id: string
+          inputs_hash: string
+          meta: Json | null
+          model_run_id: string | null
+          transform_name: string
+          value: number | null
+        }
+        Insert: {
+          as_of_date: string
+          calc_version: string
+          created_at?: string
+          id?: string
+          indicator_id: string
+          inputs_hash: string
+          meta?: Json | null
+          model_run_id?: string | null
+          transform_name: string
+          value?: number | null
+        }
+        Update: {
+          as_of_date?: string
+          calc_version?: string
+          created_at?: string
+          id?: string
+          indicator_id?: string
+          inputs_hash?: string
+          meta?: Json | null
+          model_run_id?: string | null
+          transform_name?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transform_outputs_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_registry"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transform_outputs_model_run_id_fkey"
+            columns: ["model_run_id"]
+            isOneToOne: false
+            referencedRelation: "model_runs"
             referencedColumns: ["id"]
           },
         ]
