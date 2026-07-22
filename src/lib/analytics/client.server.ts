@@ -1,12 +1,12 @@
 /**
- * Server-only HTTP client for the Python analytics service.
+ * Server-only HTTP client for the stateless Python calculation service.
  *
- * The browser must NEVER call this service directly — all traffic goes
- * through server functions (see analytics.functions.ts) which attach the
- * shared ANALYTICS_SERVICE_TOKEN bearer.
+ * The Python service is a pure calculator: it receives a fully-formed
+ * request from THIS Lovable server, returns filtered levels/slopes/CI +
+ * diagnostics, and never touches the database. All persistence
+ * (model_runs, model_outputs, vintages) happens in Lovable Cloud on this
+ * side of the wire. The browser must NEVER call the Python service.
  */
-
-type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 export interface AnalyticsHealth {
   status: "ok";
@@ -14,25 +14,49 @@ export interface AnalyticsHealth {
   deploy_env: string;
 }
 
-export interface AnalyticsJobTriggerResponse {
-  run_id: string;
-  status: "queued" | "running" | "success" | "failed" | "superseded";
+export type CalcMode = "live" | "historical";
+export type CalcStatus = "ok" | "insufficient_history" | "error";
+
+export interface KalmanCalculationRequest {
   model_key: string;
   model_version: string;
-  reused: boolean;
-  detail?: string | null;
+  calculation_mode: CalcMode;
+  as_of_date: string | null;
+  training_start: string | null;
+  training_end: string | null;
+  input_hash: string;
+  indicator_id: string;
+  indicator_frequency: "daily" | "weekly" | "monthly" | "quarterly" | "annual";
+  indicator_unit: string;
+  observations: Array<{ date: string; value: number | null }>;
+  model_config_params: { min_history?: number | null };
 }
 
-export interface AnalyticsJobStatus {
-  run_id: string;
+export interface KalmanCalculationPoint {
+  date: string;
+  level: number;
+  slope: number;
+  level_ci_low: number;
+  level_ci_high: number;
+}
+
+export interface KalmanCalculationResponse {
+  status: CalcStatus;
   model_key: string;
   model_version: string;
-  status: "queued" | "running" | "success" | "failed" | "superseded";
-  started_at: string;
-  finished_at: string | null;
-  input_hash: string | null;
-  output_summary: Json | null;
-  error: string | null;
+  indicator_id: string;
+  input_hash: string;
+  points: KalmanCalculationPoint[];
+  model_params: Record<string, number>;
+  log_likelihood: number | null;
+  converged: boolean;
+  warnings: string[];
+  n_observations: number;
+  n_missing: number;
+  training_start: string | null;
+  training_end: string | null;
+  calculated_at: string;
+  detail: string | null;
 }
 
 function config(): { url: string; token: string } {
@@ -56,7 +80,7 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   });
   const text = await res.text();
   if (!res.ok) {
-    // Never surface the token or full config; safe to include remote status + body preview.
+    // Never surface the token; safe to include remote status + body preview.
     throw new Error(`analytics ${method} ${path} -> ${res.status}: ${text.slice(0, 400)}`);
   }
   return (text ? JSON.parse(text) : {}) as T;
@@ -66,15 +90,8 @@ export function analyticsHealth(): Promise<AnalyticsHealth> {
   return call<AnalyticsHealth>("GET", "/healthz");
 }
 
-export function triggerUsGrowthKalman(
-  input: { asOfDate?: string; force?: boolean } = {},
-): Promise<AnalyticsJobTriggerResponse> {
-  return call<AnalyticsJobTriggerResponse>("POST", "/jobs/growth-engine/us/kalman", {
-    as_of_date: input.asOfDate ?? null,
-    force: input.force ?? false,
-  });
-}
-
-export function getAnalyticsJob(runId: string): Promise<AnalyticsJobStatus> {
-  return call<AnalyticsJobStatus>("GET", `/jobs/${encodeURIComponent(runId)}`);
+export function calculateKalmanLlt(
+  request: KalmanCalculationRequest,
+): Promise<KalmanCalculationResponse> {
+  return call<KalmanCalculationResponse>("POST", "/calc/kalman-llt", request);
 }
