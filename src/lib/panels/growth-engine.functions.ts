@@ -21,9 +21,39 @@ export interface GrowthIndicatorRow {
   source: string | null;
   latest_value: number | null;
   latest_date: string | null;
+  previous_value: number | null;
+  previous_date: string | null;
+  latest_revision: {
+    observation_date: string;
+    previous_value: number | null;
+    revised_value: number;
+    revised_at: string;
+  } | null;
+  history: Array<{ date: string; value: number | null }>;
+  kalman: {
+    status: "ok" | "insufficient_history" | "not_run";
+    latest_level: number | null;
+    latest_slope: number | null;
+    latest_ci_low: number | null;
+    latest_ci_high: number | null;
+    trend_direction: "improving" | "stable" | "deteriorating" | "unknown";
+    acceleration: number | null;
+    model_version: string | null;
+    calc_mode: "live" | "historical" | null;
+    as_of_date: string | null;
+    training_start: string | null;
+    training_end: string | null;
+    model_params: Record<string, number> | null;
+    reason: string | null;
+    trajectory: Array<{ date: string; level: number; ci_low: number; ci_high: number }>;
+  };
+  min_history: number | null;
+  allowed_transformations: string[];
+  direction: string | null;
+  seasonal_adj: boolean | null;
+  data_freshness_days: number | null;
   observation_count: number;
   transform_default: string | null;
-  direction: string | null;
 }
 
 export interface GrowthEnginePayload {
@@ -34,6 +64,15 @@ export interface GrowthEnginePayload {
     kalman: { available: boolean; message: string };
     factor: { available: boolean; message: string };
   };
+  latestRun: {
+    id: string;
+    status: string;
+    started_at: string;
+    finished_at: string | null;
+    model_version: string;
+    calculation_mode: string | null;
+    output_summary: Record<string, unknown> | null;
+  } | null;
 }
 
 export const getGrowthEngine = createServerFn({ method: "POST" })
