@@ -82,6 +82,14 @@ export interface GrowthHealthPayload {
     skipped: number;
     failed: number;
   };
+  scheduler: {
+    silentCron: boolean;
+    failuresLast24h: number;
+    staleIndicators: Array<{ concept_code: string; frequency: string; latest_observation_date: string | null }>;
+    lastRunStatus: string | null;
+    lastRunFinishedAt: string | null;
+    lastRunScope: string[] | null;
+  } | null;
   warnings: string[];
 }
 
@@ -239,7 +247,7 @@ export const getGrowthHealth = createServerFn({ method: "GET" }).handler(async (
     .limit(10);
   const latestRun = runs?.[0] ?? null;
   const summary = (latestRun?.output_summary as { indicators_processed?: number; indicators_skipped?: number; output_rows?: number; calculation_mode?: string } | null) ?? null;
-  const successful = (runs ?? []).filter((r) => r.status === "success").length;
+  const successful = (runs ?? []).filter((r) => r.status === "success" || r.status === "partial").length;
 
   const currentInputHash = await computeCurrentInputHash();
   const lastRunHash = (runs ?? []).find((r) => r.status === "success")?.input_hash as string | null | undefined ?? null;
@@ -261,6 +269,25 @@ export const getGrowthHealth = createServerFn({ method: "GET" }).handler(async (
   }
   if (currentInputHash && lastRunHash && currentInputHash !== lastRunHash) warnings.push("Input data has changed since the last successful Kalman run — a rerun is due.");
   if (!latestRun) warnings.push("No Kalman run has ever been recorded.");
+
+  // Scheduler/staleness surface from the data_health_alerts view.
+  const { data: alertRow } = await supabaseAdmin
+    .from("data_health_alerts" as any)
+    .select("payload")
+    .limit(1);
+  const payload = (alertRow?.[0] as any)?.payload ?? null;
+  const scheduler: GrowthHealthPayload["scheduler"] = payload
+    ? {
+        silentCron: Boolean(payload.silent_cron),
+        failuresLast24h: Number(payload.failures_last_24h ?? 0),
+        staleIndicators: Array.isArray(payload.stale_indicators) ? payload.stale_indicators : [],
+        lastRunStatus: payload.last_run?.status ?? null,
+        lastRunFinishedAt: payload.last_run?.finished_at ?? null,
+        lastRunScope: Array.isArray(payload.last_run?.scope) ? payload.last_run.scope : null,
+      }
+    : null;
+  if (scheduler?.silentCron) warnings.push("No pipeline run in the last 26 hours — the recurring scheduler may have stopped.");
+  if (scheduler && scheduler.failuresLast24h > 0) warnings.push(`${scheduler.failuresLast24h} pipeline run(s) failed in the last 24 hours.`);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -294,6 +321,7 @@ export const getGrowthHealth = createServerFn({ method: "GET" }).handler(async (
       skipped,
       failed,
     },
+    scheduler,
     warnings,
   };
 });

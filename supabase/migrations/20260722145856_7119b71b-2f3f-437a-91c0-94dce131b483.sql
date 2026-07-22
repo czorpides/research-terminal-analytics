@@ -1,0 +1,1 @@
+ALTER VIEW public.data_health_alerts SET (security_invoker = true);

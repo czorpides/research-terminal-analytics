@@ -44,9 +44,12 @@ export interface GrowthIngestRunSummary {
 }
 
 export async function runUsGrowthFredIngest(
-  opts: { yearsBack?: number } = {},
+  opts: { yearsBack?: number; conceptCodes?: string[] } = {},
 ): Promise<GrowthIngestRunSummary> {
   const yearsBack = opts.yearsBack ?? 30;
+  const scopeFilter = opts.conceptCodes && opts.conceptCodes.length > 0
+    ? new Set(opts.conceptCodes)
+    : null;
 
   const { data: region } = await supabaseAdmin
     .from("regions").select("id").eq("code", "US").maybeSingle();
@@ -75,7 +78,9 @@ export async function runUsGrowthFredIngest(
     .eq("region_id", region.id).eq("engine", "growth").eq("is_active", true);
   if (error) throw error;
 
-  const relevant = (indicators ?? []).filter((i) => US_GROWTH_CONCEPTS.has(i.concept_code as string));
+  const relevant = (indicators ?? [])
+    .filter((i) => US_GROWTH_CONCEPTS.has(i.concept_code as string))
+    .filter((i) => (scopeFilter ? scopeFilter.has(i.concept_code as string) : true));
   const startDate = new Date(Date.now() - yearsBack * 365 * 86_400_000).toISOString().slice(0, 10);
 
   const results: GrowthIngestResult[] = [];

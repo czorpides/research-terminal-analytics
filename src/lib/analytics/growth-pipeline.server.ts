@@ -52,11 +52,15 @@ export interface KalmanPipelineOptions {
   asOfDate?: string;
   mode?: CalcMode;
   force?: boolean;
+  /** Restrict Kalman + hash-guard to this subset of concept codes. */
+  conceptCodes?: string[];
+  /** Elapsed ingest time in ms, recorded into model_runs.diagnostics. */
+  ingestMs?: number;
 }
 
 export interface KalmanPipelineResult {
   runId: string | null;
-  status: "success" | "failed" | "skipped" | "reused";
+  status: "success" | "partial" | "failed" | "skipped" | "reused";
   inputHash: string | null;
   priorHash: string | null;
   dataChanged: boolean;
@@ -79,7 +83,11 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
     return emptyResult("skipped", "analytics service not configured");
   }
 
-  const indicators = await loadIndicators();
+  const allIndicators = await loadIndicators();
+  const scope = opts.conceptCodes && opts.conceptCodes.length > 0
+    ? new Set(opts.conceptCodes)
+    : null;
+  const indicators = scope ? allIndicators.filter((i) => scope.has(i.concept_code)) : allIndicators;
   if (indicators.length === 0) return emptyResult("skipped", "no active indicators");
 
   const perIndicator = await loadObservations(indicators, asOfDate);
@@ -95,11 +103,24 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
     };
   }
 
+  // Per-indicator hash lookup — skip Fly.io calls for indicators whose
+  // series content is byte-identical to the last successful run.
+  const priorIndicatorHashes = opts.force
+    ? new Map<string, string>()
+    : await lastSuccessfulIndicatorHashes();
+  const indicatorHashes = new Map<string, string>();
+  for (const row of perIndicator) {
+    indicatorHashes.set(row.indicator.id, computeIndicatorHash(row));
+  }
+
   const runId = await insertModelRun({ inputHash, indicators: perIndicator, mode, asOfDate });
+  const runStartMs = Date.now();
+  const timings: Record<string, number> = { ingest_ms: opts.ingestMs ?? 0 };
   const errors: string[] = [];
   const outputRows: any[] = [];
   const indicatorSummaries: any[] = [];
   let skipped = 0;
+  let reused = 0;
 
   const { calculateKalmanLlt } = await import("./client.server");
 
@@ -107,6 +128,15 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
     if (observations.length === 0) {
       skipped += 1;
       indicatorSummaries.push({ indicator_id: indicator.id, concept_code: indicator.concept_code, status: "no_observations" });
+      continue;
+    }
+    const indHash = indicatorHashes.get(indicator.id)!;
+    if (!opts.force && priorIndicatorHashes.get(indicator.id) === indHash) {
+      reused += 1;
+      indicatorSummaries.push({
+        indicator_id: indicator.id, concept_code: indicator.concept_code,
+        status: "reused", indicator_hash: indHash,
+      });
       continue;
     }
     const trainingStart = observations[0]!.date;
@@ -127,12 +157,15 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
       model_config_params: { min_history: indicator.min_history },
     };
 
+    const t0 = Date.now();
     let response: KalmanCalculationResponse;
     try {
       response = await calculateKalmanLlt(request);
     } catch (e) {
       errors.push(`${indicator.concept_code}: ${(e as Error).message.slice(0, 240)}`);
       continue;
+    } finally {
+      timings[`kalman_ms.${indicator.concept_code}`] = (timings[`kalman_ms.${indicator.concept_code}`] ?? 0) + (Date.now() - t0);
     }
 
     const validationError = validateResponse(request, response);
@@ -165,6 +198,7 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
       indicator_series_code: indicator.series_code_native,
       concept_code: indicator.concept_code,
       warnings: response.warnings,
+      indicator_hash: indHash,
     };
 
     for (const p of response.points) {
@@ -180,12 +214,14 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
       converged: response.converged, training_start: response.training_start,
       training_end: response.training_end, model_params: response.model_params,
       latest: response.points.length ? response.points[response.points.length - 1] : null,
+      indicator_hash: indHash,
     });
   }
 
-  const runFailed = errors.length > 0;
-  if (!runFailed) {
-    // Only persist outputs if EVERY indicator succeeded validation.
+  // Persist outputs for indicators whose Fly call succeeded, even if a peer
+  // failed. This satisfies "continue processing other indicators when one
+  // indicator fails" while keeping duplicate-guarding via upsert.
+  if (outputRows.length > 0) {
     for (let i = 0; i < outputRows.length; i += 500) {
       const chunk = outputRows.slice(i, i + 500);
       const { error } = await supabaseAdmin.from("model_outputs").upsert(chunk as any, {
@@ -198,21 +234,31 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
     }
   }
 
-  const finalStatus = errors.length > 0 ? "failed" : "success";
+  const okCount = indicatorSummaries.filter((s) => s.status === "ok").length;
+  const finalStatus: "success" | "partial" | "failed" =
+    errors.length === 0
+      ? "success"
+      : okCount + reused > 0
+        ? "partial"
+        : "failed";
+  timings.total_ms = Date.now() - runStartMs;
   await supabaseAdmin.from("model_runs").update({
     status: finalStatus,
     finished_at: new Date().toISOString(),
     output_summary: ({
       engine: "growth", region: "US", calculation_mode: mode, as_of_date: asOfDate,
-      indicators_processed: indicatorSummaries.filter((s) => s.status === "ok").length,
+      indicators_processed: okCount,
+      indicators_reused: reused,
       indicators_skipped: skipped,
-      output_rows: finalStatus === "success" ? outputRows.length : 0,
+      output_rows: outputRows.length,
       per_indicator: indicatorSummaries,
+      scope: scope ? Array.from(scope) : null,
     } as any),
+    diagnostics: timings as any,
     error: errors.length ? errors.join(" | ").slice(0, 1000) : null,
   }).eq("id", runId);
 
-  if (finalStatus === "success") {
+  if (finalStatus === "success" || finalStatus === "partial") {
     await supabaseAdmin.from("model_runs")
       .update({ status: "superseded" })
       .eq("model_key", MODEL_KEY).eq("model_version", MODEL_VERSION)
@@ -221,9 +267,9 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
 
   return {
     runId, status: finalStatus, inputHash, priorHash, dataChanged,
-    indicatorsProcessed: indicatorSummaries.filter((s) => s.status === "ok").length,
+    indicatorsProcessed: okCount,
     indicatorsSkipped: skipped,
-    outputRows: finalStatus === "success" ? outputRows.length : 0,
+    outputRows: outputRows.length,
     errors: errors.length ? errors : undefined,
   };
 }
@@ -231,12 +277,18 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
 /**
  * Combined ingest + calculation entrypoint used by the public ingest route.
  */
-export async function runUsGrowthPipeline(opts: { yearsBack?: number; forceKalman?: boolean } = {}): Promise<{
+export async function runUsGrowthPipeline(opts: { yearsBack?: number; forceKalman?: boolean; conceptCodes?: string[] } = {}): Promise<{
   ingest: GrowthIngestRunSummary;
   kalman: KalmanPipelineResult;
 }> {
-  const ingest = await runUsGrowthFredIngest({ yearsBack: opts.yearsBack });
-  const kalman = await runUsGrowthKalmanPipeline({ force: Boolean(opts.forceKalman) });
+  const t0 = Date.now();
+  const ingest = await runUsGrowthFredIngest({ yearsBack: opts.yearsBack, conceptCodes: opts.conceptCodes });
+  const ingestMs = Date.now() - t0;
+  const kalman = await runUsGrowthKalmanPipeline({
+    force: Boolean(opts.forceKalman),
+    conceptCodes: opts.conceptCodes,
+    ingestMs,
+  });
   return { ingest, kalman };
 }
 
@@ -353,9 +405,44 @@ export async function computeCurrentInputHash(): Promise<string | null> {
 async function lastSuccessfulInputHash(): Promise<string | null> {
   const { data } = await supabaseAdmin
     .from("model_runs").select("input_hash")
-    .eq("model_key", MODEL_KEY).eq("status", "success")
+    .eq("model_key", MODEL_KEY).in("status", ["success", "partial"])
     .order("finished_at", { ascending: false }).limit(1);
   return (data?.[0]?.input_hash as string | null) ?? null;
+}
+
+/**
+ * Map of indicator_id -> hash from the most recent successful/partial run's
+ * per_indicator summary. Used to skip Fly.io calls for byte-identical series.
+ */
+async function lastSuccessfulIndicatorHashes(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const { data } = await supabaseAdmin
+    .from("model_runs")
+    .select("output_summary, finished_at")
+    .eq("model_key", MODEL_KEY)
+    .in("status", ["success", "partial"])
+    .order("finished_at", { ascending: false })
+    .limit(10);
+  for (const row of data ?? []) {
+    const per = ((row.output_summary as any)?.per_indicator ?? []) as Array<any>;
+    for (const p of per) {
+      if (p?.indicator_id && p?.indicator_hash && !map.has(p.indicator_id)) {
+        map.set(p.indicator_id, p.indicator_hash);
+      }
+    }
+  }
+  return map;
+}
+
+function computeIndicatorHash(row: IndicatorObservations): string {
+  const triples = row.observations.map((o) => [o.date, o.value] as const);
+  const payload = JSON.stringify({
+    indicator_id: row.indicator.id,
+    model_key: MODEL_KEY,
+    model_version: MODEL_VERSION,
+    triples,
+  });
+  return createHash("sha256").update(payload).digest("hex");
 }
 
 async function insertModelRun(args: {

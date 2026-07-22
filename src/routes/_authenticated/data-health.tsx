@@ -115,7 +115,19 @@ function DataHealth() {
               <Kv k="Data changed since run" v={growth.model.dataChangedSinceLastRun ? "yes — rerun due" : "no"} bad={growth.model.dataChangedSinceLastRun} />
             </div>
             <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Ingestion · last US Growth FRED run</div>
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Recurring scheduler</div>
+              {growth.scheduler ? (
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
+                  <Kv k="Cron heartbeat" v={growth.scheduler.silentCron ? "silent >26h" : "active"} bad={growth.scheduler.silentCron} />
+                  <Kv k="Failures 24h" v={String(growth.scheduler.failuresLast24h)} bad={growth.scheduler.failuresLast24h > 0} />
+                  <Kv k="Last run status" v={growth.scheduler.lastRunStatus ?? "—"} bad={growth.scheduler.lastRunStatus === "failed"} />
+                  <Kv k="Last run scope" v={(growth.scheduler.lastRunScope ?? []).join(", ") || "—"} />
+                  <Kv k="Stale indicators" v={String(growth.scheduler.staleIndicators.length)} bad={growth.scheduler.staleIndicators.length > 0} />
+                </div>
+              ) : <div className="text-xs text-muted-foreground">Scheduler view not populated yet.</div>}
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Ingestion · last US Growth FRED run (detail)</div>
               {growth.ingestion.lastRun ? (
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
                   <Kv k="Started" v={new Date(growth.ingestion.lastRun.startedAt).toLocaleString()} />
