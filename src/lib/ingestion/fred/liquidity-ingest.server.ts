@@ -26,11 +26,19 @@ async function ingestOne(ind: { id: string; concept_code: string; series_code_na
     const observations = (await fetchSeriesObservations(ind.series_code_native, { observationStart })).filter((x) => x.value !== null);
     base.observations_fetched = observations.length; if (!observations.length) return { ...base, status: "insufficient" };
     const latest = observations.at(-1)!; base.latest_date = latest.date; base.latest_value = latest.value;
-    const { data: previous, error } = await supabaseAdmin.from("raw_observations").select("observation_date,value_raw,retrieved_at").eq("indicator_id", ind.id).order("observation_date", { ascending: true }).order("retrieved_at", { ascending: true }); if (error) throw error;
-    const values = new Map<string, number | null>(); for (const row of previous ?? []) values.set((row.observation_date as string).slice(0, 10), row.value_raw == null ? null : Number(row.value_raw));
+    // Supabase caps responses at 1,000 rows. Load every stored page before
+    // classifying observations, otherwise unchanged long-history rows are
+    // treated as new on every retry.
+    const values = new Map<string, number | null>();
+    for (let from = 0; ; from += 1_000) {
+      const { data: previous, error } = await supabaseAdmin.from("raw_observations").select("observation_date,value_raw,retrieved_at").eq("indicator_id", ind.id).order("observation_date", { ascending: true }).order("retrieved_at", { ascending: true }).range(from, from + 999);
+      if (error) throw error;
+      for (const row of previous ?? []) values.set((row.observation_date as string).slice(0, 10), row.value_raw == null ? null : Number(row.value_raw));
+      if ((previous?.length ?? 0) < 1_000) break;
+    }
     const changes = observations.filter((x) => values.get(x.date) === undefined || Math.abs((values.get(x.date) ?? 0) - (x.value ?? 0)) > 1e-9); if (!changes.length) return base;
     const now = new Date().toISOString(); const { data: vintage, error: vintageError } = await supabaseAdmin.from("data_vintages").insert({ indicator_id: ind.id, release_date: now.slice(0, 10), source_ref: `fred:${ind.series_code_native}`, payload_hash: `fred:${ind.series_code_native}:${now}` }).select("id").single(); if (vintageError) throw vintageError;
-    for (let i = 0; i < changes.length; i += 500) { const batch = changes.slice(i, i + 500).map((x) => ({ indicator_id: ind.id, observation_date: x.date, value_raw: x.value, unit_raw: ind.unit, vintage_id: vintage.id, source_payload_ref: `fred:${ind.series_code_native}:${x.date}`, meta: { source: "FRED", series_code: ind.series_code_native, frequency: ind.frequency, revision: values.has(x.date), previous_value: values.get(x.date) ?? null } })); const { error: insertError } = await supabaseAdmin.from("raw_observations").insert(batch as any); if (insertError) throw insertError; }
+    for (let i = 0; i < changes.length; i += 500) { const batch = changes.slice(i, i + 500).map((x) => ({ indicator_id: ind.id, observation_date: x.date, value_raw: x.value, unit_raw: ind.unit, vintage_id: vintage.id, source_payload_ref: `fred:${ind.series_code_native}:${x.date}`, meta: { source: "FRED", series_code: ind.series_code_native, frequency: ind.frequency, revision: values.has(x.date), previous_value: values.get(x.date) ?? null } })); const { error: insertError } = await supabaseAdmin.from("raw_observations").insert(batch as never); if (insertError) throw insertError; }
     base.new_observations = changes.filter((x) => !values.has(x.date)).length; base.new_revisions = changes.length - base.new_observations; return base;
   } catch (error) { return { ...base, status: "failed", error: (error as Error).message }; }
 }
