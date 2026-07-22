@@ -48,7 +48,6 @@ export async function runUsInflationKalmanPipeline(opts: { force?: boolean; inge
   const { data: run } = await supabaseAdmin.from("model_runs").insert({
     model_key: MODEL_KEY, model_version: MODEL_VERSION, status: "running",
     started_at: new Date().toISOString(), input_hash: inputHash,
-    input_data_version: "raw_observations.v1",
     output_summary: { engine: "inflation", region: "US", n_indicators: per.length },
   }).select("id").single();
   const runId = (run?.id as string | null) ?? null;
