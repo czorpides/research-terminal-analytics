@@ -96,7 +96,7 @@ export async function runUsGrowthFredIngest(
       status: overall,
       finished_at: new Date().toISOString(),
       rows_ingested: totalNewObservations + totalRevisions,
-      details: { pipeline: "us_growth_fred", yearsBack, results, totals: { totalNewObservations, totalRevisions, failed } },
+      details: JSON.parse(JSON.stringify({ pipeline: "us_growth_fred", yearsBack, results, totals: { totalNewObservations, totalRevisions, failed } })),
     }).eq("id", runId);
   }
 
