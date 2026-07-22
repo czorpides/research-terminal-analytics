@@ -1,31 +1,34 @@
 /**
- * US Inflation Engine — read function for /macro/inflation.
- * Joins registered indicators, vintage-preserved observations, Kalman
- * outputs and computes the transformation framework in-memory so panels
- * report Latest, MoM, YoY, 3m/6m annualised, momentum, acceleration,
- * z-score, percentile and Kalman trend. Also computes the Inflation
- * Pressure Score + contribution ledger, and a Growth×Inflation Map.
+ * US Inflation Engine read functions.
+ *
+ * Panels expose deterministic transforms and Kalman outputs. The pressure
+ * score uses family caps plus separate level, direction and acceleration
+ * signals. The Growth × Inflation map uses a dimensionless, direction-adjusted
+ * growth composite rather than averaging raw slopes measured in mixed units.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { runTransforms, latestOf, TRANSFORM_FRAMEWORK_VERSION } from "@/lib/transforms/runner";
-import type { Frequency, TransformName } from "@/lib/transforms/types";
+import type { Frequency, SeriesPoint, TransformName, TransformResult } from "@/lib/transforms/types";
 import { zoneForTarget } from "@/lib/transforms/directionality";
-import { scoreInflationPressure, type PressureInput } from "@/lib/scoring/inflation-pressure.server";
+import {
+  COMPONENTS,
+  scoreInflationPressure,
+  scoreInflationPressureSnapshot,
+  type PressureInput,
+  type PressureKey,
+} from "@/lib/scoring/inflation-pressure.server";
+import {
+  buildGrowthComposite,
+  GROWTH_COMPOSITE_VERSION,
+  type GrowthCompositeContribution,
+} from "@/lib/scoring/growth-composite.server";
 
-/**
- * PostgREST caps `.select()` at ~1000 rows per call. The inflation engine
- * spans 15k+ raw observations and 60k+ model outputs, so every batched read
- * MUST paginate or panels silently truncate to the first indicator's history
- * only (leaving `latest_value: null` for everyone else). This helper drains
- * a query in fixed-size pages until fewer than `pageSize` rows come back.
- */
 async function paginate<T>(
   build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
   pageSize = 1000,
 ): Promise<T[]> {
   const out: T[] = [];
   let from = 0;
-  // Safety cap: 200k rows is far above the current inflation footprint.
   for (let i = 0; i < 200; i++) {
     const { data, error } = await Promise.resolve(build(from, from + pageSize - 1));
     if (error) throw error as Error;
@@ -36,6 +39,83 @@ async function paginate<T>(
   }
   return out;
 }
+
+function nonNullPoints(result: TransformResult | undefined): Array<{ date: string; value: number }> {
+  return (result?.points ?? [])
+    .filter((point): point is SeriesPoint & { value: number } => point.value != null && Number.isFinite(point.value))
+    .map((point) => ({ date: point.date, value: point.value }));
+}
+
+interface RateDynamicPoint {
+  date: string;
+  value: number;
+  trend3m: number | null;
+  acceleration3m: number | null;
+}
+
+function monthlyLast(points: Array<{ date: string; value: number }>): Array<{ date: string; value: number }> {
+  const byMonth = new Map<string, { date: string; value: number }>();
+  for (const point of points) {
+    const month = point.date.slice(0, 7);
+    const current = byMonth.get(month);
+    if (!current || point.date.localeCompare(current.date) >= 0) byMonth.set(month, point);
+  }
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, point]) => ({ date: `${month}-01`, value: point.value }));
+}
+
+function rateDynamics(points: Array<{ date: string; value: number }>): RateDynamicPoint[] {
+  const monthly = monthlyLast(points);
+  return monthly.map((point, index) => {
+    const lag3 = index >= 3 ? monthly[index - 3].value : null;
+    const lag6 = index >= 6 ? monthly[index - 6].value : null;
+    const trend3m = lag3 == null ? null : point.value - lag3;
+    const previousTrend3m = lag3 == null || lag6 == null ? null : lag3 - lag6;
+    return {
+      date: point.date,
+      value: point.value,
+      trend3m,
+      acceleration3m: trend3m == null || previousTrend3m == null ? null : trend3m - previousTrend3m,
+    };
+  });
+}
+
+function rateSeriesForScoring(
+  rawSeries: SeriesPoint[],
+  byName: Map<TransformName, TransformResult>,
+  target: { unit?: string } | null,
+  unit: string | null,
+): Array<{ date: string; value: number }> {
+  if (target?.unit === "yoy_pct") {
+    const yoy = nonNullPoints(byName.get("yoy"));
+    if (yoy.length) return yoy;
+    if (unit === "yoy_pct") {
+      return rawSeries
+        .filter((point): point is SeriesPoint & { value: number } => point.value != null && Number.isFinite(point.value))
+        .map((point) => ({ date: point.date, value: point.value }));
+    }
+    return [];
+  }
+  return rawSeries
+    .filter((point): point is SeriesPoint & { value: number } => point.value != null && Number.isFinite(point.value))
+    .map((point) => ({ date: point.date, value: point.value }));
+}
+
+interface IndicatorRegistryRow {
+  id: string;
+  concept_code: string;
+  series_code_native: string;
+  frequency: string | null;
+  unit: string | null;
+  description: string | null;
+  allowed_transformations: string[] | null;
+  target_range: InflationIndicatorPanel["target"] | null;
+  vintage_quality: string | null;
+}
+
+interface MapGrowthIndicatorRow { id: string; concept_code: string }
+interface MapInflationIndicatorRow { id: string; concept_code: string; target_range: { band?: [number, number] } | null }
 
 export interface InflationIndicatorPanel {
   concept_code: string;
@@ -51,9 +131,17 @@ export interface InflationIndicatorPanel {
   previous_date: string | null;
   latest_revision: { observation_date: string; previous_value: number | null; revised_value: number; revised_at: string } | null;
   metrics: {
-    mom: number | null; yoy: number | null; chg3mAnn: number | null; chg6mAnn: number | null;
-    momentum: number | null; acceleration: number | null;
-    zscoreHistorical: number | null; percentileHistorical: number | null;
+    mom: number | null;
+    yoy: number | null;
+    chg3mAnn: number | null;
+    chg6mAnn: number | null;
+    momentum: number | null;
+    acceleration: number | null;
+    zscoreHistorical: number | null;
+    percentileHistorical: number | null;
+    referenceRate: number | null;
+    trend3m: number | null;
+    acceleration3m: number | null;
     distanceFromTarget: number | null;
   };
   kalman: { level: number | null; slope: number | null; ci_low: number | null; ci_high: number | null; date: string | null } | null;
@@ -63,12 +151,26 @@ export interface InflationIndicatorPanel {
   inputsHash: string | null;
 }
 
+export interface InflationCalibrationPoint {
+  date: string;
+  score: number;
+  directionScore: number;
+  breadthScore: number;
+  confidence: number;
+}
+
 export interface InflationEnginePayload {
   indicators: InflationIndicatorPanel[];
   pressure: ReturnType<typeof scoreInflationPressure>;
   latestRun: { id: string; status: string; started_at: string; finished_at: string | null; model_version: string } | null;
   frameworkVersion: string;
   breadth: { above_target: number; on_target: number; below_target: number; unknown: number };
+  calibration: {
+    history: InflationCalibrationPoint[];
+    summary: { min: number | null; max: number | null; median: number | null; current: number | null };
+    referencePeriods: Array<{ label: string; requestedDate: string; matchedDate: string | null; score: number | null }>;
+    note: string;
+  };
 }
 
 export const getInflationEngine = createServerFn({ method: "GET" }).handler(async (): Promise<InflationEnginePayload> => {
@@ -82,8 +184,8 @@ export const getInflationEngine = createServerFn({ method: "GET" }).handler(asyn
     .select("id, concept_code, series_code_native, frequency, unit, description, allowed_transformations, target_range, vintage_quality")
     .eq("region_id", region.id).eq("engine", "inflation").eq("is_active", true);
 
-  const indicators = (rawIndicators ?? []);
-  const ids = indicators.map((i) => i.id as string);
+  const indicators = (rawIndicators ?? []) as IndicatorRegistryRow[];
+  const ids = indicators.map((indicator) => indicator.id as string);
 
   const historyByIndicator = new Map<string, Array<{ date: string; value: number | null; retrieved_at: string; meta: any }>>();
   const revisionsByIndicator = new Map<string, InflationIndicatorPanel["latest_revision"]>();
@@ -98,32 +200,34 @@ export const getInflationEngine = createServerFn({ method: "GET" }).handler(asyn
         .order("retrieved_at", { ascending: true })
         .range(from, to),
     );
-    for (const o of rows) {
-      const ind = o.indicator_id as string;
-      const date = (o.observation_date as string).slice(0, 10);
-      const val = o.value_raw == null ? null : Number(o.value_raw);
-      const arr = historyByIndicator.get(ind) ?? [];
-      const last = arr[arr.length - 1];
+    for (const observation of rows) {
+      const indicatorId = observation.indicator_id;
+      const date = observation.observation_date.slice(0, 10);
+      const value = observation.value_raw == null ? null : Number(observation.value_raw);
+      const history = historyByIndicator.get(indicatorId) ?? [];
+      const last = history[history.length - 1];
       if (last && last.date === date) {
-        last.value = val; last.retrieved_at = o.retrieved_at as string; last.meta = o.meta;
-        if ((o.meta as any)?.revision) {
-          revisionsByIndicator.set(ind, {
+        last.value = value;
+        last.retrieved_at = observation.retrieved_at;
+        last.meta = observation.meta;
+        if (observation.meta?.revision) {
+          revisionsByIndicator.set(indicatorId, {
             observation_date: date,
-            previous_value: (o.meta as any)?.previous_value ?? null,
-            revised_value: val ?? 0,
-            revised_at: o.retrieved_at as string,
+            previous_value: observation.meta?.previous_value ?? null,
+            revised_value: value ?? 0,
+            revised_at: observation.retrieved_at,
           });
         }
       } else {
-        arr.push({ date, value: val, retrieved_at: o.retrieved_at as string, meta: o.meta });
-        historyByIndicator.set(ind, arr);
+        history.push({ date, value, retrieved_at: observation.retrieved_at, meta: observation.meta });
+        historyByIndicator.set(indicatorId, history);
       }
     }
   }
 
   const kalmanByIndicator = new Map<string, { level: number | null; slope: number | null; ci_low: number | null; ci_high: number | null; date: string | null }>();
   if (ids.length) {
-    const outs = await paginate<{ indicator_id: string; ts: string; output_type: string; value: unknown }>(
+    const outputs = await paginate<{ indicator_id: string; ts: string; output_type: string; value: unknown }>(
       (from, to) => supabaseAdmin
         .from("model_outputs")
         .select("indicator_id, ts, output_type, value")
@@ -132,56 +236,66 @@ export const getInflationEngine = createServerFn({ method: "GET" }).handler(asyn
         .order("ts", { ascending: true })
         .range(from, to),
     );
-    const per = new Map<string, Map<string, { level?: number; slope?: number; lo?: number; hi?: number }>>();
-    for (const o of outs) {
-      const ind = o.indicator_id as string; const ts = (o.ts as string).slice(0, 10);
-      const m = per.get(ind) ?? new Map(); const cur = m.get(ts) ?? {};
-      const v = o.value == null ? undefined : Number(o.value);
-      if (o.output_type === "kalman_level") cur.level = v;
-      else if (o.output_type === "kalman_slope") cur.slope = v;
-      else if (o.output_type === "kalman_level_ci_low") cur.lo = v;
-      else if (o.output_type === "kalman_level_ci_high") cur.hi = v;
-      m.set(ts, cur); per.set(ind, m);
+    const grouped = new Map<string, Map<string, { level?: number; slope?: number; lo?: number; hi?: number }>>();
+    for (const output of outputs) {
+      const date = output.ts.slice(0, 10);
+      const byDate = grouped.get(output.indicator_id) ?? new Map();
+      const row = byDate.get(date) ?? {};
+      const value = output.value == null ? undefined : Number(output.value);
+      if (output.output_type === "kalman_level") row.level = value;
+      else if (output.output_type === "kalman_slope") row.slope = value;
+      else if (output.output_type === "kalman_level_ci_low") row.lo = value;
+      else if (output.output_type === "kalman_level_ci_high") row.hi = value;
+      byDate.set(date, row);
+      grouped.set(output.indicator_id, byDate);
     }
-    for (const [ind, m] of per) {
-      const sorted = Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
-      const [ts, latest] = sorted[sorted.length - 1] ?? [null, {}];
-      kalmanByIndicator.set(ind, {
-        level: latest?.level ?? null, slope: latest?.slope ?? null,
-        ci_low: latest?.lo ?? null, ci_high: latest?.hi ?? null, date: ts,
+    for (const [indicatorId, byDate] of grouped) {
+      const sorted = Array.from(byDate.entries()).sort(([a], [b]) => a.localeCompare(b));
+      const [date, latest] = sorted[sorted.length - 1] ?? [null, {}];
+      kalmanByIndicator.set(indicatorId, {
+        level: latest?.level ?? null,
+        slope: latest?.slope ?? null,
+        ci_low: latest?.lo ?? null,
+        ci_high: latest?.hi ?? null,
+        date,
       });
     }
   }
 
-  const panels: InflationIndicatorPanel[] = indicators.map((i) => {
-    const history = historyByIndicator.get(i.id as string) ?? [];
-    const series = history.map((h) => ({ date: h.date, value: h.value }));
-    const allowed = ((i.allowed_transformations as string[] | null) ?? []) as TransformName[];
-    const freq = ((i.frequency as string) ?? "monthly") as Frequency;
-    const target = (i.target_range as any) ?? null;
+  const scoreHistoryByConcept = new Map<string, RateDynamicPoint[]>();
+  const panels: InflationIndicatorPanel[] = indicators.map((indicator) => {
+    const history = historyByIndicator.get(indicator.id as string) ?? [];
+    const series: SeriesPoint[] = history.map((point) => ({ date: point.date, value: point.value }));
+    const allowed = ((indicator.allowed_transformations as string[] | null) ?? []) as TransformName[];
+    const frequency = ((indicator.frequency as string) ?? "monthly") as Frequency;
+    const target = (indicator.target_range as InflationIndicatorPanel["target"]) ?? null;
+    const unit = (indicator.unit as string | null) ?? null;
 
-    const results = runTransforms({ series, allowed, frequency: freq });
-    const byName = new Map(results.map((r) => [r.name, r]));
-
-    const withVal = series.filter((s) => s.value != null);
-    const latest = withVal[withVal.length - 1] ?? null;
-    const previous = withVal[withVal.length - 2] ?? null;
-
+    const results = runTransforms({ series, allowed, frequency });
+    const byName = new Map(results.map((result) => [result.name, result]));
+    const withValue = series.filter((point): point is SeriesPoint & { value: number } => point.value != null);
+    const latest = withValue[withValue.length - 1] ?? null;
+    const previous = withValue[withValue.length - 2] ?? null;
     const yoy = latestOf(byName.get("yoy"));
-    const zone = target ? zoneForTarget(yoy, target as any) : ("gray" as const);
+    const dynamics = rateDynamics(rateSeriesForScoring(series, byName, target, unit));
+    scoreHistoryByConcept.set(indicator.concept_code as string, dynamics);
+    const latestDynamic = dynamics[dynamics.length - 1] ?? null;
+    const referenceRate = latestDynamic?.value ?? null;
+    const zone = target ? zoneForTarget(referenceRate, target as any) : "gray" as const;
 
     return {
-      concept_code: i.concept_code as string,
-      label: (i.description as string) ?? (i.concept_code as string),
-      frequency: freq, unit: (i.unit as string | null) ?? null,
-      series_code_native: i.series_code_native as string,
+      concept_code: indicator.concept_code as string,
+      label: (indicator.description as string) ?? (indicator.concept_code as string),
+      frequency,
+      unit,
+      series_code_native: indicator.series_code_native as string,
       target,
-      vintage_quality: (i.vintage_quality as string | null) ?? null,
+      vintage_quality: (indicator.vintage_quality as string | null) ?? null,
       latest_value: latest?.value ?? null,
       latest_date: latest?.date ?? null,
       previous_value: previous?.value ?? null,
       previous_date: previous?.date ?? null,
-      latest_revision: revisionsByIndicator.get(i.id as string) ?? null,
+      latest_revision: revisionsByIndicator.get(indicator.id as string) ?? null,
       metrics: {
         mom: latestOf(byName.get("mom")),
         yoy,
@@ -191,9 +305,12 @@ export const getInflationEngine = createServerFn({ method: "GET" }).handler(asyn
         acceleration: latestOf(byName.get("acceleration")),
         zscoreHistorical: latestOf(byName.get("zscoreHistorical")),
         percentileHistorical: latestOf(byName.get("percentileHistorical")),
-        distanceFromTarget: target && yoy != null ? yoy - target.value : null,
+        referenceRate,
+        trend3m: latestDynamic?.trend3m ?? null,
+        acceleration3m: latestDynamic?.acceleration3m ?? null,
+        distanceFromTarget: target && referenceRate != null ? referenceRate - target.value : null,
       },
-      kalman: kalmanByIndicator.get(i.id as string) ?? null,
+      kalman: kalmanByIndicator.get(indicator.id as string) ?? null,
       zone,
       history: series.slice(-120),
       calcVersion: TRANSFORM_FRAMEWORK_VERSION,
@@ -201,25 +318,82 @@ export const getInflationEngine = createServerFn({ method: "GET" }).handler(asyn
     };
   });
 
-  let above = 0, on = 0, below = 0, unknown = 0;
-  for (const p of panels) {
-    if (p.metrics.distanceFromTarget == null) { unknown++; continue; }
-    const halfBand = p.target ? Math.max(0.1, (p.target.band[1] - p.target.band[0]) / 2) : 0.5;
-    if (Math.abs(p.metrics.distanceFromTarget) <= halfBand) on++;
-    else if (p.metrics.distanceFromTarget > 0) above++;
+  let above = 0;
+  let on = 0;
+  let below = 0;
+  let unknown = 0;
+  for (const panel of panels) {
+    if (panel.metrics.distanceFromTarget == null) { unknown++; continue; }
+    const halfBand = panel.target ? Math.max(0.1, (panel.target.band[1] - panel.target.band[0]) / 2) : 0.5;
+    if (Math.abs(panel.metrics.distanceFromTarget) <= halfBand) on++;
+    else if (panel.metrics.distanceFromTarget > 0) above++;
     else below++;
   }
 
-  const pressureInputs: PressureInput[] = panels
-    .filter((p) => ["cpi_core","pce_core","cpi_headline","ppi_final_demand","wage_ahe","cpi_shelter","breakeven_5y5y","umich_1y_expectations","import_prices"].includes(p.concept_code))
-    .map((p) => ({
-      key: p.concept_code as PressureInput["key"],
-      label: p.label,
-      metric: p.target?.unit === "yoy_pct" ? "YoY %" : (p.target?.unit ?? "value"),
-      value: p.target?.unit === "yoy_pct" || p.target?.unit === "pct" ? (p.metrics.yoy ?? p.latest_value) : p.latest_value,
-      target: p.target ? { value: p.target.value, band: p.target.band } : null,
-    }));
+  const panelByConcept = new Map(panels.map((panel) => [panel.concept_code, panel]));
+  const pressureInputs: PressureInput[] = (Object.keys(COMPONENTS) as PressureKey[]).map((key) => {
+    const panel = panelByConcept.get(key);
+    return {
+      key,
+      label: panel?.label ?? key,
+      metric: panel?.target?.unit === "yoy_pct" ? "YoY %" : (panel?.target?.unit ?? "value"),
+      value: panel?.metrics.referenceRate ?? null,
+      trend3m: panel?.metrics.trend3m ?? null,
+      acceleration3m: panel?.metrics.acceleration3m ?? null,
+      target: panel?.target ? { value: panel.target.value, band: panel.target.band } : null,
+    };
+  });
   const pressure = scoreInflationPressure(pressureInputs);
+
+  const allCalibrationDates = new Set<string>();
+  for (const key of Object.keys(COMPONENTS) as PressureKey[]) {
+    for (const point of scoreHistoryByConcept.get(key) ?? []) allCalibrationDates.add(point.date);
+  }
+  const historyLookup = new Map<string, Map<string, RateDynamicPoint>>();
+  for (const [concept, points] of scoreHistoryByConcept) {
+    historyLookup.set(concept, new Map(points.map((point) => [point.date, point])));
+  }
+
+  const calibrationHistory: InflationCalibrationPoint[] = [];
+  for (const date of Array.from(allCalibrationDates).sort()) {
+    const snapshotInputs: PressureInput[] = (Object.keys(COMPONENTS) as PressureKey[]).map((key) => {
+      const panel = panelByConcept.get(key);
+      const point = historyLookup.get(key)?.get(date) ?? null;
+      return {
+        key,
+        label: panel?.label ?? key,
+        metric: panel?.target?.unit === "yoy_pct" ? "YoY %" : (panel?.target?.unit ?? "value"),
+        value: point?.value ?? null,
+        trend3m: point?.trend3m ?? null,
+        acceleration3m: point?.acceleration3m ?? null,
+        target: panel?.target ? { value: panel.target.value, band: panel.target.band } : null,
+      };
+    });
+    const snapshot = scoreInflationPressureSnapshot(snapshotInputs);
+    if (snapshot.confidence < 50) continue;
+    calibrationHistory.push({ date, ...snapshot });
+  }
+
+  const calibrationScores = calibrationHistory.map((point) => point.score).sort((a, b) => a - b);
+  const median = calibrationScores.length
+    ? calibrationScores.length % 2 === 1
+      ? calibrationScores[(calibrationScores.length - 1) / 2]
+      : (calibrationScores[calibrationScores.length / 2 - 1] + calibrationScores[calibrationScores.length / 2]) / 2
+    : null;
+  const referenceDates = [
+    { label: "Global financial crisis", requestedDate: "2008-12-01" },
+    { label: "Pandemic deflation shock", requestedDate: "2020-05-01" },
+    { label: "Recent inflation peak", requestedDate: "2022-06-01" },
+  ];
+  const referencePeriods = referenceDates.map((reference) => {
+    const match = calibrationHistory.reduce<InflationCalibrationPoint | null>((best, point) => {
+      const distance = Math.abs(new Date(point.date).getTime() - new Date(reference.requestedDate).getTime());
+      if (!best) return point;
+      const bestDistance = Math.abs(new Date(best.date).getTime() - new Date(reference.requestedDate).getTime());
+      return distance < bestDistance ? point : best;
+    }, null);
+    return { ...reference, matchedDate: match?.date ?? null, score: match?.score ?? null };
+  });
 
   const { data: runs } = await supabaseAdmin
     .from("model_runs")
@@ -227,50 +401,126 @@ export const getInflationEngine = createServerFn({ method: "GET" }).handler(asyn
     .eq("model_key", "inflation_engine.us.kalman_llt")
     .order("started_at", { ascending: false }).limit(1);
   const latestRun = runs?.[0]
-    ? { id: runs[0].id as string, status: runs[0].status as string, started_at: runs[0].started_at as string,
-        finished_at: (runs[0].finished_at as string | null) ?? null, model_version: runs[0].model_version as string }
+    ? {
+        id: runs[0].id as string,
+        status: runs[0].status as string,
+        started_at: runs[0].started_at as string,
+        finished_at: (runs[0].finished_at as string | null) ?? null,
+        model_version: runs[0].model_version as string,
+      }
     : null;
 
-  return { indicators: panels, pressure, latestRun, frameworkVersion: TRANSFORM_FRAMEWORK_VERSION,
-           breadth: { above_target: above, on_target: on, below_target: below, unknown } };
+  return {
+    indicators: panels,
+    pressure,
+    latestRun,
+    frameworkVersion: TRANSFORM_FRAMEWORK_VERSION,
+    breadth: { above_target: above, on_target: on, below_target: below, unknown },
+    calibration: {
+      history: calibrationHistory,
+      summary: {
+        min: calibrationScores[0] ?? null,
+        max: calibrationScores[calibrationScores.length - 1] ?? null,
+        median,
+        current: calibrationHistory[calibrationHistory.length - 1]?.score ?? null,
+      },
+      referencePeriods,
+      note: "Historical calibration uses the latest available historical snapshot, not verified real-time vintages; it is construction validation rather than a predictive backtest.",
+    },
+  };
 });
 
-export interface GrowthInflationPoint { date: string; growth: number; inflation: number }
+export type DirectionalQuadrant =
+  | "improving_growth_falling_inflation"
+  | "improving_growth_rising_inflation"
+  | "weakening_growth_falling_inflation"
+  | "weakening_growth_rising_inflation"
+  | "unknown";
+
+export interface GrowthInflationPoint {
+  date: string;
+  growth: number;
+  inflation: number;
+  inflationLevel: number;
+  growthCoverage: number;
+}
+
 export interface GrowthInflationMapData {
-  latest: { date: string; growth: number; inflation: number; quadrant: "goldilocks" | "reflation" | "stagflation" | "deflation" | "unknown" } | null;
+  latest: (GrowthInflationPoint & {
+    directionalQuadrant: DirectionalQuadrant;
+    tendency: string;
+    confidence: number;
+  }) | null;
   trail: GrowthInflationPoint[];
+  growthContributions: GrowthCompositeContribution[];
+  growthCompositeVersion: string;
   interpretation: string;
+}
+
+function levelAwareTendency(
+  quadrant: DirectionalQuadrant,
+  inflationLevel: number,
+  targetBand: [number, number],
+): string {
+  const [lower, upper] = targetBand;
+  if (quadrant === "improving_growth_falling_inflation") {
+    if (inflationLevel > upper) return "Disinflationary expansion, moving toward Goldilocks conditions";
+    if (inflationLevel < lower) return "Disinflationary expansion with deflation risk";
+    return "Goldilocks conditions";
+  }
+  if (quadrant === "improving_growth_rising_inflation") return "Inflationary expansion";
+  if (quadrant === "weakening_growth_falling_inflation") {
+    return inflationLevel < lower ? "Deflationary contraction" : "Disinflationary slowdown";
+  }
+  if (quadrant === "weakening_growth_rising_inflation") return "Stagflationary tendency";
+  return "Insufficient evidence";
 }
 
 export const getGrowthInflationMap = createServerFn({ method: "GET" }).handler(async (): Promise<GrowthInflationMapData> => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: region } = await supabaseAdmin.from("regions").select("id").eq("code", "US").maybeSingle();
-  if (!region) return { latest: null, trail: [], interpretation: "US region missing." };
+  const empty: GrowthInflationMapData = {
+    latest: null,
+    trail: [],
+    growthContributions: [],
+    growthCompositeVersion: GROWTH_COMPOSITE_VERSION,
+    interpretation: "Insufficient overlapping data to place a tendency on the map.",
+  };
+  if (!region) return { ...empty, interpretation: "US region missing." };
 
-  const { data: growthInd } = await supabaseAdmin
+  const { data: growthIndicators } = await supabaseAdmin
     .from("indicator_registry").select("id, concept_code")
     .eq("region_id", region.id).eq("engine", "growth").eq("is_active", true);
-  const { data: infInd } = await supabaseAdmin
-    .from("indicator_registry").select("id, concept_code")
+  const { data: inflationIndicators } = await supabaseAdmin
+    .from("indicator_registry").select("id, concept_code, target_range")
     .eq("region_id", region.id).eq("engine", "inflation").eq("is_active", true);
 
-  const growthIds = (growthInd ?? []).map((i) => i.id as string);
-  const coreCpi = (infInd ?? []).find((i) => i.concept_code === "cpi_core");
-  if (!growthIds.length || !coreCpi) return { latest: null, trail: [], interpretation: "Not enough model outputs yet." };
+  const typedGrowthIndicators = (growthIndicators ?? []) as MapGrowthIndicatorRow[];
+  const typedInflationIndicators = (inflationIndicators ?? []) as MapInflationIndicatorRow[];
+  const growthIds = typedGrowthIndicators.map((indicator) => indicator.id);
+  const conceptById = new Map<string, string>(typedGrowthIndicators.map((indicator) => [indicator.id, indicator.concept_code]));
+  const coreCpi = typedInflationIndicators.find((indicator) => indicator.concept_code === "cpi_core");
+  if (!growthIds.length || !coreCpi) return { ...empty, interpretation: "Not enough model outputs yet." };
 
-  const gOuts = await paginate<{ indicator_id: string; ts: string; value: unknown }>(
+  const growthOutputs = await paginate<{ indicator_id: string; ts: string; value: unknown }>(
     (from, to) => supabaseAdmin
       .from("model_outputs").select("indicator_id, ts, value")
       .eq("model_key", "growth_engine.us.kalman_llt").eq("output_type", "kalman_slope")
       .in("indicator_id", growthIds).order("ts", { ascending: true })
       .range(from, to),
   );
-  const gByMonth = new Map<string, number[]>();
-  for (const o of gOuts) {
-    const m = (o.ts as string).slice(0, 7);
-    const arr = gByMonth.get(m) ?? []; arr.push(Number(o.value)); gByMonth.set(m, arr);
+  const slopesByConcept = new Map<string, Array<{ date: string; value: number }>>();
+  for (const output of growthOutputs) {
+    const concept = conceptById.get(output.indicator_id);
+    const value = Number(output.value);
+    if (!concept || !Number.isFinite(value)) continue;
+    const points = slopesByConcept.get(concept) ?? [];
+    points.push({ date: output.ts.slice(0, 10), value });
+    slopesByConcept.set(concept, points);
   }
-  const growthSeries = Array.from(gByMonth.entries()).map(([m, arr]) => [m, arr.reduce((s, x) => s + x, 0) / arr.length] as const);
+  const growthComposite = buildGrowthComposite(
+    Array.from(slopesByConcept.entries()).map(([conceptCode, points]) => ({ conceptCode, points })),
+  );
 
   const rawCpi = await paginate<{ observation_date: string; value_raw: unknown; retrieved_at: string }>(
     (from, to) => supabaseAdmin
@@ -279,32 +529,55 @@ export const getGrowthInflationMap = createServerFn({ method: "GET" }).handler(a
       .range(from, to),
   );
   const cpiByDate = new Map<string, number>();
-  for (const o of rawCpi) cpiByDate.set((o.observation_date as string).slice(0, 10), Number(o.value_raw));
+  for (const observation of rawCpi) cpiByDate.set(observation.observation_date.slice(0, 10), Number(observation.value_raw));
   const cpiSorted = Array.from(cpiByDate.entries()).sort(([a], [b]) => a.localeCompare(b));
-  const yoy = new Map<string, number>();
-  for (let i = 12; i < cpiSorted.length; i++) {
-    const [d, cur] = cpiSorted[i]; const prev = cpiSorted[i - 12][1];
-    if (prev > 0) yoy.set(d.slice(0, 7), (cur / prev - 1) * 100);
+  const inflationRate: Array<{ date: string; value: number }> = [];
+  for (let index = 12; index < cpiSorted.length; index++) {
+    const [date, current] = cpiSorted[index];
+    const previous = cpiSorted[index - 12][1];
+    if (previous > 0) inflationRate.push({ date: `${date.slice(0, 7)}-01`, value: (current / previous - 1) * 100 });
   }
+  const inflationDynamics = rateDynamics(inflationRate);
+  const inflationByMonth = new Map(inflationDynamics.map((point) => [point.date, point]));
 
   const trail: GrowthInflationPoint[] = [];
-  for (const [m, slope] of growthSeries) {
-    const inf = yoy.get(m);
-    if (inf == null) continue;
-    trail.push({ date: `${m}-01`, growth: slope, inflation: inf });
+  for (const growth of growthComposite) {
+    const inflation = inflationByMonth.get(growth.date);
+    if (!inflation || inflation.trend3m == null) continue;
+    trail.push({
+      date: growth.date,
+      growth: growth.value,
+      inflation: inflation.trend3m,
+      inflationLevel: inflation.value,
+      growthCoverage: growth.coverage,
+    });
   }
+
   const tail = trail.slice(-36);
-  const latest = tail[tail.length - 1] ?? null;
-  const quadrant = latest
-    ? (latest.growth > 0 && latest.inflation < 3 ? "goldilocks"
-      : latest.growth > 0 && latest.inflation >= 3 ? "reflation"
-      : latest.growth <= 0 && latest.inflation >= 3 ? "stagflation"
-      : latest.growth <= 0 && latest.inflation < 3 ? "deflation" : "unknown")
-    : "unknown";
+  const latestPoint = tail[tail.length - 1] ?? null;
+  const latestGrowth = growthComposite.find((point) => point.date === latestPoint?.date) ?? null;
+  if (!latestPoint) return empty;
 
-  const interpretation = latest
-    ? `Macro tendency (not a confirmed regime): composite growth slope ${latest.growth.toFixed(2)} with core CPI YoY ${latest.inflation.toFixed(1)}% points toward the "${quadrant}" quadrant.`
-    : "Insufficient overlapping data to place a tendency on the map.";
+  const directionalQuadrant: DirectionalQuadrant =
+    latestPoint.growth > 0 && latestPoint.inflation < 0 ? "improving_growth_falling_inflation"
+      : latestPoint.growth > 0 && latestPoint.inflation >= 0 ? "improving_growth_rising_inflation"
+        : latestPoint.growth <= 0 && latestPoint.inflation < 0 ? "weakening_growth_falling_inflation"
+          : latestPoint.growth <= 0 && latestPoint.inflation >= 0 ? "weakening_growth_rising_inflation"
+            : "unknown";
+  const coreTarget = (coreCpi.target_range as { band?: [number, number] } | null)?.band ?? [1.5, 2.5];
+  const tendency = levelAwareTendency(directionalQuadrant, latestPoint.inflationLevel, coreTarget);
+  const confidence = Math.round(latestPoint.growthCoverage * 1000) / 10;
+  const latest = { ...latestPoint, directionalQuadrant, tendency, confidence };
+  const interpretation =
+    `Macro tendency, not a confirmed regime: the dimensionless growth direction composite is ${latest.growth.toFixed(2)}, `
+    + `core CPI changed ${latest.inflation.toFixed(2)} percentage points over three months and stands at ${latest.inflationLevel.toFixed(1)}% YoY. `
+    + `This is classified as ${tendency}. Growth-component coverage is ${confidence.toFixed(0)}%.`;
 
-  return { latest: latest ? { ...latest, quadrant } : null, trail: tail, interpretation };
+  return {
+    latest,
+    trail: tail,
+    growthContributions: latestGrowth?.contributions ?? [],
+    growthCompositeVersion: GROWTH_COMPOSITE_VERSION,
+    interpretation,
+  };
 });
