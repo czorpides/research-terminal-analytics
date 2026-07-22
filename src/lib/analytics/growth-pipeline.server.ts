@@ -278,32 +278,34 @@ async function loadIndicators(): Promise<IndicatorRow[]> {
 
 async function loadObservations(indicators: IndicatorRow[], asOf: string | null): Promise<IndicatorObservations[]> {
   if (indicators.length === 0) return [];
-  // Page through results — a single PostgREST call caps at ~1000 rows and
-  // would silently truncate the weekly ICSA series plus later indicators.
-  const PAGE = 500;
-  const rows: Array<{ indicator_id: string; observation_date: string; value_raw: any; retrieved_at: string }> = [];
-  let from = 0;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    let q = supabaseAdmin
-      .from("raw_observations")
-      .select("indicator_id, observation_date, value_raw, retrieved_at")
-      .in("indicator_id", indicators.map((i) => i.id))
-      .order("indicator_id", { ascending: true })
-      .order("observation_date", { ascending: true })
-      .order("retrieved_at", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (asOf) {
-      q = q.lte("observation_date", asOf).lte("retrieved_at", `${asOf}T23:59:59Z`);
+  // Query per indicator with explicit pagination — PostgREST enforces a
+  // server-wide row cap that would otherwise silently truncate weekly
+  // series and later indicators in the alphabetical id order.
+  const PAGE = 1000;
+  const data: Array<{ indicator_id: string; observation_date: string; value_raw: any; retrieved_at: string }> = [];
+  for (const ind of indicators) {
+    let from = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      let q = supabaseAdmin
+        .from("raw_observations")
+        .select("indicator_id, observation_date, value_raw, retrieved_at")
+        .eq("indicator_id", ind.id)
+        .order("observation_date", { ascending: true })
+        .order("retrieved_at", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (asOf) {
+        q = q.lte("observation_date", asOf).lte("retrieved_at", `${asOf}T23:59:59Z`);
+      }
+      const { data: batch, error } = await q;
+      if (error) throw new Error(`loadObservations(${ind.concept_code}): ${error.message}`);
+      const rows = batch ?? [];
+      data.push(...(rows as any));
+      if (rows.length === 0) break;
+      from += rows.length;
+      if (rows.length < PAGE) break;
     }
-    const { data, error } = await q;
-    if (error) throw new Error(`loadObservations: ${error.message}`);
-    const batch = data ?? [];
-    rows.push(...(batch as any));
-    if (batch.length < PAGE) break;
-    from += PAGE;
   }
-  const data = rows;
 
   // Collapse to latest vintage per (indicator, date). rows already sorted retrieved_at asc.
   const latest = new Map<string, { indicator_id: string; date: string; value: number | null }>();
