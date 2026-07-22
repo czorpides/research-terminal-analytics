@@ -4,12 +4,37 @@ import { useServerFn } from "@tanstack/react-start";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
+import {
+  ContributionLedger,
+  EngineKpi,
+  EngineSection,
+  IndicatorGrid,
+  ModelNote,
+  ScoreScale,
+} from "@/components/research/MacroEngineView";
 import { getLabourEngine } from "@/lib/panels/labour.functions";
+import { toneForScore } from "@/lib/panels/macro-view";
 
 export const Route = createFileRoute("/_authenticated/macro/labour")({
-  head: () => ({ meta: [{ title: "US Labour Engine — Research Terminal" }] }),
+  head: () => ({
+    meta: [
+      { title: "US Labour Engine — Research Terminal" },
+      {
+        name: "description",
+        content:
+          "US employment, slack, worker demand and wage pressure standardised into an auditable Labour Heat Score.",
+      },
+    ],
+  }),
   component: LabourEngine,
 });
+
+const FAMILY_LABELS = {
+  employment: "Employment momentum",
+  slack: "Labour slack",
+  demand: "Worker demand",
+  wages: "Wage pressure",
+} as const;
 
 function LabourEngine() {
   const load = useServerFn(getLabourEngine);
@@ -18,96 +43,193 @@ function LabourEngine() {
     queryFn: () => load(),
     refetchOnWindowFocus: false,
   });
+
   return (
     <AppShell>
       <SectionHeader
-        code="MA · Phase 4 · US Labour"
+        code="MA · Stage 4 · US Labour"
         title="Is the US labour market heating, balanced or breaking?"
-        purpose="Employment momentum, labour slack, worker demand and wage pressure, standardised into one auditable cycle score."
+        purpose="Employment momentum, labour slack, worker demand and wage pressure, standardised into one auditable cycle score with the model and source evidence left visible."
       />
+
       {isLoading && <div className="text-xs text-muted-foreground">Loading Labour Engine…</div>}
       {error && (
         <div className="text-xs text-[var(--negative)]">
           Failed to load: {(error as Error).message}
         </div>
       )}
-      {data && (
-        <>
-          <div className="mb-4 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
-            <Card
-              label="Labour heat"
-              value={data.score.score?.toFixed(2) ?? "—"}
-              sub={data.score.regime}
-            />
-            <Card label="Coverage" value={`${data.score.confidence}%`} sub="configured weight" />
-            <Card
-              label="Kalman"
-              value={data.kalman.status}
-              sub={data.kalman.version ?? "not run"}
-            />
-            {(["employment", "slack", "demand", "wages"] as const).map((family) => (
-              <Card
-                key={family}
-                label={family}
-                value={data.score.familyScores[family]?.toFixed(2) ?? "—"}
-                sub="family z-score"
-              />
-            ))}
-          </div>
-          <div className="mb-4 rounded border border-border bg-card p-3">
-            <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Contribution ledger
-            </div>
-            {data.score.components.map((component) => (
-              <div
-                key={component.key}
-                className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-border/50 py-2 text-xs last:border-0"
+
+      {data &&
+        (() => {
+          const score = data.score.score;
+          const componentMap = new Map(
+            data.score.components.map((component) => [component.key, component]),
+          );
+          const familyRows = Object.entries(data.score.familyScores)
+            .filter((entry): entry is [keyof typeof FAMILY_LABELS, number] => entry[1] != null)
+            .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+          const dominantFamily = familyRows[0];
+          const latestDate = data.indicators
+            .map((indicator) => indicator.date)
+            .filter((date): date is string => Boolean(date))
+            .sort()
+            .at(-1);
+
+          return (
+            <>
+              <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <EngineKpi
+                  label="Labour Heat Score"
+                  value={score?.toFixed(2) ?? "—"}
+                  sub="Positive is hotter, negative is cooler"
+                  tone={toneForScore(score, false)}
+                  badge={data.score.regime}
+                />
+                <EngineKpi
+                  label="Coverage"
+                  value={`${data.score.confidence}%`}
+                  sub={`${data.score.components.filter((item) => item.zScore != null).length}/${data.score.components.length} configured components active`}
+                  tone={data.score.confidence >= 80 ? "positive" : "warning"}
+                />
+                <EngineKpi
+                  label="Dominant family"
+                  value={dominantFamily ? FAMILY_LABELS[dominantFamily[0]] : "—"}
+                  sub={
+                    dominantFamily ? `Family score ${signed(dominantFamily[1])}` : "No family score"
+                  }
+                  tone={toneForScore(dominantFamily?.[1] ?? null, false)}
+                />
+                <EngineKpi
+                  label="Kalman trend model"
+                  value={normaliseStatus(data.kalman.status)}
+                  sub={`${data.kalman.version ?? "not run"} · ${formatDate(data.kalman.asOf ?? latestDate)}`}
+                  tone={data.kalman.status === "success" ? "positive" : "warning"}
+                  badge="latent trend"
+                />
+              </div>
+
+              <div className="mb-3 grid gap-3 xl:grid-cols-[1.25fr_0.75fr]">
+                <ScoreScale value={score} lowLabel="Cooling / stressed" highLabel="Hot" />
+                <LabourReadThrough regime={data.score.regime} family={dominantFamily ?? null} />
+              </div>
+
+              <EngineSection
+                title="Family monitor"
+                description="Each family is scored independently before its configured indicators feed the headline heat score."
+                className="mb-3"
               >
-                <span>
-                  {component.label}{" "}
-                  <span className="text-muted-foreground">· {component.family}</span>
-                </span>
-                <span className="font-mono text-muted-foreground">
-                  z {component.zScore?.toFixed(2) ?? "—"} ·{" "}
-                  {(component.effectiveWeight * 100).toFixed(0)}%
-                </span>
-                <span className="font-mono">{component.contribution?.toFixed(2) ?? "—"}</span>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {data.indicators.map((indicator) => (
-              <div key={indicator.concept} className="rounded border border-border bg-card p-3">
-                <div className="font-mono text-[10px] text-muted-foreground">
-                  {indicator.series} · {indicator.frequency}
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {(Object.keys(FAMILY_LABELS) as Array<keyof typeof FAMILY_LABELS>).map(
+                    (family) => {
+                      const value = data.score.familyScores[family] ?? null;
+                      return (
+                        <EngineKpi
+                          key={family}
+                          label={FAMILY_LABELS[family]}
+                          value={value?.toFixed(2) ?? "—"}
+                          sub={familyMeaning(family, value)}
+                          tone={toneForScore(value, false)}
+                        />
+                      );
+                    },
+                  )}
                 </div>
-                <div className="text-sm font-semibold">{indicator.label}</div>
-                <div className="mt-2 text-xl font-semibold">
-                  {indicator.latest?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? "—"}
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {indicator.date ?? "—"} · previous{" "}
-                  {indicator.previous?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ??
-                    "—"}
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-[11px] text-muted-foreground">
-            {data.note} · {data.score.methodology}
-          </p>
-        </>
-      )}
+              </EngineSection>
+
+              <EngineSection
+                title="Contribution ledger"
+                description="Signed z-scores show which releases are heating or cooling the combined labour signal."
+                className="mb-3"
+              >
+                <ContributionLedger
+                  rows={data.score.components.map((component) => ({
+                    key: component.key,
+                    label: component.label,
+                    family: component.family,
+                    zScore: component.zScore,
+                    weight: component.effectiveWeight,
+                    contribution: component.contribution,
+                  }))}
+                />
+              </EngineSection>
+
+              <EngineSection
+                title="Underlying indicators"
+                description="The latest transformed readings and recent path for employment, slack, demand and wages."
+              >
+                <IndicatorGrid
+                  rows={data.indicators.map((indicator) => {
+                    const component = componentMap.get(indicator.concept);
+                    return {
+                      ...indicator,
+                      family: component?.family,
+                      zScore: component?.zScore,
+                    };
+                  })}
+                />
+              </EngineSection>
+
+              <ModelNote>
+                {data.note} Methodology: <span className="font-mono">{data.score.methodology}</span>
+                .
+              </ModelNote>
+            </>
+          );
+        })()}
     </AppShell>
   );
 }
 
-function Card({ label, value, sub }: { label: string; value: string; sub: string }) {
+function LabourReadThrough({
+  regime,
+  family,
+}: {
+  regime: "hot" | "balanced" | "cooling" | "stressed" | "insufficient";
+  family: [keyof typeof FAMILY_LABELS, number] | null;
+}) {
+  const copy = {
+    hot: "Labour demand is running above its historical norm. Wage persistence and policy sensitivity deserve more weight in the research process.",
+    balanced:
+      "Employment, slack and wage signals are broadly consistent with a balanced labour market. Watch the family split for early turning points.",
+    cooling:
+      "The labour impulse is losing heat. This can reduce inflation pressure, but continued deterioration would become a growth warning.",
+    stressed:
+      "Labour conditions are materially weak relative to history. Treat this as a potential contraction signal and confirm it against growth and market stress.",
+    insufficient:
+      "The active data does not yet meet the minimum coverage required for a reliable cycle call.",
+  }[regime];
   return (
     <div className="rounded border border-border bg-card p-3">
-      <div className="font-mono text-[10px] uppercase text-muted-foreground">{label}</div>
-      <div className="mt-1 text-xl font-semibold">{value}</div>
-      <div className="text-[11px] capitalize text-muted-foreground">{sub}</div>
+      <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        Current read-through
+      </div>
+      <div className="mt-1 text-sm font-semibold capitalize">{regime}</div>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{copy}</p>
+      {family && (
+        <p className="mt-2 border-t border-border/50 pt-2 text-[10px] text-muted-foreground">
+          Largest family deviation:{" "}
+          <span className="text-foreground">{FAMILY_LABELS[family[0]]}</span> at{" "}
+          <span className="font-mono text-foreground">{signed(family[1])}</span>
+        </p>
+      )}
     </div>
   );
+}
+
+function familyMeaning(family: keyof typeof FAMILY_LABELS, value: number | null): string {
+  if (value == null) return "Insufficient active history";
+  const direction = value > 0.35 ? "above" : value < -0.35 ? "below" : "near";
+  return `${direction} its historical norm${family === "slack" ? " after direction adjustment" : ""}`;
+}
+
+function signed(value: number): string {
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+function normaliseStatus(status: string): string {
+  return status.replaceAll("_", " ");
+}
+
+function formatDate(value: string | null | undefined): string {
+  return value ? value.slice(0, 10) : "no run date";
 }

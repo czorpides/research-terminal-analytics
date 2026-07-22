@@ -16,8 +16,12 @@ export interface MarketEnginePayload {
     label: string;
     series: string;
     frequency: string;
+    unit: string | null;
     latest: number | null;
     date: string | null;
+    previous: number | null;
+    history: Array<{ date: string; value: number }>;
+    observationCount: number;
   }>;
   pca: {
     status: "shadow" | "not_run";
@@ -58,8 +62,12 @@ export const getMarketEngine = createServerFn({ method: "GET" }).handler(
         label: config?.label ?? indicator.label,
         series: indicator.seriesCode,
         frequency: indicator.frequency,
+        unit: config?.transform ?? indicator.unit,
         latest: transformed.at(-1)?.value ?? null,
         date: transformed.at(-1)?.date ?? null,
+        previous: transformed.at(-2)?.value ?? null,
+        history: transformed.slice(-36),
+        observationCount: transformed.length,
       };
     });
     return {
