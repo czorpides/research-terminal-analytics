@@ -2351,6 +2351,12 @@ export type Database = {
       }
     }
     Views: {
+      data_health_alerts: {
+        Row: {
+          payload: Json | null
+        }
+        Relationships: []
+      }
       v_current_canonical_observations: {
         Row: {
           id: string | null
