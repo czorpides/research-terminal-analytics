@@ -29,6 +29,17 @@ from .schemas import (
     KalmanCalculationResponse,
     KalmanPointDTO,
 )
+from fastapi import HTTPException
+
+# ---------------------------------------------------------------------------
+# Approved (model_key, model_version) combinations for /calc/kalman-llt.
+# The Kalman LLT runtime is shared across engines; each engine must register
+# its own explicit key here. Anything else is rejected.
+# ---------------------------------------------------------------------------
+APPROVED_KALMAN_MODELS: dict[str, set[str]] = {
+    "growth_engine.us.kalman_llt": {MODEL_VERSION},
+    "inflation_engine.us.kalman_llt": {MODEL_VERSION},
+}
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -51,20 +62,26 @@ def healthz() -> HealthResponse:
 def calc_kalman_llt(payload: KalmanCalculationRequest) -> KalmanCalculationResponse:
     warnings: list[str] = []
 
-    # The Kalman LLT runtime is shared across engines (growth, inflation, …).
-    # We echo the caller's model_key/model_version so the orchestrator's
-    # per-engine identity checks pass. We only warn on unexpected suffixes.
-    ALLOWED_KEYS = {
-        "growth_engine.us.kalman_llt",
-        "inflation_engine.us.kalman_llt",
-    }
-    if payload.model_key not in ALLOWED_KEYS:
-        warnings.append(
-            f"unexpected model_key '{payload.model_key}'; runtime supports {sorted(ALLOWED_KEYS)}"
+    # Strict allow-list: reject unknown keys, unsupported versions, and
+    # invalid key/version combinations. Never overwrite the caller's model_key
+    # with a different engine's key.
+    approved_versions = APPROVED_KALMAN_MODELS.get(payload.model_key)
+    if approved_versions is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unknown model_key '{payload.model_key}'. "
+                f"Approved keys: {sorted(APPROVED_KALMAN_MODELS)}"
+            ),
         )
-    if payload.model_version != MODEL_VERSION:
-        warnings.append(
-            f"model_version note: request {payload.model_version} vs runtime default {MODEL_VERSION}"
+    if payload.model_version not in approved_versions:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unsupported model_version '{payload.model_version}' for "
+                f"model_key '{payload.model_key}'. Approved versions: "
+                f"{sorted(approved_versions)}"
+            ),
         )
     echo_model_key = payload.model_key
     echo_model_version = payload.model_version
