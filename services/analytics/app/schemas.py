@@ -105,6 +105,89 @@ class InactiveModelResponse(BaseModel):
     reason: str
 
 
+class FactorMatrixRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    model_key: str
+    model_version: str
+    input_hash: str = Field(min_length=8, max_length=128)
+    dates: list[date]
+    feature_names: list[str]
+    observations: list[list[float | None]]
+    n_components: int = Field(default=2, ge=1, le=5)
+    max_missing_fraction: float = Field(default=0.2, ge=0, le=0.5)
+
+    @field_validator("observations")
+    @classmethod
+    def _matrix_shape(cls, value: list[list[float | None]], info):
+        if not value:
+            raise ValueError("observations must not be empty")
+        width = len(value[0])
+        if width < 2 or any(len(row) != width for row in value):
+            raise ValueError("observations must be a rectangular matrix with at least two columns")
+        return value
+
+
+class FactorPointDTO(BaseModel):
+    date: date
+    values: list[float]
+
+
+class FactorCalculationResponse(BaseModel):
+    status: Literal["ok", "insufficient_history", "error"]
+    model_key: str
+    model_version: str
+    input_hash: str
+    feature_names: list[str]
+    points: list[FactorPointDTO]
+    loadings: dict[str, list[float]]
+    explained_variance_ratio: list[float]
+    missing_fraction: float
+    detail: str | None = None
+
+
+class HMMCalculationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    model_key: str
+    model_version: str
+    input_hash: str = Field(min_length=8, max_length=128)
+    dates: list[date]
+    feature_names: list[str]
+    observations: list[list[float]]
+    n_states: int = Field(default=3, ge=2, le=5)
+    max_iter: int = Field(default=100, ge=10, le=500)
+
+    @field_validator("observations")
+    @classmethod
+    def _hmm_matrix_shape(cls, value: list[list[float]]):
+        if not value:
+            raise ValueError("observations must not be empty")
+        width = len(value[0])
+        if width < 1 or any(len(row) != width for row in value):
+            raise ValueError("observations must be a non-empty rectangular matrix")
+        return value
+
+
+class RegimePointDTO(BaseModel):
+    date: date
+    state_index: int
+    probabilities: list[float]
+
+
+class HMMCalculationResponse(BaseModel):
+    status: Literal["ok", "insufficient_history", "error"]
+    model_key: str
+    model_version: str
+    input_hash: str
+    state_labels: list[str]
+    points: list[RegimePointDTO]
+    state_means: list[list[float]]
+    transition_matrix: list[list[float]]
+    converged: bool
+    iterations: int
+    log_likelihood: float | None
+    detail: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str

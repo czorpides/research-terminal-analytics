@@ -121,6 +121,35 @@ export const getDataHealthOverview = createServerFn({ method: "GET" }).handler(a
   return { sources: sourceRows, recentRuns, verifyRuns };
 });
 
+export const getPhase45Health = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: region } = await supabaseAdmin.from("regions").select("id").eq("code", "US").maybeSingle();
+  if (!region) return { engines: [], model: null, warnings: ["US region is not configured."] };
+  const { data: registry } = await supabaseAdmin.from("indicator_registry")
+    .select("id,engine,concept_code,series_code_native,frequency,min_history")
+    .eq("region_id", region.id).in("engine", ["labour", "market"]).eq("is_active", true).order("engine").order("concept_code");
+  const indicators = await Promise.all((registry ?? []).map(async (indicator) => {
+    const [{ count }, { data: latest }] = await Promise.all([
+      supabaseAdmin.from("raw_observations").select("id", { count: "exact", head: true }).eq("indicator_id", indicator.id),
+      supabaseAdmin.from("raw_observations").select("observation_date").eq("indicator_id", indicator.id).order("observation_date", { ascending: false }).limit(1),
+    ]);
+    return { engine: indicator.engine as string, concept: indicator.concept_code as string, series: indicator.series_code_native as string, frequency: indicator.frequency as string, observations: count ?? 0, minHistory: (indicator.min_history as number | null) ?? null, latest: (latest?.[0]?.observation_date as string | null) ?? null };
+  }));
+  const engines = ["labour", "market"].map((engine) => {
+    const rows = indicators.filter((indicator) => indicator.engine === engine);
+    return { engine, registered: rows.length, withData: rows.filter((row) => row.observations > 0).length, eligible: rows.filter((row) => row.minHistory === null || row.observations >= row.minHistory).length, indicators: rows };
+  });
+  const { data: modelRuns } = await supabaseAdmin.from("model_runs").select("status,started_at,finished_at,output_summary,error,model_version")
+    .eq("model_key", "market_regime.us.pipeline").order("started_at", { ascending: false }).limit(1);
+  const model = modelRuns?.[0] ?? null;
+  const warnings: string[] = [];
+  for (const engine of engines) {
+    if (engine.withData < engine.registered) warnings.push(`${engine.engine}: ${engine.registered - engine.withData} active indicators have no observations.`);
+  }
+  if (!model) warnings.push("Phase 5 PCA/HMM shadow pipeline has not run yet.");
+  return { engines, model, warnings };
+});
+
 export const triggerVerifierRun = createServerFn({ method: "POST" })
   .inputValidator((input: { panelId?: string } | undefined) => input ?? {})
   .handler(async ({ data }) => {

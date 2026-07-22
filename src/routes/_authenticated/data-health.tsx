@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { SOURCE_TIER_META } from "@/lib/reliability/tiers";
 import { DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
-import { getDataHealthOverview, triggerVerifierRun } from "@/lib/panels/data-health.functions";
+import { getDataHealthOverview, getPhase45Health, triggerVerifierRun } from "@/lib/panels/data-health.functions";
 import { getSourceFreshness } from "@/lib/freshness/freshness.functions";
 import { getGrowthHealth } from "@/lib/panels/growth-health.functions";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ function DataHealth() {
   const runVerifier = useServerFn(triggerVerifierRun);
   const fetchFreshness = useServerFn(getSourceFreshness);
   const fetchGrowth = useServerFn(getGrowthHealth);
+  const fetchPhase45 = useServerFn(getPhase45Health);
   const qc = useQueryClient();
   const [running, setRunning] = useState(false);
   const { data } = useQuery({ queryKey: ["data-health"], queryFn: () => fetchOverview(), refetchOnWindowFocus: false });
@@ -39,6 +40,7 @@ function DataHealth() {
     queryFn: () => fetchGrowth(),
     refetchInterval: 60_000,
   });
+  const { data: phase45 } = useQuery({ queryKey: ["phase4-5-health"], queryFn: () => fetchPhase45(), refetchInterval: 60_000 });
 
   async function onRun() {
     setRunning(true);
@@ -89,6 +91,24 @@ function DataHealth() {
             {!freshness && <tr><td colSpan={6} className="py-2 text-muted-foreground">Loading…</td></tr>}
           </tbody>
         </table>
+      </section>
+
+      <section className="mb-6 rounded-md border border-primary/40 bg-card/60 p-3">
+        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Phases 4–5 · US Labour, Market & Regime health</h2>
+        {!phase45 && <div className="py-2 text-xs text-muted-foreground">Loading…</div>}
+        {phase45 && <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">{phase45.engines.map((engine) => <div key={engine.engine} className="rounded border border-border/70 p-2">
+            <div className="mb-2 font-mono text-[10px] uppercase">{engine.engine} engine</div>
+            <div className="grid grid-cols-3 gap-2 font-mono text-[10px]"><Kv k="Registered" v={String(engine.registered)} /><Kv k="With data" v={String(engine.withData)} bad={engine.withData < engine.registered} /><Kv k="Min-history ready" v={String(engine.eligible)} bad={engine.eligible < engine.registered} /></div>
+          </div>)}</div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
+            <Kv k="PCA/HMM pipeline" v={phase45.model?.status as string ?? "not run"} bad={!phase45.model || phase45.model.status !== "success"} />
+            <Kv k="Model version" v={phase45.model?.model_version as string ?? "—"} />
+            <Kv k="Last started" v={phase45.model?.started_at ? new Date(phase45.model.started_at as string).toLocaleString() : "—"} />
+            <Kv k="Persistence" v="shadow only" />
+          </div>
+          {phase45.warnings.length > 0 && <ul className="list-inside list-disc text-[11px] text-[var(--warning)]">{phase45.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+        </div>}
       </section>
 
       <section className="mb-6 rounded-md border border-primary/40 bg-card/60 p-3">
