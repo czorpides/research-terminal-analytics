@@ -23,6 +23,7 @@ import { Route as AuthenticatedAltDataRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security.index'
 import { Route as AuthenticatedSecuritySymbolRouteImport } from './routes/_authenticated/security.$symbol'
+import { Route as AuthenticatedMacroGrowthRouteImport } from './routes/_authenticated/macro.growth'
 import { Route as AuthenticatedMacroSplatRouteImport } from './routes/_authenticated/macro.$'
 import { Route as AuthenticatedHistoryEventIdRouteImport } from './routes/_authenticated/history.$eventId'
 import { Route as AuthenticatedHistorySplatRouteImport } from './routes/_authenticated/history.$'
@@ -112,6 +113,12 @@ const AuthenticatedSecuritySymbolRoute =
     id: '/security/$symbol',
     path: '/security/$symbol',
     getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMacroGrowthRoute =
+  AuthenticatedMacroGrowthRouteImport.update({
+    id: '/growth',
+    path: '/growth',
+    getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
 const AuthenticatedMacroSplatRoute = AuthenticatedMacroSplatRouteImport.update({
   id: '/$',
@@ -219,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/history/$': typeof AuthenticatedHistorySplatRoute
   '/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
   '/macro/$': typeof AuthenticatedMacroSplatRoute
+  '/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
@@ -250,6 +258,7 @@ export interface FileRoutesByTo {
   '/history/$': typeof AuthenticatedHistorySplatRoute
   '/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
   '/macro/$': typeof AuthenticatedMacroSplatRoute
+  '/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
@@ -283,6 +292,7 @@ export interface FileRoutesById {
   '/_authenticated/history/$': typeof AuthenticatedHistorySplatRoute
   '/_authenticated/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
   '/_authenticated/macro/$': typeof AuthenticatedMacroSplatRoute
+  '/_authenticated/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/_authenticated/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
@@ -316,6 +326,7 @@ export interface FileRouteTypes {
     | '/history/$'
     | '/history/$eventId'
     | '/macro/$'
+    | '/macro/growth'
     | '/security/$symbol'
     | '/security/'
     | '/api/public/history/verify-narratives'
@@ -347,6 +358,7 @@ export interface FileRouteTypes {
     | '/history/$'
     | '/history/$eventId'
     | '/macro/$'
+    | '/macro/growth'
     | '/security/$symbol'
     | '/security'
     | '/api/public/history/verify-narratives'
@@ -379,6 +391,7 @@ export interface FileRouteTypes {
     | '/_authenticated/history/$'
     | '/_authenticated/history/$eventId'
     | '/_authenticated/macro/$'
+    | '/_authenticated/macro/growth'
     | '/_authenticated/security/$symbol'
     | '/_authenticated/security/'
     | '/api/public/history/verify-narratives'
@@ -511,6 +524,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/security/$symbol'
       preLoaderRoute: typeof AuthenticatedSecuritySymbolRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/macro/growth': {
+      id: '/_authenticated/macro/growth'
+      path: '/growth'
+      fullPath: '/macro/growth'
+      preLoaderRoute: typeof AuthenticatedMacroGrowthRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
     }
     '/_authenticated/macro/$': {
       id: '/_authenticated/macro/$'
@@ -653,10 +673,12 @@ const AuthenticatedHistoryRouteWithChildren =
 
 interface AuthenticatedMacroRouteChildren {
   AuthenticatedMacroSplatRoute: typeof AuthenticatedMacroSplatRoute
+  AuthenticatedMacroGrowthRoute: typeof AuthenticatedMacroGrowthRoute
 }
 
 const AuthenticatedMacroRouteChildren: AuthenticatedMacroRouteChildren = {
   AuthenticatedMacroSplatRoute: AuthenticatedMacroSplatRoute,
+  AuthenticatedMacroGrowthRoute: AuthenticatedMacroGrowthRoute,
 }
 
 const AuthenticatedMacroRouteWithChildren =
