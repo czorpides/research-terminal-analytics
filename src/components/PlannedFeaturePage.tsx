@@ -36,9 +36,9 @@ function Body({ route }: { route: RouteEntry }) {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow={`${group.label} · Stage ${route.stage}`}
+        code={`${group.label} · Stage ${route.stage}`}
         title={route.name}
-        description={route.purpose}
+        purpose={route.purpose}
       />
 
       <div className="flex flex-wrap items-center gap-2 font-mono text-[10px]">
@@ -98,7 +98,7 @@ function MetaCard({ title, items, emptyLabel }: { title: string; items: string[]
 function Unknown({ pathname }: { pathname: string }) {
   return (
     <div className="space-y-4">
-      <SectionHeader eyebrow="Not registered" title="Unknown route" description={`No entry in the navigation registry matches ${pathname}.`} />
+      <SectionHeader code="Not registered" title="Unknown route" purpose={`No entry in the navigation registry matches ${pathname}.`} />
       <Link to="/" className="inline-flex items-center rounded-sm border border-border/70 px-2 py-1 font-mono text-[10px] uppercase tracking-wider hover:border-[var(--primary)] hover:text-foreground">
         ← Command Centre
       </Link>
