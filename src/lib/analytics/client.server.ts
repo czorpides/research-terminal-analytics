@@ -59,6 +59,56 @@ export interface KalmanCalculationResponse {
   detail: string | null;
 }
 
+export interface FactorCalculationRequest {
+  model_key: "market_engine.us.pca_factor";
+  model_version: "pca.v1.0";
+  input_hash: string;
+  dates: string[];
+  feature_names: string[];
+  observations: Array<Array<number | null>>;
+  n_components: number;
+  max_missing_fraction: number;
+}
+
+export interface FactorCalculationResponse {
+  status: CalcStatus;
+  model_key: string;
+  model_version: string;
+  input_hash: string;
+  feature_names: string[];
+  points: Array<{ date: string; values: number[] }>;
+  loadings: Record<string, number[]>;
+  explained_variance_ratio: number[];
+  missing_fraction: number;
+  detail: string | null;
+}
+
+export interface HMMCalculationRequest {
+  model_key: "regime_monitor.us.hmm";
+  model_version: "hmm.v1.0-shadow";
+  input_hash: string;
+  dates: string[];
+  feature_names: string[];
+  observations: number[][];
+  n_states: number;
+  max_iter: number;
+}
+
+export interface HMMCalculationResponse {
+  status: CalcStatus;
+  model_key: string;
+  model_version: string;
+  input_hash: string;
+  state_labels: string[];
+  points: Array<{ date: string; state_index: number; probabilities: number[] }>;
+  state_means: number[][];
+  transition_matrix: number[][];
+  converged: boolean;
+  iterations: number;
+  log_likelihood: number | null;
+  detail: string | null;
+}
+
 function config(): { url: string; token: string } {
   const url = process.env.ANALYTICS_SERVICE_URL;
   const token = process.env.ANALYTICS_SERVICE_TOKEN;
@@ -94,4 +144,16 @@ export function calculateKalmanLlt(
   request: KalmanCalculationRequest,
 ): Promise<KalmanCalculationResponse> {
   return call<KalmanCalculationResponse>("POST", "/calc/kalman-llt", request);
+}
+
+export function calculatePcaFactor(
+  request: FactorCalculationRequest,
+): Promise<FactorCalculationResponse> {
+  return call<FactorCalculationResponse>("POST", "/calc/pca-factor", request);
+}
+
+export function calculateHmmRegime(
+  request: HMMCalculationRequest,
+): Promise<HMMCalculationResponse> {
+  return call<HMMCalculationResponse>("POST", "/calc/hmm-regime", request);
 }

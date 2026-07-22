@@ -12,8 +12,8 @@ idempotency, `model_runs`, `model_outputs`) lives on the Lovable side.
 | ------ | ---- | ---- | ------- |
 | GET  | `/healthz`           | none   | Service status/version. No secrets. |
 | POST | `/calc/kalman-llt`   | bearer | Run one local-linear-trend Kalman calculation. |
-| POST | `/calc/pca-factor`   | bearer | Inactive — echoes stateless envelope. |
-| POST | `/calc/hmm-regime`   | bearer | Inactive — echoes stateless envelope. |
+| POST | `/calc/pca-factor`   | bearer | Phase 5 deterministic market PCA. Persistence remains shadow upstream. |
+| POST | `/calc/hmm-regime`   | bearer | Phase 5 diagonal-Gaussian HMM. Persistence remains shadow upstream. |
 
 All authenticated endpoints require `Authorization: Bearer $ANALYTICS_SERVICE_TOKEN`.
 The browser must never call this service; only Lovable server functions can.

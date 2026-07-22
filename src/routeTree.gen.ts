@@ -27,7 +27,10 @@ import { Route as AuthenticatedHistoryEventIdRouteImport } from './routes/_authe
 import { Route as AuthenticatedMacroSplatRouteImport } from './routes/_authenticated/macro.$'
 import { Route as AuthenticatedMacroGrowthRouteImport } from './routes/_authenticated/macro.growth'
 import { Route as AuthenticatedMacroInflationRouteImport } from './routes/_authenticated/macro.inflation'
+import { Route as AuthenticatedMacroLabourRouteImport } from './routes/_authenticated/macro.labour'
 import { Route as AuthenticatedMacroLiquidityRouteImport } from './routes/_authenticated/macro.liquidity'
+import { Route as AuthenticatedMacroMarketRouteImport } from './routes/_authenticated/macro.market'
+import { Route as AuthenticatedMacroRegimeRouteImport } from './routes/_authenticated/macro.regime'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security.index'
 import { Route as AuthenticatedSecuritySymbolRouteImport } from './routes/_authenticated/security.$symbol'
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
@@ -39,7 +42,10 @@ import { Route as ApiPublicIngestMacroNativeRouteImport } from './routes/api/pub
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
 import { Route as ApiPublicIngestUsGrowthFredRouteImport } from './routes/api/public/ingest/us-growth-fred'
 import { Route as ApiPublicIngestUsInflationFredRouteImport } from './routes/api/public/ingest/us-inflation-fred'
+import { Route as ApiPublicIngestUsLabourFredRouteImport } from './routes/api/public/ingest/us-labour-fred'
 import { Route as ApiPublicIngestUsLiquidityFredRouteImport } from './routes/api/public/ingest/us-liquidity-fred'
+import { Route as ApiPublicIngestUsMarketFredRouteImport } from './routes/api/public/ingest/us-market-fred'
+import { Route as ApiPublicModelsUsMarketRegimeRouteImport } from './routes/api/public/models/us-market-regime'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
@@ -141,10 +147,28 @@ const AuthenticatedMacroInflationRoute =
     path: '/inflation',
     getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
+const AuthenticatedMacroLabourRoute =
+  AuthenticatedMacroLabourRouteImport.update({
+    id: '/labour',
+    path: '/labour',
+    getParentRoute: () => AuthenticatedMacroRoute,
+  } as any)
 const AuthenticatedMacroLiquidityRoute =
   AuthenticatedMacroLiquidityRouteImport.update({
     id: '/liquidity',
     path: '/liquidity',
+    getParentRoute: () => AuthenticatedMacroRoute,
+  } as any)
+const AuthenticatedMacroMarketRoute =
+  AuthenticatedMacroMarketRouteImport.update({
+    id: '/market',
+    path: '/market',
+    getParentRoute: () => AuthenticatedMacroRoute,
+  } as any)
+const AuthenticatedMacroRegimeRoute =
+  AuthenticatedMacroRegimeRouteImport.update({
+    id: '/regime',
+    path: '/regime',
     getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
 const AuthenticatedSecurityIndexRoute =
@@ -210,10 +234,28 @@ const ApiPublicIngestUsInflationFredRoute =
     path: '/api/public/ingest/us-inflation-fred',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicIngestUsLabourFredRoute =
+  ApiPublicIngestUsLabourFredRouteImport.update({
+    id: '/api/public/ingest/us-labour-fred',
+    path: '/api/public/ingest/us-labour-fred',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicIngestUsLiquidityFredRoute =
   ApiPublicIngestUsLiquidityFredRouteImport.update({
     id: '/api/public/ingest/us-liquidity-fred',
     path: '/api/public/ingest/us-liquidity-fred',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIngestUsMarketFredRoute =
+  ApiPublicIngestUsMarketFredRouteImport.update({
+    id: '/api/public/ingest/us-market-fred',
+    path: '/api/public/ingest/us-market-fred',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicModelsUsMarketRegimeRoute =
+  ApiPublicModelsUsMarketRegimeRouteImport.update({
+    id: '/api/public/models/us-market-regime',
+    path: '/api/public/models/us-market-regime',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicProvidersPingRoute = ApiPublicProvidersPingRouteImport.update({
@@ -256,7 +298,10 @@ export interface FileRoutesByFullPath {
   '/macro/$': typeof AuthenticatedMacroSplatRoute
   '/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/macro/inflation': typeof AuthenticatedMacroInflationRoute
+  '/macro/labour': typeof AuthenticatedMacroLabourRoute
   '/macro/liquidity': typeof AuthenticatedMacroLiquidityRoute
+  '/macro/market': typeof AuthenticatedMacroMarketRoute
+  '/macro/regime': typeof AuthenticatedMacroRegimeRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
@@ -268,7 +313,10 @@ export interface FileRoutesByFullPath {
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/ingest/us-inflation-fred': typeof ApiPublicIngestUsInflationFredRoute
+  '/api/public/ingest/us-labour-fred': typeof ApiPublicIngestUsLabourFredRoute
   '/api/public/ingest/us-liquidity-fred': typeof ApiPublicIngestUsLiquidityFredRoute
+  '/api/public/ingest/us-market-fred': typeof ApiPublicIngestUsMarketFredRoute
+  '/api/public/models/us-market-regime': typeof ApiPublicModelsUsMarketRegimeRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
@@ -292,7 +340,10 @@ export interface FileRoutesByTo {
   '/macro/$': typeof AuthenticatedMacroSplatRoute
   '/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/macro/inflation': typeof AuthenticatedMacroInflationRoute
+  '/macro/labour': typeof AuthenticatedMacroLabourRoute
   '/macro/liquidity': typeof AuthenticatedMacroLiquidityRoute
+  '/macro/market': typeof AuthenticatedMacroMarketRoute
+  '/macro/regime': typeof AuthenticatedMacroRegimeRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
@@ -304,7 +355,10 @@ export interface FileRoutesByTo {
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/ingest/us-inflation-fred': typeof ApiPublicIngestUsInflationFredRoute
+  '/api/public/ingest/us-labour-fred': typeof ApiPublicIngestUsLabourFredRoute
   '/api/public/ingest/us-liquidity-fred': typeof ApiPublicIngestUsLiquidityFredRoute
+  '/api/public/ingest/us-market-fred': typeof ApiPublicIngestUsMarketFredRoute
+  '/api/public/models/us-market-regime': typeof ApiPublicModelsUsMarketRegimeRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
@@ -330,7 +384,10 @@ export interface FileRoutesById {
   '/_authenticated/macro/$': typeof AuthenticatedMacroSplatRoute
   '/_authenticated/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/_authenticated/macro/inflation': typeof AuthenticatedMacroInflationRoute
+  '/_authenticated/macro/labour': typeof AuthenticatedMacroLabourRoute
   '/_authenticated/macro/liquidity': typeof AuthenticatedMacroLiquidityRoute
+  '/_authenticated/macro/market': typeof AuthenticatedMacroMarketRoute
+  '/_authenticated/macro/regime': typeof AuthenticatedMacroRegimeRoute
   '/_authenticated/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
@@ -342,7 +399,10 @@ export interface FileRoutesById {
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/ingest/us-inflation-fred': typeof ApiPublicIngestUsInflationFredRoute
+  '/api/public/ingest/us-labour-fred': typeof ApiPublicIngestUsLabourFredRoute
   '/api/public/ingest/us-liquidity-fred': typeof ApiPublicIngestUsLiquidityFredRoute
+  '/api/public/ingest/us-market-fred': typeof ApiPublicIngestUsMarketFredRoute
+  '/api/public/models/us-market-regime': typeof ApiPublicModelsUsMarketRegimeRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
@@ -368,7 +428,10 @@ export interface FileRouteTypes {
     | '/macro/$'
     | '/macro/growth'
     | '/macro/inflation'
+    | '/macro/labour'
     | '/macro/liquidity'
+    | '/macro/market'
+    | '/macro/regime'
     | '/security/$symbol'
     | '/security/'
     | '/api/public/history/verify-narratives'
@@ -380,7 +443,10 @@ export interface FileRouteTypes {
     | '/api/public/ingest/stooq'
     | '/api/public/ingest/us-growth-fred'
     | '/api/public/ingest/us-inflation-fred'
+    | '/api/public/ingest/us-labour-fred'
     | '/api/public/ingest/us-liquidity-fred'
+    | '/api/public/ingest/us-market-fred'
+    | '/api/public/models/us-market-regime'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
@@ -404,7 +470,10 @@ export interface FileRouteTypes {
     | '/macro/$'
     | '/macro/growth'
     | '/macro/inflation'
+    | '/macro/labour'
     | '/macro/liquidity'
+    | '/macro/market'
+    | '/macro/regime'
     | '/security/$symbol'
     | '/security'
     | '/api/public/history/verify-narratives'
@@ -416,7 +485,10 @@ export interface FileRouteTypes {
     | '/api/public/ingest/stooq'
     | '/api/public/ingest/us-growth-fred'
     | '/api/public/ingest/us-inflation-fred'
+    | '/api/public/ingest/us-labour-fred'
     | '/api/public/ingest/us-liquidity-fred'
+    | '/api/public/ingest/us-market-fred'
+    | '/api/public/models/us-market-regime'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
@@ -441,7 +513,10 @@ export interface FileRouteTypes {
     | '/_authenticated/macro/$'
     | '/_authenticated/macro/growth'
     | '/_authenticated/macro/inflation'
+    | '/_authenticated/macro/labour'
     | '/_authenticated/macro/liquidity'
+    | '/_authenticated/macro/market'
+    | '/_authenticated/macro/regime'
     | '/_authenticated/security/$symbol'
     | '/_authenticated/security/'
     | '/api/public/history/verify-narratives'
@@ -453,7 +528,10 @@ export interface FileRouteTypes {
     | '/api/public/ingest/stooq'
     | '/api/public/ingest/us-growth-fred'
     | '/api/public/ingest/us-inflation-fred'
+    | '/api/public/ingest/us-labour-fred'
     | '/api/public/ingest/us-liquidity-fred'
+    | '/api/public/ingest/us-market-fred'
+    | '/api/public/models/us-market-regime'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
@@ -472,7 +550,10 @@ export interface RootRouteChildren {
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
   ApiPublicIngestUsGrowthFredRoute: typeof ApiPublicIngestUsGrowthFredRoute
   ApiPublicIngestUsInflationFredRoute: typeof ApiPublicIngestUsInflationFredRoute
+  ApiPublicIngestUsLabourFredRoute: typeof ApiPublicIngestUsLabourFredRoute
   ApiPublicIngestUsLiquidityFredRoute: typeof ApiPublicIngestUsLiquidityFredRoute
+  ApiPublicIngestUsMarketFredRoute: typeof ApiPublicIngestUsMarketFredRoute
+  ApiPublicModelsUsMarketRegimeRoute: typeof ApiPublicModelsUsMarketRegimeRoute
   ApiPublicProvidersPingRoute: typeof ApiPublicProvidersPingRoute
   ApiPublicScoresRunRoute: typeof ApiPublicScoresRunRoute
   ApiPublicVerifyRunRoute: typeof ApiPublicVerifyRunRoute
@@ -607,11 +688,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMacroInflationRouteImport
       parentRoute: typeof AuthenticatedMacroRoute
     }
+    '/_authenticated/macro/labour': {
+      id: '/_authenticated/macro/labour'
+      path: '/labour'
+      fullPath: '/macro/labour'
+      preLoaderRoute: typeof AuthenticatedMacroLabourRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
+    }
     '/_authenticated/macro/liquidity': {
       id: '/_authenticated/macro/liquidity'
       path: '/liquidity'
       fullPath: '/macro/liquidity'
       preLoaderRoute: typeof AuthenticatedMacroLiquidityRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
+    }
+    '/_authenticated/macro/market': {
+      id: '/_authenticated/macro/market'
+      path: '/market'
+      fullPath: '/macro/market'
+      preLoaderRoute: typeof AuthenticatedMacroMarketRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
+    }
+    '/_authenticated/macro/regime': {
+      id: '/_authenticated/macro/regime'
+      path: '/regime'
+      fullPath: '/macro/regime'
+      preLoaderRoute: typeof AuthenticatedMacroRegimeRouteImport
       parentRoute: typeof AuthenticatedMacroRoute
     }
     '/_authenticated/security/': {
@@ -691,11 +793,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicIngestUsInflationFredRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/us-labour-fred': {
+      id: '/api/public/ingest/us-labour-fred'
+      path: '/api/public/ingest/us-labour-fred'
+      fullPath: '/api/public/ingest/us-labour-fred'
+      preLoaderRoute: typeof ApiPublicIngestUsLabourFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/us-liquidity-fred': {
       id: '/api/public/ingest/us-liquidity-fred'
       path: '/api/public/ingest/us-liquidity-fred'
       fullPath: '/api/public/ingest/us-liquidity-fred'
       preLoaderRoute: typeof ApiPublicIngestUsLiquidityFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/us-market-fred': {
+      id: '/api/public/ingest/us-market-fred'
+      path: '/api/public/ingest/us-market-fred'
+      fullPath: '/api/public/ingest/us-market-fred'
+      preLoaderRoute: typeof ApiPublicIngestUsMarketFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/models/us-market-regime': {
+      id: '/api/public/models/us-market-regime'
+      path: '/api/public/models/us-market-regime'
+      fullPath: '/api/public/models/us-market-regime'
+      preLoaderRoute: typeof ApiPublicModelsUsMarketRegimeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/providers/ping': {
@@ -757,14 +880,20 @@ interface AuthenticatedMacroRouteChildren {
   AuthenticatedMacroSplatRoute: typeof AuthenticatedMacroSplatRoute
   AuthenticatedMacroGrowthRoute: typeof AuthenticatedMacroGrowthRoute
   AuthenticatedMacroInflationRoute: typeof AuthenticatedMacroInflationRoute
+  AuthenticatedMacroLabourRoute: typeof AuthenticatedMacroLabourRoute
   AuthenticatedMacroLiquidityRoute: typeof AuthenticatedMacroLiquidityRoute
+  AuthenticatedMacroMarketRoute: typeof AuthenticatedMacroMarketRoute
+  AuthenticatedMacroRegimeRoute: typeof AuthenticatedMacroRegimeRoute
 }
 
 const AuthenticatedMacroRouteChildren: AuthenticatedMacroRouteChildren = {
   AuthenticatedMacroSplatRoute: AuthenticatedMacroSplatRoute,
   AuthenticatedMacroGrowthRoute: AuthenticatedMacroGrowthRoute,
   AuthenticatedMacroInflationRoute: AuthenticatedMacroInflationRoute,
+  AuthenticatedMacroLabourRoute: AuthenticatedMacroLabourRoute,
   AuthenticatedMacroLiquidityRoute: AuthenticatedMacroLiquidityRoute,
+  AuthenticatedMacroMarketRoute: AuthenticatedMacroMarketRoute,
+  AuthenticatedMacroRegimeRoute: AuthenticatedMacroRegimeRoute,
 }
 
 const AuthenticatedMacroRouteWithChildren =
@@ -815,7 +944,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
   ApiPublicIngestUsGrowthFredRoute: ApiPublicIngestUsGrowthFredRoute,
   ApiPublicIngestUsInflationFredRoute: ApiPublicIngestUsInflationFredRoute,
+  ApiPublicIngestUsLabourFredRoute: ApiPublicIngestUsLabourFredRoute,
   ApiPublicIngestUsLiquidityFredRoute: ApiPublicIngestUsLiquidityFredRoute,
+  ApiPublicIngestUsMarketFredRoute: ApiPublicIngestUsMarketFredRoute,
+  ApiPublicModelsUsMarketRegimeRoute: ApiPublicModelsUsMarketRegimeRoute,
   ApiPublicProvidersPingRoute: ApiPublicProvidersPingRoute,
   ApiPublicScoresRunRoute: ApiPublicScoresRunRoute,
   ApiPublicVerifyRunRoute: ApiPublicVerifyRunRoute,

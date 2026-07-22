@@ -15,6 +15,7 @@ from app.main import app
 from app.models.kalman import MODEL_KEY, MODEL_VERSION
 
 INFLATION_MODEL_KEY = "inflation_engine.us.kalman_llt"
+LABOUR_MODEL_KEY = "labour_engine.us.kalman_llt"
 
 TOKEN = "test-token-please-ignore"
 HASH = "deadbeef" * 8
@@ -190,6 +191,14 @@ def test_valid_inflation_engine_request_is_accepted_and_echoed():
     assert body["input_hash"] == req["input_hash"]
 
 
+def test_valid_labour_engine_request_is_accepted_and_echoed():
+    req = _valid_request(model_key=LABOUR_MODEL_KEY, model_version=MODEL_VERSION, indicator_id="44444444-4444-4444-4444-444444444444")
+    r = _client().post("/calc/kalman-llt", json=req, headers={"Authorization": f"Bearer {TOKEN}"})
+    assert r.status_code == 200
+    assert r.json()["model_key"] == LABOUR_MODEL_KEY
+    assert r.json()["indicator_id"] == req["indicator_id"]
+
+
 def test_unknown_model_key_is_rejected():
     r = _client().post(
         "/calc/kalman-llt",
@@ -279,33 +288,58 @@ def test_service_starts_without_supabase_env(monkeypatch):
     assert r.json()["status"] == "ok"
 
 
-# --- inactive models ---
+# --- Phase 5 shadow models ---
 
-def test_pca_endpoint_is_inactive_and_echoes_hash():
+def test_pca_endpoint_calculates_and_echoes_hash():
+    dates = [(date(2020, 1, 1) + timedelta(days=30 * i)).isoformat() for i in range(48)]
+    observations = [[float(i), float(i % 7) + i * 0.2, float(48 - i)] for i in range(48)]
     r = _client().post(
         "/calc/pca-factor",
         json={
-            "model_key": "growth_engine.us.pca_factor",
-            "model_version": "pca.v0.0-inactive",
+            "model_key": "market_engine.us.pca_factor",
+            "model_version": "pca.v1.0",
             "input_hash": HASH,
+            "dates": dates,
+            "feature_names": ["equity", "credit", "volatility"],
+            "observations": observations,
+            "n_components": 2,
+            "max_missing_fraction": 0.2,
         },
         headers={"Authorization": f"Bearer {TOKEN}"},
     )
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] == "inactive"
+    assert body["status"] == "ok"
     assert body["input_hash"] == HASH
+    assert len(body["points"]) == 48
+    assert len(body["explained_variance_ratio"]) == 2
+    assert set(body["loadings"]) == {"equity", "credit", "volatility"}
 
 
-def test_hmm_endpoint_is_inactive_and_echoes_hash():
+def test_hmm_endpoint_calculates_probabilities_and_echoes_hash():
+    dates = [(date(2018, 1, 1) + timedelta(days=30 * i)).isoformat() for i in range(72)]
+    observations = []
+    for i in range(72):
+        state = -1.5 if i < 24 else (0.0 if i < 48 else 1.5)
+        observations.append([state + (i % 3) * 0.03, state * 0.5 + (i % 5) * 0.02, -state])
     r = _client().post(
         "/calc/hmm-regime",
         json={
             "model_key": "regime_monitor.us.hmm",
-            "model_version": "hmm.v0.0-inactive",
+            "model_version": "hmm.v1.0-shadow",
             "input_hash": HASH,
+            "dates": dates,
+            "feature_names": ["market_stress", "factor", "equity_stress"],
+            "observations": observations,
+            "n_states": 3,
+            "max_iter": 100,
         },
         headers={"Authorization": f"Bearer {TOKEN}"},
     )
     assert r.status_code == 200
-    assert r.json()["status"] == "inactive"
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["input_hash"] == HASH
+    assert len(body["points"]) == 72
+    assert set(body["state_labels"]) == {"risk_on", "neutral", "risk_off"}
+    assert all(abs(sum(point["probabilities"]) - 1.0) < 1e-6 for point in body["points"])

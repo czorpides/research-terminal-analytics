@@ -6,8 +6,8 @@ calculations on payloads sent by the authenticated Lovable/TanStack server.
 Endpoints
   GET  /healthz                 -> public health (no secrets, no PII)
   POST /calc/kalman-llt         -> run one Kalman LLT calculation
-  POST /calc/pca-factor         -> inactive (stateless contract preserved)
-  POST /calc/hmm-regime         -> inactive (stateless contract preserved)
+  POST /calc/pca-factor         -> market PCA (shadow persistence upstream)
+  POST /calc/hmm-regime         -> Gaussian HMM (shadow persistence upstream)
 """
 from __future__ import annotations
 
@@ -19,15 +19,20 @@ from fastapi import Depends, FastAPI
 from .auth import require_service_token
 from .config import get_settings
 from .logging_config import configure_logging
-from .models import hmm_stub, pca_stub
 from .models.kalman import MODEL_KEY, MODEL_VERSION, fit_llt, resolve_min_history
+from .models.hmm import MODEL_KEY as HMM_KEY, MODEL_VERSION as HMM_VERSION, fit_hmm
+from .models.pca import MODEL_KEY as PCA_KEY, MODEL_VERSION as PCA_VERSION, fit_pca
 from .schemas import (
     HealthResponse,
-    InactiveModelRequest,
-    InactiveModelResponse,
+    FactorCalculationResponse,
+    FactorMatrixRequest,
+    FactorPointDTO,
+    HMMCalculationRequest,
+    HMMCalculationResponse,
     KalmanCalculationRequest,
     KalmanCalculationResponse,
     KalmanPointDTO,
+    RegimePointDTO,
 )
 from fastapi import HTTPException
 
@@ -39,6 +44,7 @@ from fastapi import HTTPException
 APPROVED_KALMAN_MODELS: dict[str, set[str]] = {
     "growth_engine.us.kalman_llt": {MODEL_VERSION},
     "inflation_engine.us.kalman_llt": {MODEL_VERSION},
+    "labour_engine.us.kalman_llt": {MODEL_VERSION},
 }
 
 settings = get_settings()
@@ -164,31 +170,35 @@ def calc_kalman_llt(payload: KalmanCalculationRequest) -> KalmanCalculationRespo
 
 @app.post(
     "/calc/pca-factor",
-    response_model=InactiveModelResponse,
+    response_model=FactorCalculationResponse,
     dependencies=[Depends(require_service_token)],
     tags=["calc"],
 )
-def calc_pca(payload: InactiveModelRequest) -> InactiveModelResponse:
-    body = pca_stub.run({})
-    return InactiveModelResponse(
-        model_key=body["model_key"],
-        model_version=body["model_version"],
-        input_hash=payload.input_hash,
-        reason=body["reason"],
-    )
+def calc_pca(payload: FactorMatrixRequest) -> FactorCalculationResponse:
+    if payload.model_key != PCA_KEY or payload.model_version != PCA_VERSION:
+        raise HTTPException(status_code=422, detail=f"expected {PCA_KEY}@{PCA_VERSION}")
+    if len(payload.dates) != len(payload.observations) or len(payload.feature_names) != len(payload.observations[0]):
+        raise HTTPException(status_code=422, detail="dates/features do not match observation matrix")
+    try:
+        fit = fit_pca(payload.observations, payload.n_components, payload.max_missing_fraction)
+    except ValueError as exc:
+        return FactorCalculationResponse(status="insufficient_history", model_key=PCA_KEY, model_version=PCA_VERSION, input_hash=payload.input_hash, feature_names=payload.feature_names, points=[], loadings={}, explained_variance_ratio=[], missing_fraction=0, detail=str(exc))
+    return FactorCalculationResponse(status="ok", model_key=PCA_KEY, model_version=PCA_VERSION, input_hash=payload.input_hash, feature_names=payload.feature_names, points=[FactorPointDTO(date=date, values=[float(v) for v in fit.scores[i]]) for i, date in enumerate(payload.dates)], loadings={name: [float(v) for v in fit.loadings[i]] for i, name in enumerate(payload.feature_names)}, explained_variance_ratio=[float(v) for v in fit.explained_variance_ratio], missing_fraction=fit.missing_fraction)
 
 
 @app.post(
     "/calc/hmm-regime",
-    response_model=InactiveModelResponse,
+    response_model=HMMCalculationResponse,
     dependencies=[Depends(require_service_token)],
     tags=["calc"],
 )
-def calc_hmm(payload: InactiveModelRequest) -> InactiveModelResponse:
-    body = hmm_stub.run({})
-    return InactiveModelResponse(
-        model_key=body["model_key"],
-        model_version=body["model_version"],
-        input_hash=payload.input_hash,
-        reason=body["reason"],
-    )
+def calc_hmm(payload: HMMCalculationRequest) -> HMMCalculationResponse:
+    if payload.model_key != HMM_KEY or payload.model_version != HMM_VERSION:
+        raise HTTPException(status_code=422, detail=f"expected {HMM_KEY}@{HMM_VERSION}")
+    if len(payload.dates) != len(payload.observations) or len(payload.feature_names) != len(payload.observations[0]):
+        raise HTTPException(status_code=422, detail="dates/features do not match observation matrix")
+    try:
+        fit = fit_hmm(payload.observations, payload.n_states, payload.max_iter)
+    except ValueError as exc:
+        return HMMCalculationResponse(status="insufficient_history", model_key=HMM_KEY, model_version=HMM_VERSION, input_hash=payload.input_hash, state_labels=[], points=[], state_means=[], transition_matrix=[], converged=False, iterations=0, log_likelihood=None, detail=str(exc))
+    return HMMCalculationResponse(status="ok", model_key=HMM_KEY, model_version=HMM_VERSION, input_hash=payload.input_hash, state_labels=fit.labels, points=[RegimePointDTO(date=date, state_index=int(fit.states[i]), probabilities=[float(v) for v in fit.probabilities[i]]) for i, date in enumerate(payload.dates)], state_means=[[float(v) for v in row] for row in fit.means], transition_matrix=[[float(v) for v in row] for row in fit.transition], converged=fit.converged, iterations=fit.iterations, log_likelihood=fit.log_likelihood)
