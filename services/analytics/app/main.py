@@ -45,6 +45,7 @@ def trigger_us_growth_kalman(payload: JobTriggerRequest, tasks: BackgroundTasks)
         prep = prepare_run(
             as_of_date=payload.as_of_date.isoformat() if payload.as_of_date else None,
             force=payload.force,
+            mode=payload.mode,
         )
     except Exception as exc:  # noqa: BLE001
         log.exception("prepare_run failed")
@@ -56,7 +57,7 @@ def trigger_us_growth_kalman(payload: JobTriggerRequest, tasks: BackgroundTasks)
             reused=True, detail=prep.get("detail"),
         )
 
-    tasks.add_task(execute_run, prep["run_id"], prep["indicators"], prep["triples"])
+    tasks.add_task(execute_run, prep["run_id"], prep["indicators"], prep["triples"], prep.get("as_of_date"), prep.get("mode", "live"))
     return JobTriggerResponse(
         run_id=prep["run_id"], status="queued", model_key=MODEL_KEY, model_version=MODEL_VERSION, reused=False,
     )

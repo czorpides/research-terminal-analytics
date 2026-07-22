@@ -8,8 +8,6 @@ import math
 import random
 from datetime import date, timedelta
 
-import pytest
-
 from app.models.kalman import fit_llt
 
 
@@ -83,9 +81,21 @@ def test_temporary_outlier_does_not_dominate_latest_estimate():
     assert ci_width_end <= ci_width_mid * 2  # doesn't blow up permanently
 
 
-def test_too_few_observations_raises():
-    with pytest.raises(ValueError):
-        fit_llt([("2024-01-01", 1.0), ("2024-02-01", 2.0)])
+def test_too_few_observations_returns_insufficient_history():
+    fit = fit_llt(
+        [("2024-01-01", 1.0), ("2024-02-01", 2.0)],
+        min_history=4,
+    )
+    assert fit.status == "insufficient_history"
+    assert fit.points == []
+    assert fit.insufficient_reason and "need" in fit.insufficient_reason
+
+
+def test_configurable_min_history_gates_output():
+    n = 20
+    series = [(d, 10.0 + i) for i, d in enumerate(_dates(n))]
+    assert fit_llt(series, min_history=24).status == "insufficient_history"
+    assert fit_llt(series, min_history=8).status == "ok"
 
 
 def test_ci_brackets_level_and_is_symmetric():

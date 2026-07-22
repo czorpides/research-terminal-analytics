@@ -1073,6 +1073,7 @@ export type Database = {
       }
       indicator_registry: {
         Row: {
+          allowed_transformations: string[] | null
           concept_code: string
           created_at: string
           description: string | null
@@ -1083,6 +1084,7 @@ export type Database = {
           id: string
           is_active: boolean
           license_status: string
+          min_history: number | null
           region_id: string
           release_calendar_id: string | null
           seasonal_adj: boolean
@@ -1094,6 +1096,7 @@ export type Database = {
           vintage_policy: string
         }
         Insert: {
+          allowed_transformations?: string[] | null
           concept_code: string
           created_at?: string
           description?: string | null
@@ -1104,6 +1107,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           license_status?: string
+          min_history?: number | null
           region_id: string
           release_calendar_id?: string | null
           seasonal_adj?: boolean
@@ -1115,6 +1119,7 @@ export type Database = {
           vintage_policy?: string
         }
         Update: {
+          allowed_transformations?: string[] | null
           concept_code?: string
           created_at?: string
           description?: string | null
@@ -1125,6 +1130,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           license_status?: string
+          min_history?: number | null
           region_id?: string
           release_calendar_id?: string | null
           seasonal_adj?: boolean
