@@ -18,12 +18,27 @@ export const Route = createFileRoute("/api/public/ingest/us-growth-fred")({
         const yearsBack = Number(url.searchParams.get("years") ?? "30");
         const pipeline = url.searchParams.get("pipeline") === "1";
         const force = url.searchParams.get("forceKalman") === "1";
+        const scope = url.searchParams.get("scope");
+        const SCOPES: Record<string, string[]> = {
+          weekly: ["initial_jobless_claims"],
+          payrolls: ["nonfarm_payrolls"],
+          monthly: ["industrial_production", "retail_sales", "housing_starts"],
+          // safety + revisions poll everything; the per-indicator hash guard
+          // keeps Fly.io calls cheap when nothing changed.
+          safety: [],
+          revisions: [],
+        };
+        const conceptCodes = scope && SCOPES[scope]?.length ? SCOPES[scope] : undefined;
+        // Payrolls window fires every Friday in cron; gate to the first week of the month.
+        if (scope === "payrolls" && new Date().getUTCDate() > 7) {
+          return Response.json({ ok: true, skipped: "payrolls window: not first week of month" });
+        }
         try {
           if (pipeline) {
-            const out = await runUsGrowthPipeline({ yearsBack, forceKalman: force });
+            const out = await runUsGrowthPipeline({ yearsBack, forceKalman: force, conceptCodes });
             return Response.json({ ok: true, ...out });
           }
-          const results = await runUsGrowthFredIngest({ yearsBack });
+          const results = await runUsGrowthFredIngest({ yearsBack, conceptCodes });
           return Response.json({ ok: true, results });
         } catch (e) {
           return new Response(`Ingest error: ${(e as Error).message}`, { status: 500 });
