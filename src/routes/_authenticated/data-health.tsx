@@ -115,9 +115,6 @@ function DataHealth() {
               <Kv k="Data changed since run" v={growth.model.dataChangedSinceLastRun ? "yes — rerun due" : "no"} bad={growth.model.dataChangedSinceLastRun} />
             </div>
             <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Ingestion · last US Growth FRED run</div>
-            </div>
-            <div>
               <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Recurring scheduler</div>
               {growth.scheduler ? (
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
