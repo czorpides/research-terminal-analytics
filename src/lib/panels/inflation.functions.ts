@@ -20,7 +20,7 @@ import { scoreInflationPressure, type PressureInput } from "@/lib/scoring/inflat
  * a query in fixed-size pages until fewer than `pageSize` rows come back.
  */
 async function paginate<T>(
-  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+  build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
   pageSize = 1000,
 ): Promise<T[]> {
   const out: T[] = [];
@@ -29,7 +29,7 @@ async function paginate<T>(
   for (let i = 0; i < 200; i++) {
     const { data, error } = await Promise.resolve(build(from, from + pageSize - 1));
     if (error) throw error as Error;
-    const rows = (data ?? []) as T[];
+    const rows = ((data ?? []) as unknown) as T[];
     out.push(...rows);
     if (rows.length < pageSize) break;
     from += pageSize;
