@@ -41,7 +41,6 @@ import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ing
 import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
 import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/ingest/altdata'
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
-import { Route as ApiPublicDiagKalmanInflationPingRouteImport } from './routes/api/public/diag/kalman-inflation-ping'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
 const AuthRoute = AuthRouteImport.update({
@@ -218,12 +217,6 @@ const ApiPublicHistoryVerifyNarrativesRoute =
     path: '/api/public/history/verify-narratives',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicDiagKalmanInflationPingRoute =
-  ApiPublicDiagKalmanInflationPingRouteImport.update({
-    id: '/api/public/diag/kalman-inflation-ping',
-    path: '/api/public/diag/kalman-inflation-ping',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicRadarsUndervaluationRefreshRoute =
   ApiPublicRadarsUndervaluationRefreshRouteImport.update({
     id: '/api/public/radars/undervaluation/refresh',
@@ -251,7 +244,6 @@ export interface FileRoutesByFullPath {
   '/macro/inflation': typeof AuthenticatedMacroInflationRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
-  '/api/public/diag/kalman-inflation-ping': typeof ApiPublicDiagKalmanInflationPingRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -286,7 +278,6 @@ export interface FileRoutesByTo {
   '/macro/inflation': typeof AuthenticatedMacroInflationRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
-  '/api/public/diag/kalman-inflation-ping': typeof ApiPublicDiagKalmanInflationPingRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -323,7 +314,6 @@ export interface FileRoutesById {
   '/_authenticated/macro/inflation': typeof AuthenticatedMacroInflationRoute
   '/_authenticated/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
-  '/api/public/diag/kalman-inflation-ping': typeof ApiPublicDiagKalmanInflationPingRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -360,7 +350,6 @@ export interface FileRouteTypes {
     | '/macro/inflation'
     | '/security/$symbol'
     | '/security/'
-    | '/api/public/diag/kalman-inflation-ping'
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
@@ -395,7 +384,6 @@ export interface FileRouteTypes {
     | '/macro/inflation'
     | '/security/$symbol'
     | '/security'
-    | '/api/public/diag/kalman-inflation-ping'
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
@@ -431,7 +419,6 @@ export interface FileRouteTypes {
     | '/_authenticated/macro/inflation'
     | '/_authenticated/security/$symbol'
     | '/_authenticated/security/'
-    | '/api/public/diag/kalman-inflation-ping'
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
@@ -450,7 +437,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  ApiPublicDiagKalmanInflationPingRoute: typeof ApiPublicDiagKalmanInflationPingRoute
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
   ApiPublicIngestAltdataRoute: typeof ApiPublicIngestAltdataRoute
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
@@ -692,13 +678,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHistoryVerifyNarrativesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/diag/kalman-inflation-ping': {
-      id: '/api/public/diag/kalman-inflation-ping'
-      path: '/api/public/diag/kalman-inflation-ping'
-      fullPath: '/api/public/diag/kalman-inflation-ping'
-      preLoaderRoute: typeof ApiPublicDiagKalmanInflationPingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/radars/undervaluation/refresh': {
       id: '/api/public/radars/undervaluation/refresh'
       path: '/api/public/radars/undervaluation/refresh'
@@ -784,7 +763,6 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  ApiPublicDiagKalmanInflationPingRoute: ApiPublicDiagKalmanInflationPingRoute,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
   ApiPublicIngestAltdataRoute: ApiPublicIngestAltdataRoute,
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
