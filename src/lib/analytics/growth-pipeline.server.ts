@@ -60,7 +60,7 @@ export interface KalmanPipelineOptions {
 
 export interface KalmanPipelineResult {
   runId: string | null;
-  status: "success" | "failed" | "skipped" | "reused";
+  status: "success" | "partial" | "failed" | "skipped" | "reused";
   inputHash: string | null;
   priorHash: string | null;
   dataChanged: boolean;
