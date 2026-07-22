@@ -257,6 +257,9 @@ export const getGrowthEngine = createServerFn({ method: "POST" })
       const previous = withValues[withValues.length - 2] ?? null;
       const revision = revisionsByIndicator.get(i.id as string) ?? null;
       const kal = kalmanByIndicator.get(i.id as string) ?? null;
+      const historySource: GrowthIndicatorRow["history_source"] = history.length === 0
+        ? "none"
+        : (rawObservationsFor.has(i.id as string) ? "raw_observations" : "legacy_data_points");
 
       const freshnessDays = latest
         ? Math.max(0, Math.round((Date.now() - new Date(`${latest.date}T00:00:00Z`).getTime()) / 86_400_000))
