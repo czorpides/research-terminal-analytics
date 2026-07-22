@@ -1,39 +1,39 @@
-# Fly.io deployment config — NOT deployed in Stage 1 scaffold.
-# Once ready: `flyctl launch --no-deploy --copy-config`, adjust `app`,
-# `flyctl secrets set ...` for every .env.example entry except
-# SERVICE_VERSION / DEPLOY_ENV, then `flyctl deploy`.
+# fly.toml app configuration file generated for research-terminal-analytics-npzukg on 2026-07-22T13:55:45Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "analytics-service"
-primary_region = "lhr"
+app = 'research-terminal-analytics-npzukg'
+primary_region = 'lhr'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  SERVICE_VERSION = "0.1.0"
-  DEPLOY_ENV = "production"
-  LOG_LEVEL = "INFO"
+  DEPLOY_ENV = 'production'
+  LOG_LEVEL = 'INFO'
+  SERVICE_VERSION = '0.1.0'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
   [http_service.concurrency]
-    type = "requests"
+    type = 'requests'
     hard_limit = 25
     soft_limit = 20
 
-[[http_service.checks]]
-  interval = "30s"
-  timeout = "5s"
-  grace_period = "10s"
-  method = "get"
-  path = "/healthz"
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'get'
+    path = '/healthz'
 
 [[vm]]
-  cpu_kind = "shared"
+  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 512
