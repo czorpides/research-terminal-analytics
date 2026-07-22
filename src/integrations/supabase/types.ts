@@ -344,6 +344,62 @@ export type Database = {
           },
         ]
       }
+      data_quality_scores: {
+        Row: {
+          authority: number | null
+          composite: number | null
+          coverage: number | null
+          created_at: string
+          feature_code: string | null
+          freshness: number | null
+          id: string
+          indicator_id: string | null
+          mapping: number | null
+          meta: Json | null
+          reconciliation: number | null
+          stability: number | null
+          ts: string
+        }
+        Insert: {
+          authority?: number | null
+          composite?: number | null
+          coverage?: number | null
+          created_at?: string
+          feature_code?: string | null
+          freshness?: number | null
+          id?: string
+          indicator_id?: string | null
+          mapping?: number | null
+          meta?: Json | null
+          reconciliation?: number | null
+          stability?: number | null
+          ts: string
+        }
+        Update: {
+          authority?: number | null
+          composite?: number | null
+          coverage?: number | null
+          created_at?: string
+          feature_code?: string | null
+          freshness?: number | null
+          id?: string
+          indicator_id?: string | null
+          mapping?: number | null
+          meta?: Json | null
+          reconciliation?: number | null
+          stability?: number | null
+          ts?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_quality_scores_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       data_sources: {
         Row: {
           active: boolean
@@ -382,6 +438,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      data_vintages: {
+        Row: {
+          id: string
+          indicator_id: string
+          payload_hash: string
+          release_date: string
+          retrieved_at: string
+          source_ref: string | null
+        }
+        Insert: {
+          id?: string
+          indicator_id: string
+          payload_hash: string
+          release_date: string
+          retrieved_at?: string
+          source_ref?: string | null
+        }
+        Update: {
+          id?: string
+          indicator_id?: string
+          payload_hash?: string
+          release_date?: string
+          retrieved_at?: string
+          source_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_vintages_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_registry"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       earnings_events: {
         Row: {
@@ -536,6 +627,39 @@ export type Database = {
           },
         ]
       }
+      event_definitions: {
+        Row: {
+          category: string | null
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          rules: Json | null
+          version: string
+        }
+        Insert: {
+          category?: string | null
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          rules?: Json | null
+          version?: string
+        }
+        Update: {
+          category?: string | null
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          rules?: Json | null
+          version?: string
+        }
+        Relationships: []
+      }
       event_impacts: {
         Row: {
           created_at: string
@@ -573,6 +697,54 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "historical_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_instances: {
+        Row: {
+          created_at: string
+          definition_id: string
+          event_date: string
+          id: string
+          meta: Json | null
+          region_id: string | null
+          subject_id: string | null
+          subject_type: string | null
+        }
+        Insert: {
+          created_at?: string
+          definition_id: string
+          event_date: string
+          id?: string
+          meta?: Json | null
+          region_id?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
+        }
+        Update: {
+          created_at?: string
+          definition_id?: string
+          event_date?: string
+          id?: string
+          meta?: Json | null
+          region_id?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_instances_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "event_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_instances_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "regions"
             referencedColumns: ["id"]
           },
         ]
@@ -624,6 +796,50 @@ export type Database = {
           window_days?: number
         }
         Relationships: []
+      }
+      factor_models: {
+        Row: {
+          approved: boolean
+          created_at: string
+          engine: string
+          explained_variance: Json | null
+          id: string
+          label: string | null
+          loadings: Json | null
+          model_version: string
+          region_id: string
+        }
+        Insert: {
+          approved?: boolean
+          created_at?: string
+          engine: string
+          explained_variance?: Json | null
+          id?: string
+          label?: string | null
+          loadings?: Json | null
+          model_version: string
+          region_id: string
+        }
+        Update: {
+          approved?: boolean
+          created_at?: string
+          engine?: string
+          explained_variance?: Json | null
+          id?: string
+          label?: string | null
+          loadings?: Json | null
+          model_version?: string
+          region_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "factor_models_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "regions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       factors: {
         Row: {
@@ -855,6 +1071,101 @@ export type Database = {
         }
         Relationships: []
       }
+      indicator_registry: {
+        Row: {
+          concept_code: string
+          created_at: string
+          description: string | null
+          direction: string | null
+          engine: string
+          fallback_source_id: string | null
+          frequency: string
+          id: string
+          is_active: boolean
+          license_status: string
+          region_id: string
+          release_calendar_id: string | null
+          seasonal_adj: boolean
+          series_code_native: string
+          source_id: string | null
+          transform_default: string | null
+          unit: string | null
+          updated_at: string
+          vintage_policy: string
+        }
+        Insert: {
+          concept_code: string
+          created_at?: string
+          description?: string | null
+          direction?: string | null
+          engine: string
+          fallback_source_id?: string | null
+          frequency: string
+          id?: string
+          is_active?: boolean
+          license_status?: string
+          region_id: string
+          release_calendar_id?: string | null
+          seasonal_adj?: boolean
+          series_code_native: string
+          source_id?: string | null
+          transform_default?: string | null
+          unit?: string | null
+          updated_at?: string
+          vintage_policy?: string
+        }
+        Update: {
+          concept_code?: string
+          created_at?: string
+          description?: string | null
+          direction?: string | null
+          engine?: string
+          fallback_source_id?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          license_status?: string
+          region_id?: string
+          release_calendar_id?: string | null
+          seasonal_adj?: boolean
+          series_code_native?: string
+          source_id?: string | null
+          transform_default?: string | null
+          unit?: string | null
+          updated_at?: string
+          vintage_policy?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indicator_registry_fallback_source_id_fkey"
+            columns: ["fallback_source_id"]
+            isOneToOne: false
+            referencedRelation: "data_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicator_registry_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "regions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicator_registry_release_calendar_id_fkey"
+            columns: ["release_calendar_id"]
+            isOneToOne: false
+            referencedRelation: "release_calendars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicator_registry_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "data_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       industries: {
         Row: {
           code: string
@@ -927,6 +1238,122 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "data_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      model_outputs: {
+        Row: {
+          created_at: string
+          id: string
+          indicator_id: string | null
+          meta: Json | null
+          model_key: string
+          model_version: string
+          output_type: string
+          run_id: string | null
+          ts: string
+          uncertainty: number | null
+          value: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          indicator_id?: string | null
+          meta?: Json | null
+          model_key: string
+          model_version: string
+          output_type: string
+          run_id?: string | null
+          ts: string
+          uncertainty?: number | null
+          value?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          indicator_id?: string | null
+          meta?: Json | null
+          model_key?: string
+          model_version?: string
+          output_type?: string
+          run_id?: string | null
+          ts?: string
+          uncertainty?: number | null
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_outputs_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_registry"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_outputs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "model_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      model_runs: {
+        Row: {
+          created_at: string
+          diagnostics: Json | null
+          error: string | null
+          finished_at: string | null
+          git_sha: string | null
+          id: string
+          input_hash: string | null
+          model_key: string
+          model_version: string
+          output_summary: Json | null
+          region_id: string | null
+          service_version: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          diagnostics?: Json | null
+          error?: string | null
+          finished_at?: string | null
+          git_sha?: string | null
+          id?: string
+          input_hash?: string | null
+          model_key: string
+          model_version: string
+          output_summary?: Json | null
+          region_id?: string | null
+          service_version?: string | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          diagnostics?: Json | null
+          error?: string | null
+          finished_at?: string | null
+          git_sha?: string | null
+          id?: string
+          input_hash?: string | null
+          model_key?: string
+          model_version?: string
+          output_summary?: Json | null
+          region_id?: string | null
+          service_version?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_runs_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "regions"
             referencedColumns: ["id"]
           },
         ]
@@ -1137,6 +1564,63 @@ export type Database = {
         }
         Relationships: []
       }
+      raw_observations: {
+        Row: {
+          created_at: string
+          id: string
+          indicator_id: string
+          meta: Json | null
+          observation_date: string
+          release_date: string | null
+          retrieved_at: string
+          source_payload_ref: string | null
+          unit_raw: string | null
+          value_raw: number | null
+          vintage_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          indicator_id: string
+          meta?: Json | null
+          observation_date: string
+          release_date?: string | null
+          retrieved_at?: string
+          source_payload_ref?: string | null
+          unit_raw?: string | null
+          value_raw?: number | null
+          vintage_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          indicator_id?: string
+          meta?: Json | null
+          observation_date?: string
+          release_date?: string | null
+          retrieved_at?: string
+          source_payload_ref?: string | null
+          unit_raw?: string | null
+          value_raw?: number | null
+          vintage_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_observations_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_registry"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "raw_observations_vintage_id_fkey"
+            columns: ["vintage_id"]
+            isOneToOne: false
+            referencedRelation: "data_vintages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       regime_classifications: {
         Row: {
           as_of: string
@@ -1164,6 +1648,107 @@ export type Database = {
           inputs?: Json
           label?: string
           regime_type?: string
+        }
+        Relationships: []
+      }
+      regime_states: {
+        Row: {
+          created_at: string
+          id: string
+          model_version: string
+          probabilities: Json | null
+          region_id: string
+          state_index: number | null
+          state_label: string | null
+          status: string
+          ts: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          model_version: string
+          probabilities?: Json | null
+          region_id: string
+          state_index?: number | null
+          state_label?: string | null
+          status?: string
+          ts: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          model_version?: string
+          probabilities?: Json | null
+          region_id?: string
+          state_index?: number | null
+          state_label?: string | null
+          status?: string
+          ts?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regime_states_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "regions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      regions: {
+        Row: {
+          code: string
+          created_at: string
+          currency_code: string | null
+          id: string
+          name: string
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          currency_code?: string | null
+          id?: string
+          name: string
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          currency_code?: string | null
+          id?: string
+          name?: string
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      release_calendars: {
+        Row: {
+          cadence: string
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          typical_lag_days: number | null
+        }
+        Insert: {
+          cadence: string
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          typical_lag_days?: number | null
+        }
+        Update: {
+          cadence?: string
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          typical_lag_days?: number | null
         }
         Relationships: []
       }
@@ -1200,6 +1785,45 @@ export type Database = {
           tags?: string[]
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      score_ledger_entries: {
+        Row: {
+          contribution: number | null
+          created_at: string
+          direction: string
+          evidence_ref: Json | null
+          feature_code: string
+          id: string
+          model_version: string
+          subject_id: string
+          subject_type: string
+          ts: string
+        }
+        Insert: {
+          contribution?: number | null
+          created_at?: string
+          direction: string
+          evidence_ref?: Json | null
+          feature_code: string
+          id?: string
+          model_version: string
+          subject_id: string
+          subject_type: string
+          ts: string
+        }
+        Update: {
+          contribution?: number | null
+          created_at?: string
+          direction?: string
+          evidence_ref?: Json | null
+          feature_code?: string
+          id?: string
+          model_version?: string
+          subject_id?: string
+          subject_type?: string
+          ts?: string
         }
         Relationships: []
       }
@@ -1431,6 +2055,47 @@ export type Database = {
             columns: ["thesis_id"]
             isOneToOne: false
             referencedRelation: "theses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transformed_signals: {
+        Row: {
+          computed_at: string
+          id: string
+          indicator_id: string
+          model_version: string
+          params: Json | null
+          transform_code: string
+          ts: string
+          value: number | null
+        }
+        Insert: {
+          computed_at?: string
+          id?: string
+          indicator_id: string
+          model_version: string
+          params?: Json | null
+          transform_code: string
+          ts: string
+          value?: number | null
+        }
+        Update: {
+          computed_at?: string
+          id?: string
+          indicator_id?: string
+          model_version?: string
+          params?: Json | null
+          transform_code?: string
+          ts?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transformed_signals_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_registry"
             referencedColumns: ["id"]
           },
         ]
@@ -1680,7 +2345,64 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_current_canonical_observations: {
+        Row: {
+          id: string | null
+          indicator_id: string | null
+          observation_date: string | null
+          release_date: string | null
+          retrieved_at: string | null
+          unit_raw: string | null
+          value_raw: number | null
+          vintage_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_observations_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_registry"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "raw_observations_vintage_id_fkey"
+            columns: ["vintage_id"]
+            isOneToOne: false
+            referencedRelation: "data_vintages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_current_model_outputs: {
+        Row: {
+          id: string | null
+          indicator_id: string | null
+          meta: Json | null
+          model_key: string | null
+          model_version: string | null
+          output_type: string | null
+          run_id: string | null
+          ts: string | null
+          uncertainty: number | null
+          value: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_outputs_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_registry"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_outputs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "model_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       [_ in never]: never
