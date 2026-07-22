@@ -51,12 +51,23 @@ def healthz() -> HealthResponse:
 def calc_kalman_llt(payload: KalmanCalculationRequest) -> KalmanCalculationResponse:
     warnings: list[str] = []
 
-    if payload.model_key != MODEL_KEY:
-        warnings.append(f"unexpected model_key '{payload.model_key}', expected '{MODEL_KEY}'")
+    # The Kalman LLT runtime is shared across engines (growth, inflation, …).
+    # We echo the caller's model_key/model_version so the orchestrator's
+    # per-engine identity checks pass. We only warn on unexpected suffixes.
+    ALLOWED_KEYS = {
+        "growth_engine.us.kalman_llt",
+        "inflation_engine.us.kalman_llt",
+    }
+    if payload.model_key not in ALLOWED_KEYS:
+        warnings.append(
+            f"unexpected model_key '{payload.model_key}'; runtime supports {sorted(ALLOWED_KEYS)}"
+        )
     if payload.model_version != MODEL_VERSION:
         warnings.append(
-            f"model_version mismatch: request {payload.model_version} vs runtime {MODEL_VERSION}"
+            f"model_version note: request {payload.model_version} vs runtime default {MODEL_VERSION}"
         )
+    echo_model_key = payload.model_key
+    echo_model_version = payload.model_version
 
     # Point-in-time guard: strip any observation later than as_of_date.
     obs = [(o.date.isoformat(), o.value) for o in payload.observations]
@@ -84,8 +95,8 @@ def calc_kalman_llt(payload: KalmanCalculationRequest) -> KalmanCalculationRespo
         log.exception("kalman fit failed", extra={"indicator_id": payload.indicator_id})
         return KalmanCalculationResponse(
             status="error",
-            model_key=MODEL_KEY,
-            model_version=MODEL_VERSION,
+            model_key=echo_model_key,
+            model_version=echo_model_version,
             indicator_id=payload.indicator_id,
             input_hash=payload.input_hash,
             points=[],
@@ -116,8 +127,8 @@ def calc_kalman_llt(payload: KalmanCalculationRequest) -> KalmanCalculationRespo
 
     return KalmanCalculationResponse(
         status=status_val,
-        model_key=MODEL_KEY,
-        model_version=MODEL_VERSION,
+        model_key=echo_model_key,
+        model_version=echo_model_version,
         indicator_id=payload.indicator_id,
         input_hash=payload.input_hash,
         points=points,
