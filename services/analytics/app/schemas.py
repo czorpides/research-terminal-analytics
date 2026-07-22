@@ -17,6 +17,7 @@ class JobTriggerRequest(BaseModel):
 
     as_of_date: date | None = None
     force: bool = False  # if True, ignore idempotency cache and run again
+    mode: Literal["live", "historical"] = "live"
 
 
 class JobTriggerResponse(BaseModel):

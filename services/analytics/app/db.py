@@ -56,7 +56,7 @@ def list_active_indicators(engine: str, region_code: str) -> list[dict[str, Any]
         r = c.get(
             "/indicator_registry",
             params={
-                "select": "id,concept_code,series_code_native,frequency,unit",
+                "select": "id,concept_code,series_code_native,frequency,unit,direction,seasonal_adj,min_history,allowed_transformations",
                 "engine": f"eq.{engine}",
                 "region_id": f"eq.{region_id}",
                 "is_active": "eq.true",
