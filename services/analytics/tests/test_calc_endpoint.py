@@ -14,6 +14,8 @@ from app.config import Settings, get_settings
 from app.main import app
 from app.models.kalman import MODEL_KEY, MODEL_VERSION
 
+INFLATION_MODEL_KEY = "inflation_engine.us.kalman_llt"
+
 TOKEN = "test-token-please-ignore"
 HASH = "deadbeef" * 8
 
@@ -151,6 +153,112 @@ def test_response_echoes_input_hash_and_indicator_id():
     assert body["indicator_id"] == req["indicator_id"]
     assert body["model_key"] == MODEL_KEY
     assert body["model_version"] == MODEL_VERSION
+
+
+# --- strict model_key / model_version allow-list -----------------------------
+
+def test_valid_growth_engine_request_is_accepted_and_echoed():
+    req = _valid_request(model_key=MODEL_KEY, model_version=MODEL_VERSION)
+    r = _client().post(
+        "/calc/kalman-llt", json=req,
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["model_key"] == MODEL_KEY
+    assert body["model_version"] == MODEL_VERSION
+    assert body["indicator_id"] == req["indicator_id"]
+    assert body["input_hash"] == req["input_hash"]
+
+
+def test_valid_inflation_engine_request_is_accepted_and_echoed():
+    req = _valid_request(
+        model_key=INFLATION_MODEL_KEY,
+        model_version=MODEL_VERSION,
+        indicator_id="22222222-2222-2222-2222-222222222222",
+    )
+    r = _client().post(
+        "/calc/kalman-llt", json=req,
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    # Must NOT overwrite the inflation key with the growth key.
+    assert body["model_key"] == INFLATION_MODEL_KEY
+    assert body["model_version"] == MODEL_VERSION
+    assert body["indicator_id"] == req["indicator_id"]
+    assert body["input_hash"] == req["input_hash"]
+
+
+def test_unknown_model_key_is_rejected():
+    r = _client().post(
+        "/calc/kalman-llt",
+        json=_valid_request(model_key="liquidity_engine.us.kalman_llt"),
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 422
+    assert "unknown model_key" in r.json()["detail"]
+
+
+def test_unsupported_model_version_is_rejected():
+    r = _client().post(
+        "/calc/kalman-llt",
+        json=_valid_request(model_version="kalman.llt.v9.9"),
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 422
+    assert "unsupported model_version" in r.json()["detail"]
+
+
+def test_invalid_key_version_combination_is_rejected():
+    # Both key and version are individually valid strings but the combination
+    # is not on the approved list.
+    r = _client().post(
+        "/calc/kalman-llt",
+        json=_valid_request(
+            model_key=INFLATION_MODEL_KEY,
+            model_version="kalman.llt.v0.1",
+        ),
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 422
+    body = r.json()
+    assert "unsupported model_version" in body["detail"]
+    assert INFLATION_MODEL_KEY in body["detail"]
+
+
+# --- Atlanta Fed wage series (FRBATLWGTUMHWGO) end-to-end shape --------------
+
+def test_frbatlwgtumhwgo_series_processes_successfully():
+    """The corrected Atlanta Fed Wage Growth Tracker series id must ingest
+    and validate through the stateless calc endpoint under the inflation
+    engine model key."""
+    # Synthetic monthly YoY-% observations (60 months, ~24 min history).
+    obs = [
+        {"date": (date.fromisoformat("2020-01-01") + timedelta(days=30 * i)).isoformat(),
+         "value": 3.0 + 0.02 * i}
+        for i in range(60)
+    ]
+    req = _valid_request(
+        model_key=INFLATION_MODEL_KEY,
+        model_version=MODEL_VERSION,
+        indicator_id="33333333-3333-3333-3333-333333333333",
+        indicator_unit="yoy_pct",
+        observations=obs,
+        model_config_params={"min_history": 24},
+    )
+    r = _client().post(
+        "/calc/kalman-llt", json=req,
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["model_key"] == INFLATION_MODEL_KEY
+    assert body["model_version"] == MODEL_VERSION
+    assert body["input_hash"] == req["input_hash"]
+    assert body["indicator_id"] == req["indicator_id"]
+    assert len(body["points"]) == len(obs)
 
 
 # --- no database credentials required ---
