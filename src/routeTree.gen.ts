@@ -31,6 +31,7 @@ import { Route as AuthenticatedAltDataSplatRouteImport } from './routes/_authent
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
+import { Route as ApiPublicIngestUsGrowthFredRouteImport } from './routes/api/public/ingest/us-growth-fred'
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
 import { Route as ApiPublicIngestMacroNativeRouteImport } from './routes/api/public/ingest/macro-native'
 import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
@@ -157,6 +158,12 @@ const ApiPublicProvidersPingRoute = ApiPublicProvidersPingRouteImport.update({
   path: '/api/public/providers/ping',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIngestUsGrowthFredRoute =
+  ApiPublicIngestUsGrowthFredRouteImport.update({
+    id: '/api/public/ingest/us-growth-fred',
+    path: '/api/public/ingest/us-growth-fred',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
   id: '/api/public/ingest/stooq',
   path: '/api/public/ingest/stooq',
@@ -229,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
@@ -260,6 +268,7 @@ export interface FileRoutesByTo {
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
@@ -293,6 +302,7 @@ export interface FileRoutesById {
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/providers/ping': typeof ApiPublicProvidersPingRoute
   '/api/public/scores/run': typeof ApiPublicScoresRunRoute
   '/api/public/verify/run': typeof ApiPublicVerifyRunRoute
@@ -326,6 +336,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
+    | '/api/public/ingest/us-growth-fred'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
@@ -357,6 +368,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
+    | '/api/public/ingest/us-growth-fred'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
@@ -389,6 +401,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
+    | '/api/public/ingest/us-growth-fred'
     | '/api/public/providers/ping'
     | '/api/public/scores/run'
     | '/api/public/verify/run'
@@ -405,6 +418,7 @@ export interface RootRouteChildren {
   ApiPublicIngestFundamentalsRoute: typeof ApiPublicIngestFundamentalsRoute
   ApiPublicIngestMacroNativeRoute: typeof ApiPublicIngestMacroNativeRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
+  ApiPublicIngestUsGrowthFredRoute: typeof ApiPublicIngestUsGrowthFredRoute
   ApiPublicProvidersPingRoute: typeof ApiPublicProvidersPingRoute
   ApiPublicScoresRunRoute: typeof ApiPublicScoresRunRoute
   ApiPublicVerifyRunRoute: typeof ApiPublicVerifyRunRoute
@@ -567,6 +581,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicProvidersPingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/us-growth-fred': {
+      id: '/api/public/ingest/us-growth-fred'
+      path: '/api/public/ingest/us-growth-fred'
+      fullPath: '/api/public/ingest/us-growth-fred'
+      preLoaderRoute: typeof ApiPublicIngestUsGrowthFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/stooq': {
       id: '/api/public/ingest/stooq'
       path: '/api/public/ingest/stooq'
@@ -706,6 +727,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicIngestFundamentalsRoute: ApiPublicIngestFundamentalsRoute,
   ApiPublicIngestMacroNativeRoute: ApiPublicIngestMacroNativeRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
+  ApiPublicIngestUsGrowthFredRoute: ApiPublicIngestUsGrowthFredRoute,
   ApiPublicProvidersPingRoute: ApiPublicProvidersPingRoute,
   ApiPublicScoresRunRoute: ApiPublicScoresRunRoute,
   ApiPublicVerifyRunRoute: ApiPublicVerifyRunRoute,

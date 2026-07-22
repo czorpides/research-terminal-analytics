@@ -117,6 +117,7 @@ async function ingestOne(
     let vintageId: string | null = null;
 
     const nowIso = new Date().toISOString();
+    const payloadHash = `fred:${ind.series_code_native}:${nowIso}`;
     // Reuse a single vintage per (indicator, run) so revision rows share it.
     const { data: vintage } = await supabaseAdmin
       .from("data_vintages")
@@ -124,6 +125,7 @@ async function ingestOne(
         indicator_id: ind.id,
         release_date: new Date().toISOString().slice(0, 10),
         source_ref: `fred:${ind.series_code_native}`,
+        payload_hash: payloadHash,
         retrieved_at: nowIso,
       })
       .select("id").single();
