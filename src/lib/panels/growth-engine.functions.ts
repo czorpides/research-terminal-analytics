@@ -51,11 +51,13 @@ export const getGrowthEngine = createServerFn({ method: "POST" })
       .eq("region_id", region.id).eq("engine", "growth").eq("is_active", true)
       .order("concept_code");
 
-    const sourceIds = Array.from(new Set((indicators ?? []).map((i) => i.source_id).filter(Boolean))) as string[];
+    const sourceIds = Array.from(
+      new Set((indicators ?? []).map((i) => i.source_id).filter((x): x is string => typeof x === "string"))
+    );
     const { data: sources } = sourceIds.length
       ? await supabaseAdmin.from("data_sources").select("id, name").in("id", sourceIds)
       : { data: [] as { id: string; name: string }[] };
-    const sourceName = new Map((sources ?? []).map((s) => [s.id, s.name]));
+    const sourceName = new Map((sources ?? []).map((s) => [s.id as string, s.name as string]));
 
     const ids = (indicators ?? []).map((i) => i.id);
     const latestByIndicator = new Map<string, { value: number | null; date: string | null; count: number }>();
@@ -77,30 +79,37 @@ export const getGrowthEngine = createServerFn({ method: "POST" })
     // legacy data_points table — surface those latest values until the
     // raw_observations backfill lands.
     if (data.region === "US" && ids.length) {
+      // Legacy fallback: FRED already writes to public.data_points keyed by
+      // (subject_type='indicator', metric_code=<FRED series code>). Surface
+      // those latest values until the raw_observations backfill lands.
       const codes = (indicators ?? []).map((i) => i.series_code_native);
       try {
         const { data: legacy } = await supabaseAdmin
           .from("data_points")
-          .select("series_code, ts, value")
-          .in("series_code", codes)
-          .order("ts", { ascending: false });
+          .select("metric_code, as_of, value_num")
+          .in("metric_code", codes)
+          .order("as_of", { ascending: false });
         const bySeries = new Map<string, { value: number; date: string; count: number }>();
         for (const row of legacy ?? []) {
-          const entry = bySeries.get(row.series_code as string) ?? { value: 0, date: "", count: 0 };
-          if (entry.count === 0) { entry.value = row.value as number; entry.date = (row.ts as string).slice(0, 10); }
+          const code = row.metric_code as string;
+          const entry = bySeries.get(code) ?? { value: 0, date: "", count: 0 };
+          if (entry.count === 0 && row.value_num !== null) {
+            entry.value = Number(row.value_num);
+            entry.date = (row.as_of as string).slice(0, 10);
+          }
           entry.count += 1;
-          bySeries.set(row.series_code as string, entry);
+          bySeries.set(code, entry);
         }
         for (const ind of indicators ?? []) {
           const cur = latestByIndicator.get(ind.id);
           if (cur && cur.value !== null) continue;
-          const legacyEntry = bySeries.get(ind.series_code_native);
-          if (legacyEntry) {
+          const legacyEntry = bySeries.get(ind.series_code_native as string);
+          if (legacyEntry && legacyEntry.date) {
             latestByIndicator.set(ind.id, { value: legacyEntry.value, date: legacyEntry.date, count: legacyEntry.count });
           }
         }
       } catch {
-        // no-op — legacy table shape may differ; we degrade to empty state.
+        // no-op — degrade to empty state.
       }
     }
 
