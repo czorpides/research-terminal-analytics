@@ -97,8 +97,8 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
 
   const runId = await insertModelRun({ inputHash, indicators: perIndicator, mode, asOfDate });
   const errors: string[] = [];
-  const outputRows: Array<Record<string, unknown>> = [];
-  const indicatorSummaries: Array<Record<string, unknown>> = [];
+  const outputRows: any[] = [];
+  const indicatorSummaries: any[] = [];
   let skipped = 0;
 
   const { calculateKalmanLlt } = await import("./client.server");
@@ -188,7 +188,7 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
     // Only persist outputs if EVERY indicator succeeded validation.
     for (let i = 0; i < outputRows.length; i += 500) {
       const chunk = outputRows.slice(i, i + 500);
-      const { error } = await supabaseAdmin.from("model_outputs").upsert(chunk, {
+      const { error } = await supabaseAdmin.from("model_outputs").upsert(chunk as any, {
         onConflict: "model_key,model_version,indicator_id,ts,output_type",
       });
       if (error) {
@@ -202,13 +202,13 @@ export async function runUsGrowthKalmanPipeline(opts: KalmanPipelineOptions = {}
   await supabaseAdmin.from("model_runs").update({
     status: finalStatus,
     finished_at: new Date().toISOString(),
-    output_summary: {
+    output_summary: ({
       engine: "growth", region: "US", calculation_mode: mode, as_of_date: asOfDate,
       indicators_processed: indicatorSummaries.filter((s) => s.status === "ok").length,
       indicators_skipped: skipped,
       output_rows: finalStatus === "success" ? outputRows.length : 0,
       per_indicator: indicatorSummaries,
-    },
+    } as any),
     error: errors.length ? errors.join(" | ").slice(0, 1000) : null,
   }).eq("id", runId);
 
