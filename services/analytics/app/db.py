@@ -71,24 +71,40 @@ def fetch_observations(indicator_ids: Iterable[str], as_of: str | None = None) -
     """Read `raw_observations` for the indicators, respecting a point-in-time cutoff.
 
     `as_of` is an ISO date; when set, only observations with `observation_date <= as_of`
-    and `known_at <= as_of` are returned (vintage-safe).
+    and `retrieved_at <= as_of` are returned (vintage-safe: earlier vintages of
+    the same observation_date remain readable, later revisions are hidden).
     """
     ids = list(indicator_ids)
     if not ids:
         return []
     params: dict[str, Any] = {
-        "select": "indicator_id,observation_date,value,vintage_date,known_at",
+        "select": "indicator_id,observation_date,value_raw,retrieved_at,vintage_id",
         "indicator_id": f"in.({','.join(ids)})",
-        "order": "indicator_id.asc,observation_date.asc",
+        "order": "indicator_id.asc,observation_date.asc,retrieved_at.asc",
         "limit": "50000",
     }
     if as_of:
         params["observation_date"] = f"lte.{as_of}"
-        params["known_at"] = f"lte.{as_of}T23:59:59Z"
+        params["retrieved_at"] = f"lte.{as_of}T23:59:59Z"
     with _client() as c:
         r = c.get("/raw_observations", params=params)
         _raise(r)
-        return r.json()
+        rows = r.json()
+        # Collapse to the latest vintage per (indicator, observation_date) that
+        # satisfies the as_of cutoff. Rows are already sorted retrieved_at ASC.
+        latest: dict[tuple[str, str], dict[str, Any]] = {}
+        for row in rows:
+            key = (row["indicator_id"], row["observation_date"])
+            latest[key] = row
+        out: list[dict[str, Any]] = []
+        for row in latest.values():
+            out.append({
+                "indicator_id": row["indicator_id"],
+                "observation_date": row["observation_date"],
+                "value": row["value_raw"],
+            })
+        out.sort(key=lambda r: (r["indicator_id"], r["observation_date"]))
+        return out
 
 
 # --- model_runs / model_outputs writes ---
