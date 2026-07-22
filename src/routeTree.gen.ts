@@ -39,6 +39,7 @@ import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ing
 import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
 import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/ingest/altdata'
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
+import { Route as ApiPublicAnalyticsSelftestRouteImport } from './routes/api/public/analytics/selftest'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
 const AuthRoute = AuthRouteImport.update({
@@ -203,6 +204,12 @@ const ApiPublicHistoryVerifyNarrativesRoute =
     path: '/api/public/history/verify-narratives',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicAnalyticsSelftestRoute =
+  ApiPublicAnalyticsSelftestRouteImport.update({
+    id: '/api/public/analytics/selftest',
+    path: '/api/public/analytics/selftest',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicRadarsUndervaluationRefreshRoute =
   ApiPublicRadarsUndervaluationRefreshRouteImport.update({
     id: '/api/public/radars/undervaluation/refresh',
@@ -229,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
+  '/api/public/analytics/selftest': typeof ApiPublicAnalyticsSelftestRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -261,6 +269,7 @@ export interface FileRoutesByTo {
   '/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
+  '/api/public/analytics/selftest': typeof ApiPublicAnalyticsSelftestRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -295,6 +304,7 @@ export interface FileRoutesById {
   '/_authenticated/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/_authenticated/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
+  '/api/public/analytics/selftest': typeof ApiPublicAnalyticsSelftestRoute
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
@@ -329,6 +339,7 @@ export interface FileRouteTypes {
     | '/macro/growth'
     | '/security/$symbol'
     | '/security/'
+    | '/api/public/analytics/selftest'
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
@@ -361,6 +372,7 @@ export interface FileRouteTypes {
     | '/macro/growth'
     | '/security/$symbol'
     | '/security'
+    | '/api/public/analytics/selftest'
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
@@ -394,6 +406,7 @@ export interface FileRouteTypes {
     | '/_authenticated/macro/growth'
     | '/_authenticated/security/$symbol'
     | '/_authenticated/security/'
+    | '/api/public/analytics/selftest'
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
@@ -411,6 +424,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicAnalyticsSelftestRoute: typeof ApiPublicAnalyticsSelftestRoute
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
   ApiPublicIngestAltdataRoute: typeof ApiPublicIngestAltdataRoute
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
@@ -637,6 +651,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHistoryVerifyNarrativesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/analytics/selftest': {
+      id: '/api/public/analytics/selftest'
+      path: '/api/public/analytics/selftest'
+      fullPath: '/api/public/analytics/selftest'
+      preLoaderRoute: typeof ApiPublicAnalyticsSelftestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/radars/undervaluation/refresh': {
       id: '/api/public/radars/undervaluation/refresh'
       path: '/api/public/radars/undervaluation/refresh'
@@ -720,6 +741,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicAnalyticsSelftestRoute: ApiPublicAnalyticsSelftestRoute,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
   ApiPublicIngestAltdataRoute: ApiPublicIngestAltdataRoute,
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
@@ -737,13 +759,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
