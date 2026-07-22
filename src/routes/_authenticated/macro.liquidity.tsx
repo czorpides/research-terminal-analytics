@@ -35,7 +35,9 @@ function LiquidityEngine() {
   const { data, error, isLoading } = useQuery({
     queryKey: ["liquidity-engine"],
     queryFn: () => load(),
-    refetchOnWindowFocus: false,
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   return (
@@ -43,7 +45,7 @@ function LiquidityEngine() {
       <SectionHeader
         code="MA · Stage 3 · US Liquidity"
         title="How restrictive are US financial conditions?"
-        purpose="Rates, curve shape, credit spreads, stress and liquidity aggregates, standardised against their own histories and combined in one inspectable score."
+        purpose="Rates, curve shape, credit spreads, stress and liquidity, each compared with its own history and combined into one inspectable score."
       />
 
       {isLoading && <PageState>Loading Liquidity Engine…</PageState>}

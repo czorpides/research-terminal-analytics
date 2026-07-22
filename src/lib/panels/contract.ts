@@ -37,6 +37,8 @@ export interface Metric {
   value: string;
   delta?: string;
   tone?: "positive" | "negative" | "neutral" | "warning";
+  /** Plain-English hover help for the label/value. */
+  explanation?: string;
   /** Optional inline sparkline for this metric. */
   trend?: TrendSeries;
 }
@@ -164,4 +166,11 @@ export interface PanelData {
     penalties: ConfidencePenalty[];
   };
   calculation?: CalculationTrace;
+  /** Optional pre-built narrative. The UI always supplies an evidence-linked fallback. */
+  narrative?: {
+    summary: string;
+    detail?: string;
+    watch?: string[];
+    asOf?: string;
+  };
 }

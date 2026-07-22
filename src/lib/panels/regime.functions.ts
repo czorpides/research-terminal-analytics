@@ -129,7 +129,7 @@ export const getRegimeMonitor = createServerFn({ method: "GET" }).handler(
         version: (state?.model_version as string | null) ?? null,
         asOf: (state?.ts as string | null) ?? null,
       },
-      note: "The rules-based regime is live and fully inspectable. HMM probabilities remain shadow evidence until transition stability and out-of-sample labels are formally accepted.",
+      note: "The transparent rules-based regime is live. The experimental probability model remains a comparison only until its behaviour is stable on data it was not trained on.",
     };
   },
 );

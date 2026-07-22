@@ -65,4 +65,4 @@ export const WIKIPEDIA_TITLES: Record<string, string> = {
   XOM: "ExxonMobil",
 };
 
-export const WIKIPEDIA_ATTENTION_VERSION = "altdata.wiki_attention.v0.1";
+export const WIKIPEDIA_ATTENTION_VERSION = "altdata.wiki_attention.robust.v0.2";

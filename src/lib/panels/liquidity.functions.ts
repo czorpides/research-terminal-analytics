@@ -135,7 +135,7 @@ export const getLiquidityEngine = createServerFn({ method: "GET" }).handler(
     return {
       score,
       indicators,
-      note: "Stage 3 uses a transparent, direction-adjusted z-score composite. It is a financial-conditions monitor, not a credit forecast or a validated PCA factor.",
+      note: "The live score combines each indicator's distance from its own history, reversing signs where a higher number means easier conditions. It monitors financial conditions; it is not a credit forecast.",
     };
   },
 );

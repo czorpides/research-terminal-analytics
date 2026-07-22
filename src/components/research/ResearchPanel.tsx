@@ -30,19 +30,11 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SOURCE_TIER_META, type SourceTier } from "@/lib/reliability/tiers";
 import { TrendChart } from "./TrendChart";
+import { InfoTip, PanelNarrative } from "./ResearchContext";
 import type {
   PanelData,
   Evidence,
@@ -54,18 +46,24 @@ import type {
 
 function ToneClass(tone?: Metric["tone"]) {
   switch (tone) {
-    case "positive": return "text-[var(--positive)]";
-    case "negative": return "text-[var(--negative)]";
-    case "warning":  return "text-[var(--warning)]";
-    default: return "text-foreground";
+    case "positive":
+      return "text-[var(--positive)]";
+    case "negative":
+      return "text-[var(--negative)]";
+    case "warning":
+      return "text-[var(--warning)]";
+    default:
+      return "text-foreground";
   }
 }
 
 function FreshnessDot({ state }: { state: Evidence["freshness"] }) {
   const color =
-    state === "fresh" ? "bg-[var(--positive)]" :
-    state === "warn"  ? "bg-[var(--warning)]"  :
-                        "bg-[var(--negative)]";
+    state === "fresh"
+      ? "bg-[var(--positive)]"
+      : state === "warn"
+        ? "bg-[var(--warning)]"
+        : "bg-[var(--negative)]";
   return <span className={cn("inline-block h-1.5 w-1.5 rounded-full", color)} />;
 }
 
@@ -92,13 +90,19 @@ function TierBadge({ tier }: { tier: SourceTier }) {
 
 function ConfidenceMeter({ value, penalties }: PanelData["confidence"]) {
   const icon =
-    value >= 75 ? <ShieldCheck className="h-3.5 w-3.5" /> :
-    value >= 40 ? <ShieldQuestion className="h-3.5 w-3.5" /> :
-                  <ShieldAlert className="h-3.5 w-3.5" />;
+    value >= 75 ? (
+      <ShieldCheck className="h-3.5 w-3.5" />
+    ) : value >= 40 ? (
+      <ShieldQuestion className="h-3.5 w-3.5" />
+    ) : (
+      <ShieldAlert className="h-3.5 w-3.5" />
+    );
   const tone =
-    value >= 75 ? "text-[var(--positive)]" :
-    value >= 40 ? "text-[var(--warning)]" :
-                  "text-[var(--negative)]";
+    value >= 75
+      ? "text-[var(--positive)]"
+      : value >= 40
+        ? "text-[var(--warning)]"
+        : "text-[var(--negative)]";
   return (
     <TooltipProvider delayDuration={100}>
       <Tooltip>
@@ -114,7 +118,9 @@ function ConfidenceMeter({ value, penalties }: PanelData["confidence"]) {
             Confidence breakdown
           </div>
           {penalties.length === 0 ? (
-            <div className="text-xs">No deductions — all inputs are fresh, agreeing and Tier 1.</div>
+            <div className="text-xs">
+              No deductions — all inputs are fresh, agreeing and Tier 1.
+            </div>
           ) : (
             <ul className="space-y-1 text-xs">
               {penalties.map((p) => (
@@ -139,7 +145,12 @@ function EvidenceRow({ e }: { e: Evidence }) {
           <FreshnessDot state={e.freshness} />
           <span className="truncate text-xs">{e.label}</span>
           {e.url && (
-            <a href={e.url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
+            <a
+              href={e.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-muted-foreground hover:text-foreground"
+            >
               <ArrowUpRight className="h-3 w-3" />
             </a>
           )}
@@ -152,7 +163,12 @@ function EvidenceRow({ e }: { e: Evidence }) {
           <span className="font-mono">{new Date(e.asOf).toLocaleString()}</span>
         </div>
       </div>
-      <span className={cn("mt-1 shrink-0 text-[10px] font-mono uppercase", e.agrees ? "text-[var(--positive)]" : "text-[var(--negative)]")}>
+      <span
+        className={cn(
+          "mt-1 shrink-0 text-[10px] font-mono uppercase",
+          e.agrees ? "text-[var(--positive)]" : "text-[var(--negative)]",
+        )}
+      >
         {e.agrees ? "agrees" : "disagrees"}
       </span>
     </div>
@@ -180,25 +196,27 @@ function PointList({ points, kind }: { points: Point[]; kind: "positive" | "dedu
   );
 }
 
-const VERIFIER_META: Record<
-  VerifyCheck["verifier"],
-  { label: string; icon: typeof Cpu }
-> = {
-  algo:   { label: "Algorithm",  icon: Cpu },
-  api:    { label: "External API", icon: Cloud },
-  ai:     { label: "AI check",   icon: Sparkles },
-  manual: { label: "Manual",     icon: User },
+const VERIFIER_META: Record<VerifyCheck["verifier"], { label: string; icon: typeof Cpu }> = {
+  algo: { label: "Algorithm", icon: Cpu },
+  api: { label: "External API", icon: Cloud },
+  ai: { label: "AI check", icon: Sparkles },
+  manual: { label: "Manual", icon: User },
 };
 
 function StatusIcon({ status }: { status: VerifyCheck["status"] }) {
   const cls = "mt-0.5 h-3.5 w-3.5 shrink-0";
   switch (status) {
-    case "pass":        return <CheckCircle2 className={cn(cls, "text-[var(--positive)]")} />;
-    case "fail":        return <XCircle className={cn(cls, "text-[var(--negative)]")} />;
-    case "stale":       return <AlertTriangle className={cn(cls, "text-[var(--warning)]")} />;
-    case "unavailable": return <CircleDashed className={cn(cls, "text-muted-foreground")} />;
+    case "pass":
+      return <CheckCircle2 className={cn(cls, "text-[var(--positive)]")} />;
+    case "fail":
+      return <XCircle className={cn(cls, "text-[var(--negative)]")} />;
+    case "stale":
+      return <AlertTriangle className={cn(cls, "text-[var(--warning)]")} />;
+    case "unavailable":
+      return <CircleDashed className={cn(cls, "text-muted-foreground")} />;
     case "pending":
-    default:            return <CircleDashed className={cn(cls, "text-muted-foreground")} />;
+    default:
+      return <CircleDashed className={cn(cls, "text-muted-foreground")} />;
   }
 }
 
@@ -222,7 +240,9 @@ function VerifyRow({ v, dense = false }: { v: VerifyCheck; dense?: boolean }) {
           </li>
         </TooltipTrigger>
         <TooltipContent side="left" className="max-w-xs">
-          <div className="text-xs font-medium">{meta.label} · {v.status}</div>
+          <div className="text-xs font-medium">
+            {meta.label} · {v.status}
+          </div>
           {v.detail && <div className="mt-0.5 text-xs text-muted-foreground">{v.detail}</div>}
           {v.checkedAt && (
             <div className="mt-0.5 text-[10px] font-mono text-muted-foreground">
@@ -243,7 +263,9 @@ export function ResearchPanel({ data }: { data: PanelData }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold leading-tight tracking-tight text-foreground">{data.title}</h3>
+          <h3 className="text-sm font-semibold leading-tight tracking-tight text-foreground">
+            {data.title}
+          </h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">{data.purpose}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -265,26 +287,38 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                 <Section title="Metrics">
                   <MetricGrid metrics={data.metrics} large />
                 </Section>
+                <PanelNarrative data={data} />
                 {data.chart && (
                   <Section title="Trend">
                     <div className="rounded-md border border-border/60 bg-background/40 p-2">
-                      <TrendChart series={{ ...data.chart, overrideKey: data.chart.overrideKey ?? data.id }} height={220} />
+                      <TrendChart
+                        series={{ ...data.chart, overrideKey: data.chart.overrideKey ?? data.id }}
+                        height={220}
+                      />
                     </div>
                   </Section>
                 )}
-                <Section title="What changed"><p className="text-sm">{data.whatChanged}</p></Section>
+                <Section title="What changed">
+                  <p className="text-sm">{data.whatChanged}</p>
+                </Section>
                 <Section title="Why it matters">
                   <p className="text-sm">{data.whyItMatters}</p>
                   {data.whyBullets && data.whyBullets.length > 0 && (
                     <ul className="mt-2 space-y-1 text-sm list-disc pl-4 marker:text-[var(--primary)]">
-                      {data.whyBullets.map((b, i) => <li key={i} className="leading-snug">{b}</li>)}
+                      {data.whyBullets.map((b, i) => (
+                        <li key={i} className="leading-snug">
+                          {b}
+                        </li>
+                      ))}
                     </ul>
                   )}
                 </Section>
                 <Section title={`Evidence (${data.evidence.length})`}>
-                  {data.evidence.length === 0
-                    ? <div className="text-xs text-muted-foreground">— no evidence wired —</div>
-                    : data.evidence.map((e) => <EvidenceRow key={e.id} e={e} />)}
+                  {data.evidence.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">— no evidence wired —</div>
+                  ) : (
+                    data.evidence.map((e) => <EvidenceRow key={e.id} e={e} />)
+                  )}
                 </Section>
                 <div className="grid grid-cols-2 gap-4">
                   <Section title={`Positives (${data.positives.length})`}>
@@ -296,16 +330,21 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                 </div>
                 <Section title="Verified by platform">
                   <ul className="space-y-1 text-sm">
-                    {data.verifyNext.map((v) => <VerifyRow key={v.id} v={v} />)}
+                    {data.verifyNext.map((v) => (
+                      <VerifyRow key={v.id} v={v} />
+                    ))}
                   </ul>
                   <div className="mt-1 text-[10px] text-muted-foreground/70">
-                    Secondary checks. The metrics, evidence, positives and deductions above are the primary evidence.
+                    Secondary checks. The metrics, evidence, positives and deductions above are the
+                    primary evidence.
                   </div>
                 </Section>
                 {data.catalysts && data.catalysts.length > 0 && (
                   <Section title={`External catalysts (${data.catalysts.length})`}>
                     <div className="space-y-2">
-                      {data.catalysts.map((c) => <CatalystRow key={c.id} c={c} />)}
+                      {data.catalysts.map((c) => (
+                        <CatalystRow key={c.id} c={c} />
+                      ))}
                     </div>
                   </Section>
                 )}
@@ -322,8 +361,16 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                         ))}
                       </div>
                       <div className="mt-2 border-t border-border/70 pt-1.5 text-[10px]">
-                        <div>version <span className="text-foreground">{data.calculation.calcVersion}</span></div>
-                        <div>computed <span className="text-foreground">{new Date(data.calculation.computedAt).toLocaleString()}</span></div>
+                        <div>
+                          version{" "}
+                          <span className="text-foreground">{data.calculation.calcVersion}</span>
+                        </div>
+                        <div>
+                          computed{" "}
+                          <span className="text-foreground">
+                            {new Date(data.calculation.computedAt).toLocaleString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </Section>
@@ -336,6 +383,8 @@ export function ResearchPanel({ data }: { data: PanelData }) {
 
       {/* Compact metrics */}
       <MetricGrid metrics={data.metrics} />
+
+      <PanelNarrative data={data} compact />
 
       {/* Trend chart */}
       {data.chart && (
@@ -355,7 +404,11 @@ export function ResearchPanel({ data }: { data: PanelData }) {
           <p className="mt-0.5 leading-snug">{data.whyItMatters}</p>
           {data.whyBullets && data.whyBullets.length > 0 && (
             <ul className="mt-1 space-y-0.5 list-disc pl-4 marker:text-[var(--primary)]">
-              {data.whyBullets.map((b, i) => <li key={i} className="leading-snug">{b}</li>)}
+              {data.whyBullets.map((b, i) => (
+                <li key={i} className="leading-snug">
+                  {b}
+                </li>
+              ))}
             </ul>
           )}
         </div>
@@ -368,7 +421,9 @@ export function ResearchPanel({ data }: { data: PanelData }) {
             Evidence · {data.evidence.length}
           </div>
           <div>
-            {data.evidence.slice(0, 3).map((e) => <EvidenceRow key={e.id} e={e} />)}
+            {data.evidence.slice(0, 3).map((e) => (
+              <EvidenceRow key={e.id} e={e} />
+            ))}
           </div>
         </div>
       )}
@@ -392,12 +447,17 @@ export function ResearchPanel({ data }: { data: PanelData }) {
       {/* Verify next */}
       {data.verifyNext.length > 0 && (
         <div className="border-t border-border/60 pt-2">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Verified by platform</div>
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+            Verified by platform
+          </div>
           <ul className="space-y-0.5 text-[11px]">
-            {data.verifyNext.slice(0, 3).map((v) => <VerifyRow key={v.id} v={v} dense />)}
+            {data.verifyNext.slice(0, 3).map((v) => (
+              <VerifyRow key={v.id} v={v} dense />
+            ))}
           </ul>
           <div className="mt-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
-            Secondary — the core fundamental, technical & macro metrics above remain the primary evidence.
+            Secondary — the core fundamental, technical & macro metrics above remain the primary
+            evidence.
           </div>
         </div>
       )}
@@ -409,17 +469,25 @@ export function ResearchPanel({ data }: { data: PanelData }) {
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               External catalysts · {data.catalysts.length}
             </div>
-            <div className="text-[9px] font-mono text-muted-foreground/70">macro · commodity · alt-data</div>
+            <div className="text-[9px] font-mono text-muted-foreground/70">
+              macro · commodity · alt-data
+            </div>
           </div>
           <div className="space-y-1.5">
-            {data.catalysts.slice(0, 4).map((c) => <CatalystRow key={c.id} c={c} dense />)}
+            {data.catalysts.slice(0, 4).map((c) => (
+              <CatalystRow key={c.id} c={c} dense />
+            ))}
           </div>
         </div>
       )}
 
       {/* Calculation drawer */}
       {data.calculation && (
-        <Collapsible open={showCalc} onOpenChange={setShowCalc} className="border-t border-border/60 pt-2">
+        <Collapsible
+          open={showCalc}
+          onOpenChange={setShowCalc}
+          className="border-t border-border/60 pt-2"
+        >
           <CollapsibleTrigger className="flex w-full items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground">
             <span>Show calculation</span>
             <ChevronDown className={cn("h-3 w-3 transition-transform", showCalc && "rotate-180")} />
@@ -428,7 +496,8 @@ export function ResearchPanel({ data }: { data: PanelData }) {
             <div className="rounded-md border border-border bg-muted/30 p-2 text-[11px] font-mono">
               <div className="text-[var(--primary)]">{data.calculation.formula}</div>
               <div className="mt-1.5 text-[10px] text-muted-foreground">
-                v{data.calculation.calcVersion} · {new Date(data.calculation.computedAt).toLocaleString()}
+                v{data.calculation.calcVersion} ·{" "}
+                {new Date(data.calculation.computedAt).toLocaleString()}
               </div>
             </div>
           </CollapsibleContent>
@@ -449,12 +518,24 @@ function MetricGrid({ metrics, large = false }: { metrics: Metric[]; large?: boo
     >
       {metrics.map((m, i) => (
         <div key={i} className="rounded-md border border-border/60 bg-background/40 px-2 py-1.5">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{m.label}</div>
-          <div className={cn("mt-0.5 font-mono tabular-nums", large ? "text-lg" : "text-sm", ToneClass(m.tone))}>
-            {m.value}
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            <InfoTip label={m.label} explanation={m.explanation} />
           </div>
+          <InfoTip label={`${m.label}: ${m.value}`} explanation={m.explanation}>
+            <span
+              className={cn(
+                "mt-0.5 font-mono tabular-nums",
+                large ? "text-lg" : "text-sm",
+                ToneClass(m.tone),
+              )}
+            >
+              {m.value}
+            </span>
+          </InfoTip>
           {m.delta && (
-            <div className={cn("text-[10px] font-mono tabular-nums", ToneClass(m.tone))}>{m.delta}</div>
+            <div className={cn("text-[10px] font-mono tabular-nums", ToneClass(m.tone))}>
+              {m.delta}
+            </div>
           )}
         </div>
       ))}
@@ -496,7 +577,11 @@ function BackgroundBlock({ bg }: { bg: NonNullable<PanelData["background"]> }) {
             What typically causes it
           </div>
           <ul className="space-y-0.5 text-xs list-disc pl-4 marker:text-[var(--primary)]">
-            {bg.whatCauses.map((c, i) => <li key={i} className="leading-snug">{c}</li>)}
+            {bg.whatCauses.map((c, i) => (
+              <li key={i} className="leading-snug">
+                {c}
+              </li>
+            ))}
           </ul>
         </div>
       )}
@@ -509,7 +594,10 @@ function BackgroundBlock({ bg }: { bg: NonNullable<PanelData["background"]> }) {
             {bg.assetsAffected.map((a, i) => (
               <li key={i} className="flex gap-2">
                 <span className="font-mono text-[var(--primary)] shrink-0">›</span>
-                <span className="leading-snug"><span className="font-medium">{a.label}</span>{a.note && <span className="text-muted-foreground"> — {a.note}</span>}</span>
+                <span className="leading-snug">
+                  <span className="font-medium">{a.label}</span>
+                  {a.note && <span className="text-muted-foreground"> — {a.note}</span>}
+                </span>
               </li>
             ))}
           </ul>
@@ -521,7 +609,11 @@ function BackgroundBlock({ bg }: { bg: NonNullable<PanelData["background"]> }) {
             What to watch next
           </div>
           <ul className="space-y-0.5 text-xs list-disc pl-4 marker:text-[var(--warning)]">
-            {bg.whatToWatch.map((c, i) => <li key={i} className="leading-snug">{c}</li>)}
+            {bg.whatToWatch.map((c, i) => (
+              <li key={i} className="leading-snug">
+                {c}
+              </li>
+            ))}
           </ul>
         </div>
       )}
@@ -534,7 +626,10 @@ function BackgroundBlock({ bg }: { bg: NonNullable<PanelData["background"]> }) {
             {bg.examples.map((a, i) => (
               <li key={i} className="flex gap-2">
                 <span className="font-mono text-muted-foreground shrink-0">•</span>
-                <span className="leading-snug"><span className="font-medium">{a.label}</span>{a.note && <span className="text-muted-foreground"> — {a.note}</span>}</span>
+                <span className="leading-snug">
+                  <span className="font-medium">{a.label}</span>
+                  {a.note && <span className="text-muted-foreground"> — {a.note}</span>}
+                </span>
               </li>
             ))}
           </ul>
@@ -546,24 +641,35 @@ function BackgroundBlock({ bg }: { bg: NonNullable<PanelData["background"]> }) {
 
 function CatalystRow({ c, dense = false }: { c: Catalyst; dense?: boolean }) {
   const tone = c.direction === "tailwind" ? "text-[var(--positive)]" : "text-[var(--negative)]";
-  const bg   = c.direction === "tailwind" ? "border-[color:var(--positive)]/30 bg-[color:var(--positive)]/5"
-                                          : "border-[color:var(--negative)]/30 bg-[color:var(--negative)]/5";
+  const bg =
+    c.direction === "tailwind"
+      ? "border-[color:var(--positive)]/30 bg-[color:var(--positive)]/5"
+      : "border-[color:var(--negative)]/30 bg-[color:var(--negative)]/5";
   const kindLabel = c.kind === "alt_data" ? "alt-data" : c.kind;
   const mag = "•".repeat(c.magnitude);
   return (
     <div className={cn("rounded-sm border p-1.5", bg)}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className={cn("flex items-center gap-1.5 text-[11px] font-medium leading-tight", tone)}>
+          <div
+            className={cn("flex items-center gap-1.5 text-[11px] font-medium leading-tight", tone)}
+          >
             <span className="font-mono text-[9px] uppercase tracking-wider">{kindLabel}</span>
             <span className="font-mono text-[9px]">{mag}</span>
             <span className="truncate">{c.headline}</span>
           </div>
-          <div className={cn("mt-0.5 leading-snug text-muted-foreground", dense ? "text-[10px]" : "text-[11px]")}>
+          <div
+            className={cn(
+              "mt-0.5 leading-snug text-muted-foreground",
+              dense ? "text-[10px]" : "text-[11px]",
+            )}
+          >
             {c.reasoning}
           </div>
           {c.historicalNote && !dense && (
-            <div className="mt-0.5 text-[10px] italic text-muted-foreground/80">↳ {c.historicalNote}</div>
+            <div className="mt-0.5 text-[10px] italic text-muted-foreground/80">
+              ↳ {c.historicalNote}
+            </div>
           )}
         </div>
         <div className="shrink-0 text-right font-mono text-[9px] text-muted-foreground">

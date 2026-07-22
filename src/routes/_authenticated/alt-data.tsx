@@ -8,13 +8,22 @@ import { getAltDataPanels } from "@/lib/panels/alt-data.functions";
 const altDataQuery = queryOptions({
   queryKey: ["panels", "alt-data"],
   queryFn: () => getAltDataPanels(),
+  staleTime: 5 * 60 * 1000,
+  refetchInterval: 30 * 60 * 1000,
+  refetchOnWindowFocus: true,
 });
 
 export const Route = createFileRoute("/_authenticated/alt-data")({
-  head: () => ({ meta: [
-    { title: "Alternative Data — Research Terminal" },
-    { name: "description", content: "Web, satellite, hiring, patents and other alt signals — always penalised for provenance and freshness." },
-  ]}),
+  head: () => ({
+    meta: [
+      { title: "Alternative Data — Research Terminal" },
+      {
+        name: "description",
+        content:
+          "Live Wikipedia attention signals with visible provenance, freshness and reliability penalties.",
+      },
+    ],
+  }),
   loader: ({ context }) => context.queryClient.ensureQueryData(altDataQuery),
   component: AltData,
 });
@@ -25,8 +34,8 @@ function AltData() {
     <AppShell>
       <SectionHeader
         code="AD · Alternative Data"
-        title="What are non-traditional signals saying?"
-        purpose="Alt data is a Tier 4 input by default: every signal carries a visible confidence penalty and links to the raw payload."
+        title="Where is unusual investor attention building or fading?"
+        purpose="Live Wikipedia attention is treated as lower-confidence supporting evidence. Every signal shows freshness, coverage, method and the penalty applied for weaker provenance."
       />
       <PanelGrid panels={panels} />
     </AppShell>

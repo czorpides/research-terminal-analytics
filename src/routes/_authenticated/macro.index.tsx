@@ -13,6 +13,8 @@ import {
   type MacroRegion,
 } from "@/lib/panels/macro.functions";
 import { cn } from "@/lib/utils";
+import { ResearchNarrative } from "@/components/research/ResearchContext";
+import type { PanelData } from "@/lib/panels/contract";
 
 export const Route = createFileRoute("/_authenticated/macro/")({
   head: () => ({
@@ -49,7 +51,9 @@ function MacroOverview() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["macro-panels", tab],
     queryFn: () => (tab === "COMPARE" ? fetchCompare() : fetchRegion({ data: { region: tab } })),
-    refetchOnWindowFocus: false,
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const active = TABS.find((item) => item.id === tab)!;
@@ -86,7 +90,47 @@ function MacroOverview() {
           Failed to load: {(error as Error).message}
         </div>
       )}
-      {data && <PanelGrid panels={data} />}
+      {data && (
+        <>
+          <div className="mb-3">
+            <ResearchNarrative
+              summary={macroSummary(data, active.label)}
+              detail="The overview refreshes every 15 minutes while open, refreshes again when you return to the tab, and shows the source date on every evidence row. Dashed chart tails mean the last official release is being carried forward, not mistaken for a new observation."
+              watch={data.flatMap((panel) => panel.whyBullets ?? []).slice(0, 4)}
+              asOf={latestEvidenceDate(data)}
+              confidence={averageConfidence(data)}
+            />
+          </div>
+          <PanelGrid panels={data} />
+        </>
+      )}
     </AppShell>
   );
+}
+
+function latestEvidenceDate(panels: PanelData[]): string | null {
+  return (
+    panels
+      .flatMap((panel) => panel.evidence.map((item) => item.asOf))
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null
+  );
+}
+
+function averageConfidence(panels: Array<{ confidence: { value: number } }>): number | null {
+  return panels.length
+    ? panels.reduce((sum, panel) => sum + panel.confidence.value, 0) / panels.length
+    : null;
+}
+
+function macroSummary(
+  panels: Array<{ title: string; whatChanged: string }>,
+  region: string,
+): string {
+  const updates = panels
+    .slice(0, 3)
+    .map((panel) => `${panel.title}: ${panel.whatChanged}`)
+    .join(" ");
+  return `${region} macro snapshot. ${updates}`;
 }
