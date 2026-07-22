@@ -280,7 +280,7 @@ async function loadObservations(indicators: IndicatorRow[], asOf: string | null)
   if (indicators.length === 0) return [];
   // Page through results — a single PostgREST call caps at ~1000 rows and
   // would silently truncate the weekly ICSA series plus later indicators.
-  const PAGE = 1000;
+  const PAGE = 500;
   const rows: Array<{ indicator_id: string; observation_date: string; value_raw: any; retrieved_at: string }> = [];
   let from = 0;
   // eslint-disable-next-line no-constant-condition
