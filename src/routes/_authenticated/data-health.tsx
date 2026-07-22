@@ -352,3 +352,12 @@ function formatDur(s: number): string {
   if (s < 86400) return `${Math.round(s / 3600)}h`;
   return `${Math.round(s / 86400)}d`;
 }
+
+function Kv({ k, v, bad }: { k: string; v: string; bad?: boolean }) {
+  return (
+    <div className="rounded-sm border border-border/50 bg-background/40 px-2 py-1">
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{k}</div>
+      <div className={bad ? "text-[var(--warning)]" : ""}>{v}</div>
+    </div>
+  );
+}
