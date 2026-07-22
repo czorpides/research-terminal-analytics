@@ -29,7 +29,7 @@ export interface AnalyticsJobStatus {
   started_at: string;
   finished_at: string | null;
   input_hash: string | null;
-  output_summary: Record<string, unknown> | null;
+  output_summary: unknown;
   error: string | null;
 }
 
