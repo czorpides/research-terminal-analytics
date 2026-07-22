@@ -6,6 +6,8 @@
  * shared ANALYTICS_SERVICE_TOKEN bearer.
  */
 
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
 export interface AnalyticsHealth {
   status: "ok";
   service_version: string;
@@ -29,7 +31,7 @@ export interface AnalyticsJobStatus {
   started_at: string;
   finished_at: string | null;
   input_hash: string | null;
-  output_summary: unknown;
+  output_summary: Json | null;
   error: string | null;
 }
 
