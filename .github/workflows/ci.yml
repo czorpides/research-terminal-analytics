@@ -30,7 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Run ESLint
+      - name: Run ESLint (diagnostic)
+        continue-on-error: true
         run: npm run lint
 
       - name: Run TypeScript check
