@@ -14,8 +14,6 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
 
     analytics_service_token: str = Field(default="")
-    supabase_url: str = Field(default="")
-    supabase_service_role_key: str = Field(default="")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 

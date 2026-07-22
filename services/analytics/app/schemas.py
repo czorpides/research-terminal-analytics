@@ -1,59 +1,111 @@
-"""Typed data contracts for jobs and DB rows.
+"""Typed data contracts for the stateless calculation service.
 
-These mirror the existing `model_runs` / `model_outputs` schema — no new
-tables are introduced. See services/analytics/README.md for the rationale
-for reusing the existing contracts.
+The service does NOT talk to Supabase. It receives a fully-formed
+calculation request from the Lovable/TanStack server, performs the maths
+and returns the calculated series + diagnostics. Persistence, idempotency,
+vintages and model_runs/model_outputs writes all live on the Lovable side.
 """
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-RunStatus = Literal["queued", "running", "success", "failed", "superseded"]
-
-
-class JobTriggerRequest(BaseModel):
-    """Optional body for a job trigger. `as_of_date` pins the input snapshot."""
-
-    as_of_date: date | None = None
-    force: bool = False  # if True, ignore idempotency cache and run again
-    mode: Literal["live", "historical"] = "live"
+CalcMode = Literal["live", "historical"]
+CalcStatus = Literal["ok", "insufficient_history", "error"]
 
 
-class JobTriggerResponse(BaseModel):
-    run_id: str
-    status: RunStatus
+class Observation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    date: date
+    value: float | None = None
+
+
+class KalmanModelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    min_history: int | None = None
+
+
+class KalmanCalculationRequest(BaseModel):
+    """Everything the Kalman filter needs. No credentials, no user data."""
+
+    model_config = ConfigDict(extra="forbid")
+
     model_key: str
     model_version: str
-    reused: bool = False
+    calculation_mode: CalcMode
+    as_of_date: date | None = None
+    training_start: date | None = None
+    training_end: date | None = None
+    input_hash: str = Field(min_length=8, max_length=128)
+    indicator_id: str
+    indicator_frequency: Literal["daily", "weekly", "monthly", "quarterly", "annual"]
+    indicator_unit: str
+    observations: list[Observation]
+    model_config_params: KalmanModelConfig = Field(default_factory=KalmanModelConfig, alias="model_config_params")
+
+    @field_validator("observations")
+    @classmethod
+    def _non_empty_and_ordered(cls, v: list[Observation]) -> list[Observation]:
+        if not v:
+            raise ValueError("observations must not be empty")
+        prev: date | None = None
+        for o in v:
+            if prev is not None and o.date < prev:
+                raise ValueError("observations must be ordered ascending by date")
+            prev = o.date
+        return v
+
+
+class KalmanPointDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    date: date
+    level: float
+    slope: float
+    level_ci_low: float
+    level_ci_high: float
+
+
+class KalmanCalculationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: CalcStatus
+    model_key: str
+    model_version: str
+    indicator_id: str
+    input_hash: str
+    points: list[KalmanPointDTO]
+    model_params: dict[str, float]
+    log_likelihood: float | None = None
+    converged: bool
+    warnings: list[str] = Field(default_factory=list)
+    n_observations: int
+    n_missing: int
+    training_start: date | None = None
+    training_end: date | None = None
+    calculated_at: datetime
     detail: str | None = None
 
 
-class JobStatusResponse(BaseModel):
-    run_id: str
+class InactiveModelRequest(BaseModel):
+    """Shared stateless contract for PCA / HMM. Same envelope, no computation."""
+
+    model_config = ConfigDict(extra="forbid")
     model_key: str
     model_version: str
-    status: RunStatus
-    started_at: datetime
-    finished_at: datetime | None = None
-    input_hash: str | None = None
-    output_summary: dict[str, Any] | None = None
-    error: str | None = None
+    input_hash: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class InactiveModelResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["inactive"] = "inactive"
+    model_key: str
+    model_version: str
+    input_hash: str
+    reason: str
 
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str
     deploy_env: str
-
-
-class ModelOutputRow(BaseModel):
-    model_key: str
-    model_version: str
-    run_id: str
-    indicator_id: str
-    ts: date
-    output_type: str
-    value: float | None
-    uncertainty: float | None = None
-    meta: dict[str, Any] = Field(default_factory=dict)

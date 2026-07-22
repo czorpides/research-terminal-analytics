@@ -9,7 +9,7 @@ import {
   type GrowthRegion,
   type GrowthIndicatorRow,
 } from "@/lib/panels/growth-engine.functions";
-import { triggerUsGrowthKalmanFn } from "@/lib/analytics/analytics.functions";
+import { runUsGrowthKalmanFn } from "@/lib/analytics/analytics.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/macro/growth")({
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/_authenticated/macro/growth")({
 function GrowthEnginePage() {
   const [region, setRegion] = useState<GrowthRegion>("US");
   const fetchGrowth = useServerFn(getGrowthEngine);
-  const triggerKalman = useServerFn(triggerUsGrowthKalmanFn);
+  const triggerKalman = useServerFn(runUsGrowthKalmanFn);
   const qc = useQueryClient();
 
   const { data, isLoading, error } = useQuery({

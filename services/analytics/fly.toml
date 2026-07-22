@@ -1,7 +1,7 @@
-# Fly.io deployment config — NOT deployed in Stage 1 scaffold.
-# Once ready: `flyctl launch --no-deploy --copy-config`, adjust `app`,
-# `flyctl secrets set ...` for every .env.example entry except
-# SERVICE_VERSION / DEPLOY_ENV, then `flyctl deploy`.
+# Fly.io deployment config for the stateless analytics calculator.
+# Only ANALYTICS_SERVICE_TOKEN is required as a secret:
+#   flyctl secrets set ANALYTICS_SERVICE_TOKEN=<long-random-string>
+# SUPABASE_* variables are intentionally NOT required or read.
 
 app = "analytics-service"
 primary_region = "lhr"
@@ -10,7 +10,7 @@ primary_region = "lhr"
   dockerfile = "Dockerfile"
 
 [env]
-  SERVICE_VERSION = "0.1.0"
+  SERVICE_VERSION = "0.2.0"
   DEPLOY_ENV = "production"
   LOG_LEVEL = "INFO"
 
