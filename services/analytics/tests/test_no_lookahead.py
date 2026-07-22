@@ -14,6 +14,8 @@ from datetime import date, timedelta
 
 from app.models.kalman import fit_llt
 
+_MH = 4  # synthetic series — production callers pass frequency-derived values
+
 
 def _dates(n: int) -> list[str]:
     d0 = date(2019, 1, 1)
@@ -27,7 +29,7 @@ def test_filtered_estimate_does_not_use_future_observations():
     full_series = [(d, 100.0 + slope_true * i + rng.gauss(0, 2.0)) for i, d in enumerate(_dates(n))]
 
     # Fit on the full series
-    full_fit = fit_llt(full_series)
+    full_fit = fit_llt(full_series, min_history=_MH)
 
     # Fit on a prefix; the filtered value at the last prefix point must
     # equal the filtered value at the same index in the full fit — since
@@ -35,7 +37,7 @@ def test_filtered_estimate_does_not_use_future_observations():
     # series with future data must not change earlier filtered states
     # (up to numerical noise from hyperparameter re-estimation).
     for cutoff in (30, 45, 60):
-        prefix_fit = fit_llt(full_series[:cutoff])
+        prefix_fit = fit_llt(full_series[:cutoff], min_history=_MH)
         full_at_cutoff = full_fit.points[cutoff - 1]
         prefix_last = prefix_fit.points[-1]
         # Loose tolerance to accommodate hyperparameter MLE variance across fits
@@ -48,12 +50,12 @@ def test_future_shock_does_not_shift_earlier_filtered_state():
     """A spike appended AFTER time t must not change the filtered level at t."""
     n = 50
     base = [(d, 100.0 + 0.5 * i) for i, d in enumerate(_dates(n))]
-    base_fit = fit_llt(base)
+    base_fit = fit_llt(base, min_history=_MH)
 
     # Extend with a large future shock
     extended_dates = _dates(n + 10)
     extended = base + [(extended_dates[n + k], 100.0 + 0.5 * (n + k) + 400.0) for k in range(10)]
-    ext_fit = fit_llt(extended)
+    ext_fit = fit_llt(extended, min_history=_MH)
 
     # Compare filtered level at the last pre-shock index
     base_last = base_fit.points[-1].level
