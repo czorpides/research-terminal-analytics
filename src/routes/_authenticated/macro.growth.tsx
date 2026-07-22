@@ -118,6 +118,16 @@ function IndicatorPanel({ row }: { row: GrowthIndicatorRow }) {
           {row.kalman.trend_direction}
         </span>
       </div>
+      {row.history_source === "legacy_data_points" && (
+        <div className="mt-2 rounded-sm border border-[var(--warning)]/50 bg-[var(--warning)]/10 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-[var(--warning)]">
+          Legacy fallback data — vintage-aware backfill pending
+        </div>
+      )}
+      {row.history_source === "none" && (
+        <div className="mt-2 rounded-sm border border-[var(--negative)]/50 bg-[var(--negative)]/10 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-[var(--negative)]">
+          No observations available
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
         <Stat label="Latest" value={fmt(row.latest_value, row.unit)} sub={row.latest_date ?? "—"} />

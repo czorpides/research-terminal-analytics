@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 
 from .auth import require_service_token
 from .config import get_settings
@@ -40,7 +40,14 @@ def healthz() -> HealthResponse:
     dependencies=[Depends(require_service_token)],
     tags=["jobs"],
 )
-def trigger_us_growth_kalman(payload: JobTriggerRequest, tasks: BackgroundTasks) -> JobTriggerResponse:
+def trigger_us_growth_kalman(payload: JobTriggerRequest) -> JobTriggerResponse:
+    """Synchronous execution.
+
+    Stage 1 Kalman runs finish in well under a minute for the five US Growth
+    series, so we do the whole thing inside the request. This avoids the
+    risk of an auto-stopping Fly machine terminating an in-process
+    BackgroundTask before it can mark the run success or write outputs.
+    """
     try:
         prep = prepare_run(
             as_of_date=payload.as_of_date.isoformat() if payload.as_of_date else None,
@@ -57,9 +64,28 @@ def trigger_us_growth_kalman(payload: JobTriggerRequest, tasks: BackgroundTasks)
             reused=True, detail=prep.get("detail"),
         )
 
-    tasks.add_task(execute_run, prep["run_id"], prep["indicators"], prep["triples"], prep.get("as_of_date"), prep.get("mode", "live"))
+    # Executes inline. execute_run never raises — on failure it marks the
+    # model_runs row status='failed' and records the error.
+    execute_run(
+        prep["run_id"], prep["indicators"], prep["triples"],
+        prep.get("as_of_date"), prep.get("mode", "live"),
+    )
+
+    row = db.get_run(prep["run_id"]) or {}
+    final_status = row.get("status", "failed")
+    detail = None
+    if final_status == "success":
+        summary = row.get("output_summary") or {}
+        skipped = summary.get("indicators_skipped") or 0
+        processed = summary.get("indicators_processed") or 0
+        if skipped and processed:
+            detail = f"partial: {processed} processed, {skipped} skipped"
+    elif final_status == "failed":
+        detail = row.get("error")
     return JobTriggerResponse(
-        run_id=prep["run_id"], status="queued", model_key=MODEL_KEY, model_version=MODEL_VERSION, reused=False,
+        run_id=prep["run_id"], status=final_status,
+        model_key=MODEL_KEY, model_version=MODEL_VERSION,
+        reused=False, detail=detail,
     )
 
 
