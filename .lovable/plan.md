@@ -1,61 +1,88 @@
-## Recurring US Growth pipeline — proposal (awaiting approval before activation)
+# Stage 2 — Transformation Framework + US Inflation Engine
 
-### Cadence (release-calendar aware, UTC)
+Scope guardrails
+- PCA and HMM stay inactive; keep existing DB contracts and stub endpoints.
+- Do not mutate accepted Growth Engine outputs. If the Growth pipeline migrates to the shared framework, run it in shadow (write to a `shadow=true` model_run) and compare vs accepted outputs (tolerance ≤1e-6 on Kalman level, ≤1e-4 on transforms). Cut over only after parity is proven; otherwise Growth keeps using its existing path.
+- No recurring Inflation cron until one green end-to-end manual run.
 
-| Window | Cron | Indicators polled | Rationale |
-|---|---|---|---|
-| **Weekly claims window** | `30 12,13,14 * * 4` (Thu 12:30 / 13:30 / 14:30 UTC) | ICSA | ICSA releases Thu 08:30 ET (12:30/13:30 UTC seasonal). Three attempts covers DST + occasional delay. |
-| **Monthly payrolls window** | `0 13,14,15 * * 5` on ISO week containing 1st Fri | PAYEMS | Nonfarm Payrolls first Friday 08:30 ET. Gate inside handler on `day_of_month ≤ 7`. |
-| **Monthly mid-month window** | `0 13,14,15 13-20 * *` | INDPRO, RSAFS, HOUST | Retail Sales ~14-16th, Housing Starts ~17-19th, Industrial Production ~15-17th, all 08:30/09:15 ET. |
-| **Daily safety poll** | `0 6 * * *` | all 5 | Cheap DB read + hash compare; only fires FRED calls if release calendar says an indicator is due but was missed. |
-| **Weekly revision sweep** | `0 5 * * 0` | all 5, `years=2` | Detects late revisions to prior vintages (ALFRED-style revisions FRED backfills into latest series). |
+## Part A — Reusable transformation framework
 
-All schedules call the existing `POST /api/public/ingest/us-growth-fred?pipeline=1` — no new endpoints. Manual admin trigger stays unchanged.
+Location: `src/lib/transforms/` (TS, deterministic, pure).
+- `types.ts` — `TransformName`, `TransformSpec { formula, inputs, frequency, minHistory, lookback, seasonal, direction, unit, version }`, `TransformResult { name, points, spec, asOf, inputsHash }`.
+- `catalog.ts` — one implementation per transform: level, absChg, pctChg, mom, qoq, wow, yoy, chg3mAnn, chg6mAnn, rollingMean(w), ewma(halflife), momentum, acceleration, zscoreHistorical, zscoreRolling(w), percentileHistorical, surpriseScore, revisionScore, breadthDiffusion, kalmanLevel, kalmanSlope, kalmanCI. Kalman transforms delegate to the existing Fly.io service — they are not re-implemented locally.
+- `runner.ts` — `runTransforms(series, registryRow, opts)` — reads `indicator_registry.allowed_transformations` (array) and only runs opted-in transforms. Stamps each output with `calcVersion + inputsHash` (reuse `stampCalculation`).
+- `directionality.ts` — shared "higher is good / bad / context-dependent" rules with a `zoneFor(value, spec, context)` helper. Context includes target range (e.g. Fed 2%), momentum, deflation guard.
+- Extend Python analytics service `services/analytics/app/models/transforms.py` with the same catalog for server-side batch use; keep TS as source of truth for panels. Add explicit gating comment.
 
-### Expected monthly volume
+DB migration (single):
+- Add `allowed_transformations text[]` (if not already present — it exists in registry per current schema; verify), `target_range jsonb`, `direction text` (`higher_better|lower_better|context`) to `indicator_registry` where missing.
+- Create `public.transform_outputs` (indicator_id, transform_name, as_of_date, value, calc_version, inputs_hash, model_run_id, created_at) with unique(indicator_id, transform_name, as_of_date, calc_version). Full GRANT + RLS.
+- Extend `model_runs` allowed `model_key` to include `transform_batch` and `inflation_pressure_score`.
 
-| Call type | FRED reads/mo | Fly.io Kalman calls/mo |
-|---|---:|---:|
-| Weekly ICSA (4-5 Thu × 3 attempts) | ~15 | 4-5 (hash changes once/week) |
-| Monthly payrolls (1 Fri × 3 attempts) | 3 | 1 |
-| Mid-month monthlies (8 days × 3 × 3 indicators) | 72 | 3 (one per indicator per month) |
-| Daily safety poll | 150 (5 × 30, mostly no-op) | 0-2 (only on missed release) |
-| Weekly revision sweep | 20 (5 × 4) | 0-2 (rare revision) |
-| **Total** | **~260 FRED requests/mo** | **~10-13 Fly.io calls/mo** |
+Unit tests (Vitest): `src/lib/transforms/__tests__/catalog.test.ts` with known series (linear, sinusoidal, step) validating every transform against hand-calculated expected values. `test_transforms.py` already exists — add parity tests for the new names.
 
-FRED is unmetered for personal keys. Fly.io analytics service usage stays negligible (<15 short calls/month).
+## Part B — US Inflation Engine
 
-### Correctness guarantees (already in `growth-pipeline.server.ts`)
+### Indicators (FRED unless noted)
+Headline CPI (CPIAUCSL), Core CPI (CPILFESL), Headline PCE (PCEPI), Core PCE (PCEPILFE), PPI final demand (PPIACO / PPIFIS), Average Hourly Earnings (CES0500000003), Atlanta Fed Wage Tracker (FRBATLWGT12MMUMHWGO), Shelter CPI (CUSR0000SAH1), Import prices (IR), 5y5y forward breakeven (T5YIFR), 10y breakeven (T10YIE), Michigan 1y expectations (MICH), NY Fed 1y SCE (proxy via FRED where available), CRB / BCOM commodity index (via existing commodity ingest), Cass freight index proxy (fallback to FRED DTB3-style freight series or mark unavailable), ISM prices (NAPMPRI where licensable — else mark inactive).
 
-- Deterministic input hash over `(indicator, date, value)` tuples.
-- Kalman skipped when `inputHash === priorHash` (no duplicate `model_runs` / `model_outputs`).
-- Per-indicator try/catch — one failure marks that indicator `skipped`, others continue; run status = `partial` or `success`.
-- Vintage-aware writes to `raw_observations` + `data_vintages`, upsert on unique key prevents duplicate observations.
-- Timings recorded per indicator into `model_runs.diagnostics` (`ingest_ms`, `transform_ms`, `kalman_ms`).
+Seed via migration: rows in `indicator_registry` with `engine='inflation'`, `group` in {goods, services, shelter, energy, food, wages, imported, expectations, commodities, freight, survey}, `source`, `series_code_native`, `frequency`, `unit`, `release_calendar`, `revision_policy`, `allowed_transformations`, `target_range` (e.g. `{ "value": 2.0, "band": [1.5, 2.5] }`), `direction: 'context'`.
 
-### Staleness / failure surfacing
+Vintage handling: reuse existing `raw_observations` + `data_vintages` snapshot-on-ingest. Document that CPI/PCE historical vintages are NOT true ALFRED PIT until backfilled — add a `vintage_quality` column (`snapshot|revision_tracked|real_time_verified`) on registry.
 
-Extend Stage 1 Health panel + new `data_health_alerts` view driven by:
+### Ingestion
+- New file `src/lib/ingestion/fred/inflation-ingest.server.ts` — mirror `growth-ingest.server.ts`. Per-indicator hash guard, vintage insert on change, 30-year backfill support.
+- Public endpoint `src/routes/api/public/ingest/us-inflation-fred.ts` — same shape as growth endpoint, supports `?scope=monthly|weekly|expectations|safety|revisions&pipeline=1&years=30`.
+- Commodities/freight pulled from existing commodity ingest if present; otherwise mark data source `unavailable` (no fabricated data).
 
-- **Stale**: `max(observation_date)` older than release-calendar `expected_next + 48h grace`.
-- **Failed run**: any `model_runs` row with `status='failed'` in the last 24h, or `status='partial'` where `indicators_skipped > 0`.
-- **Silent cron**: no `model_runs` for `growth_engine.us.kalman_llt` in the last 26h.
+### Analytics pipeline
+- `src/lib/analytics/inflation-pipeline.server.ts` — orchestrates: fetch raw_observations (paginated) → run transform batch (TS) → call Fly.io Kalman for level/slope/CI → write `transform_outputs` + `model_outputs` under one `model_run_id`. Per-indicator hash guard reused from growth pipeline (extract to `src/lib/analytics/hash-guard.server.ts`).
+- Inflation Pressure Score (`src/lib/scoring/inflation-pressure.server.ts`): deterministic sum of weighted contributions. If any weight input is missing, reduce confidence penalty and return status=`insufficient_data` for that component — never substitute a default score. Persist contribution ledger to `model_outputs.payload`.
 
-Alerts render as amber (stale/partial) / red (failed/silent) badges on `/data-health` and at the top of every US Growth panel.
+### UI
+- Route `src/routes/_authenticated/macro.inflation.tsx` — grouped panels (Headline, Core, Shelter, Wages, Expectations, Commodities & Freight, Composite). Each panel uses existing `ResearchPanel` + `TrendChart`, with Kalman trend, CI, target band, percentile zones, contribution ledger for the composite.
+- Growth×Inflation Map: new panel `src/lib/panels/growth-inflation-map.functions.ts` + component `src/components/research/GrowthInflationMap.tsx`. Four-quadrant scatter with current dot, 1w/1m/3m trails, confidence rings. Added to Macro Overview.
+- AI interpretation: reuse Lovable AI Gateway; system prompt hard-limits to explain/interpret only (no numeric calculation, no invented data, must cite `asOf` + calc_version). Rendered per panel + on the map.
+- Sidebar: add "Inflation Engine" and "Growth & Inflation Map" entries with status badges (In Development until acceptance passes; Live after).
 
-### Technical implementation
+### Screener integration (shadow only)
+- Migration: add columns to `assets`: `inflation_sensitivity`, `wage_cost_sensitivity`, `commodity_input_sensitivity`, `pricing_power`, `interest_rate_sensitivity`, `duration_sensitivity`, `geographic_inflation_exposure` (all nullable numeric or jsonb where richer). Populate via a shadow scorer `src/lib/scoring/inflation-alignment.shadow.server.ts` writing to `model_outputs` with `shadow=true`. Do NOT mutate any radar/screener rankings.
 
-1. New `src/lib/analytics/cron-guard.server.ts` — release-calendar check that decides which indicators to poll for a given call, so the shared endpoint can be reused by all cron rows without wasteful full sweeps.
-2. Extend `POST /api/public/ingest/us-growth-fred` with `?scope=weekly|monthly|payrolls|safety|revisions` — routes to the appropriate subset via the guard. Manual `?force=1` still runs everything.
-3. Diagnostics: record `ingest_ms`, `transform_ms`, `kalman_ms` per indicator into `model_runs.diagnostics`.
-4. Register 5 `pg_cron` jobs above using the stable dev URL until publish, then the production URL.
-5. Migration adds `data_health_alerts` view (SELECT-only, `TO authenticated`) reading from `raw_observations`, `release_calendars`, `indicator_registry`, `model_runs`.
-6. Wire alert badges into `/data-health` Stage 1 panel and `macro.growth.tsx` header.
+### Scheduling
+- Do not install cron this stage. Provide the SQL in a documented block inside the endpoint file / plan output for later activation after acceptance.
 
-### Not in scope
-- PCA / HMM stay inactive.
-- No new indicators, no new engines, no ALFRED point-in-time upgrade.
-- No changes to manual admin controls.
+### Health monitoring
+- Extend `data_health_alerts` view to include `engine` filter; add Inflation Engine block to `/data-health` mirroring Growth Engine block.
 
-### To activate after approval
-Reply "activate" (or with cadence tweaks). Cron rows will be installed via `supabase--insert`, alerts view via migration, and I'll trigger one dry-run call per scope to confirm each fires cleanly.
+## Deliverables checklist (matches user's report requirements)
+1. Shared transform modules (TS + Python parity).
+2. Formulas list + Vitest/pytest results.
+3. Indicator registry rows added, with sources.
+4. Historical coverage report (per indicator, first_date → last_date, row count).
+5. Vintage coverage (snapshot vs verified PIT).
+6. Transform output row counts.
+7. Kalman run summary (per indicator: converged, loglik, n_obs).
+8. Inflation Pressure Score contribution ledger (first live run).
+9. Panels/charts inventory.
+10. Growth×Inflation Map screenshot + inputs table.
+11. Shadow stock alignment fields populated.
+12. Health checks (Data Health block).
+13. Warnings/limitations/missing data (freight, ISM if unavailable; vintage quality caveats).
+14. Stage 2 acceptance readiness verdict.
+
+## Execution order
+1. Migration: registry columns, `transform_outputs`, asset shadow columns, seed inflation indicators.
+2. Framework: `src/lib/transforms/*` + tests.
+3. Extract shared hash-guard helper; refactor growth-pipeline to import it (no behavior change).
+4. Inflation ingest + endpoint; run 30y backfill manually via curl once endpoint is live.
+5. Inflation pipeline + Pressure Score; one manual end-to-end run.
+6. UI: Inflation route, Growth×Inflation map, sidebar, AI interpretations.
+7. Shadow stock alignment scorer.
+8. Health panel additions.
+9. Acceptance report.
+
+## Open assumptions (will proceed unless you flag)
+- Freight index: use FRED `TRUCKD11` if accessible, else mark unavailable rather than substituting.
+- ISM prices: mark inactive/licensable — no fabricated data.
+- Consensus/surprise data: no free source integrated yet → `surpriseScore` returns null with confidence penalty until a provider is wired.
+- Growth pipeline stays on its current code path; framework migration deferred to a follow-up parity PR.
