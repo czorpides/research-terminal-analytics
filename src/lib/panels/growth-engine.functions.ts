@@ -34,6 +34,7 @@ export interface GrowthIndicatorRow {
   allowed_transformations: string[];
   min_history: number | null;
   observation_count: number;
+  history_source: "raw_observations" | "legacy_data_points" | "none";
   latest_value: number | null;
   latest_date: string | null;
   previous_value: number | null;
@@ -138,6 +139,7 @@ export const getGrowthEngine = createServerFn({ method: "POST" })
     // Bulk-load raw observations (dedupe by observation_date, take latest vintage)
     const historyByIndicator = new Map<string, Array<{ date: string; value: number | null; retrieved_at: string }>>();
     const revisionsByIndicator = new Map<string, GrowthIndicatorRow["latest_revision"]>();
+    const rawObservationsFor = new Set<string>();
     if (ids.length) {
       const { data: rawObs } = await supabaseAdmin
         .from("raw_observations")
@@ -149,6 +151,7 @@ export const getGrowthEngine = createServerFn({ method: "POST" })
 
       for (const o of rawObs ?? []) {
         const ind = o.indicator_id as string;
+        rawObservationsFor.add(ind);
         const date = (o.observation_date as string).slice(0, 10);
         const value = o.value_raw === null ? null : Number(o.value_raw);
         // Collapse to latest vintage per date; revision = last non-null replaces earlier.
@@ -291,6 +294,7 @@ export const getGrowthEngine = createServerFn({ method: "POST" })
         allowed_transformations: ((i.allowed_transformations as string[] | null) ?? []),
         min_history: (i.min_history as number | null) ?? null,
         observation_count: withValues.length,
+        history_source: historySource,
         latest_value: latest?.value ?? null,
         latest_date: latest?.date ?? null,
         previous_value: previous?.value ?? null,
