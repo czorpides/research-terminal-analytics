@@ -68,10 +68,15 @@ export const getGrowthEngine = createServerFn({ method: "POST" })
         .in("indicator_id", ids)
         .order("observation_date", { ascending: false });
       for (const o of obs ?? []) {
-        const entry = latestByIndicator.get(o.indicator_id) ?? { value: null, date: null, count: 0 };
-        if (entry.value === null) { entry.value = o.value_raw as number | null; entry.date = o.observation_date as string; }
+        const indicatorId = o.indicator_id as string | null;
+        if (!indicatorId) continue;
+        const entry = latestByIndicator.get(indicatorId) ?? { value: null, date: null, count: 0 };
+        if (entry.value === null) {
+          entry.value = o.value_raw as number | null;
+          entry.date = (o.observation_date as string | null) ?? null;
+        }
         entry.count += 1;
-        latestByIndicator.set(o.indicator_id, entry);
+        latestByIndicator.set(indicatorId, entry);
       }
     }
 
