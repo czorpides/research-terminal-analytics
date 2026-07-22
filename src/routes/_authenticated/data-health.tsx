@@ -91,10 +91,6 @@ function DataHealth() {
         </table>
       </section>
 
-      <section className="mb-6 rounded-md border border-border/70 bg-card/60 p-3">
-        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Sources · live</h2>
-      </section>
-
       <section className="mb-6 rounded-md border border-primary/40 bg-card/60 p-3">
         <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
           Stage 1 · US Growth Engine health
