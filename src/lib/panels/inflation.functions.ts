@@ -12,6 +12,31 @@ import type { Frequency, TransformName } from "@/lib/transforms/types";
 import { zoneForTarget } from "@/lib/transforms/directionality";
 import { scoreInflationPressure, type PressureInput } from "@/lib/scoring/inflation-pressure.server";
 
+/**
+ * PostgREST caps `.select()` at ~1000 rows per call. The inflation engine
+ * spans 15k+ raw observations and 60k+ model outputs, so every batched read
+ * MUST paginate or panels silently truncate to the first indicator's history
+ * only (leaving `latest_value: null` for everyone else). This helper drains
+ * a query in fixed-size pages until fewer than `pageSize` rows come back.
+ */
+async function paginate<T>(
+  build: (from: number, to: number) => Promise<{ data: T[] | null; error: unknown }>,
+  pageSize = 1000,
+): Promise<T[]> {
+  const out: T[] = [];
+  let from = 0;
+  // Safety cap: 200k rows is far above the current inflation footprint.
+  for (let i = 0; i < 200; i++) {
+    const { data, error } = await build(from, from + pageSize - 1);
+    if (error) throw error as Error;
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return out;
+}
+
 export interface InflationIndicatorPanel {
   concept_code: string;
   label: string;
@@ -63,14 +88,17 @@ export const getInflationEngine = createServerFn({ method: "GET" }).handler(asyn
   const historyByIndicator = new Map<string, Array<{ date: string; value: number | null; retrieved_at: string; meta: any }>>();
   const revisionsByIndicator = new Map<string, InflationIndicatorPanel["latest_revision"]>();
   if (ids.length) {
-    const { data: rows } = await supabaseAdmin
-      .from("raw_observations")
-      .select("indicator_id, observation_date, value_raw, retrieved_at, meta")
-      .in("indicator_id", ids)
-      .order("indicator_id", { ascending: true })
-      .order("observation_date", { ascending: true })
-      .order("retrieved_at", { ascending: true });
-    for (const o of rows ?? []) {
+    const rows = await paginate<{ indicator_id: string; observation_date: string; value_raw: unknown; retrieved_at: string; meta: any }>(
+      (from, to) => supabaseAdmin
+        .from("raw_observations")
+        .select("indicator_id, observation_date, value_raw, retrieved_at, meta")
+        .in("indicator_id", ids)
+        .order("indicator_id", { ascending: true })
+        .order("observation_date", { ascending: true })
+        .order("retrieved_at", { ascending: true })
+        .range(from, to),
+    );
+    for (const o of rows) {
       const ind = o.indicator_id as string;
       const date = (o.observation_date as string).slice(0, 10);
       const val = o.value_raw == null ? null : Number(o.value_raw);
@@ -95,14 +123,17 @@ export const getInflationEngine = createServerFn({ method: "GET" }).handler(asyn
 
   const kalmanByIndicator = new Map<string, { level: number | null; slope: number | null; ci_low: number | null; ci_high: number | null; date: string | null }>();
   if (ids.length) {
-    const { data: outs } = await supabaseAdmin
-      .from("model_outputs")
-      .select("indicator_id, ts, output_type, value")
-      .eq("model_key", "inflation_engine.us.kalman_llt")
-      .in("indicator_id", ids)
-      .order("ts", { ascending: true });
+    const outs = await paginate<{ indicator_id: string; ts: string; output_type: string; value: unknown }>(
+      (from, to) => supabaseAdmin
+        .from("model_outputs")
+        .select("indicator_id, ts, output_type, value")
+        .eq("model_key", "inflation_engine.us.kalman_llt")
+        .in("indicator_id", ids)
+        .order("ts", { ascending: true })
+        .range(from, to),
+    );
     const per = new Map<string, Map<string, { level?: number; slope?: number; lo?: number; hi?: number }>>();
-    for (const o of outs ?? []) {
+    for (const o of outs) {
       const ind = o.indicator_id as string; const ts = (o.ts as string).slice(0, 10);
       const m = per.get(ind) ?? new Map(); const cur = m.get(ts) ?? {};
       const v = o.value == null ? undefined : Number(o.value);
@@ -227,22 +258,28 @@ export const getGrowthInflationMap = createServerFn({ method: "GET" }).handler(a
   const coreCpi = (infInd ?? []).find((i) => i.concept_code === "cpi_core");
   if (!growthIds.length || !coreCpi) return { latest: null, trail: [], interpretation: "Not enough model outputs yet." };
 
-  const { data: gOuts } = await supabaseAdmin
-    .from("model_outputs").select("indicator_id, ts, value")
-    .eq("model_key", "growth_engine.us.kalman_llt").eq("output_type", "kalman_slope")
-    .in("indicator_id", growthIds).order("ts", { ascending: true });
+  const gOuts = await paginate<{ indicator_id: string; ts: string; value: unknown }>(
+    (from, to) => supabaseAdmin
+      .from("model_outputs").select("indicator_id, ts, value")
+      .eq("model_key", "growth_engine.us.kalman_llt").eq("output_type", "kalman_slope")
+      .in("indicator_id", growthIds).order("ts", { ascending: true })
+      .range(from, to),
+  );
   const gByMonth = new Map<string, number[]>();
-  for (const o of gOuts ?? []) {
+  for (const o of gOuts) {
     const m = (o.ts as string).slice(0, 7);
     const arr = gByMonth.get(m) ?? []; arr.push(Number(o.value)); gByMonth.set(m, arr);
   }
   const growthSeries = Array.from(gByMonth.entries()).map(([m, arr]) => [m, arr.reduce((s, x) => s + x, 0) / arr.length] as const);
 
-  const { data: rawCpi } = await supabaseAdmin
-    .from("raw_observations").select("observation_date, value_raw, retrieved_at")
-    .eq("indicator_id", coreCpi.id).order("observation_date", { ascending: true }).order("retrieved_at", { ascending: true });
+  const rawCpi = await paginate<{ observation_date: string; value_raw: unknown; retrieved_at: string }>(
+    (from, to) => supabaseAdmin
+      .from("raw_observations").select("observation_date, value_raw, retrieved_at")
+      .eq("indicator_id", coreCpi.id).order("observation_date", { ascending: true }).order("retrieved_at", { ascending: true })
+      .range(from, to),
+  );
   const cpiByDate = new Map<string, number>();
-  for (const o of rawCpi ?? []) cpiByDate.set((o.observation_date as string).slice(0, 10), Number(o.value_raw));
+  for (const o of rawCpi) cpiByDate.set((o.observation_date as string).slice(0, 10), Number(o.value_raw));
   const cpiSorted = Array.from(cpiByDate.entries()).sort(([a], [b]) => a.localeCompare(b));
   const yoy = new Map<string, number>();
   for (let i = 12; i < cpiSorted.length; i++) {
@@ -266,8 +303,8 @@ export const getGrowthInflationMap = createServerFn({ method: "GET" }).handler(a
     : "unknown";
 
   const interpretation = latest
-    ? `Composite growth slope ${latest.growth.toFixed(2)} with core CPI YoY ${latest.inflation.toFixed(1)}% places the US in the "${quadrant}" quadrant.`
-    : "Insufficient overlapping data to place the US on the map.";
+    ? `Macro tendency (not a confirmed regime): composite growth slope ${latest.growth.toFixed(2)} with core CPI YoY ${latest.inflation.toFixed(1)}% points toward the "${quadrant}" quadrant.`
+    : "Insufficient overlapping data to place a tendency on the map.";
 
   return { latest: latest ? { ...latest, quadrant } : null, trail: tail, interpretation };
 });
