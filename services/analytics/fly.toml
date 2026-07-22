@@ -1,0 +1,39 @@
+# Fly.io deployment config — NOT deployed in Stage 1 scaffold.
+# Once ready: `flyctl launch --no-deploy --copy-config`, adjust `app`,
+# `flyctl secrets set ...` for every .env.example entry except
+# SERVICE_VERSION / DEPLOY_ENV, then `flyctl deploy`.
+
+app = "analytics-service"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SERVICE_VERSION = "0.1.0"
+  DEPLOY_ENV = "production"
+  LOG_LEVEL = "INFO"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 25
+    soft_limit = 20
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "get"
+  path = "/healthz"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
