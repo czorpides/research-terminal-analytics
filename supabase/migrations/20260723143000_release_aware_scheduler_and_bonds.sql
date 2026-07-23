@@ -4,6 +4,23 @@
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Generate the calendar-worker credential inside Postgres. Browser roles
+-- cannot read it; cron and the server-side service-role client can.
+CREATE TABLE IF NOT EXISTS public.scheduler_credentials (
+  name TEXT PRIMARY KEY,
+  token TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.scheduler_credentials ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.scheduler_credentials FROM anon, authenticated;
+GRANT SELECT ON public.scheduler_credentials TO service_role;
+
+INSERT INTO public.scheduler_credentials (name, token)
+VALUES ('release-calendar', encode(gen_random_bytes(32), 'hex'))
+ON CONFLICT (name) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS public.release_series_mappings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -124,6 +141,9 @@ SELECT cron.schedule(
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'apikey', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZndvamlteHV4d214amNvbHp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NzEwMzIsImV4cCI6MjEwMDE0NzAzMn0.ysFIVxKkUIZEdma74PYlINR-ZfI9BU_J4beHMB0Xf80'
+    ) || jsonb_build_object(
+      'X-Scheduler-Secret',
+      (SELECT token FROM public.scheduler_credentials WHERE name = 'release-calendar')
     ),
     body := '{"source":"cron"}'::jsonb,
     timeout_milliseconds := 300000
@@ -140,6 +160,9 @@ SELECT cron.schedule(
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'apikey', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZndvamlteHV4d214amNvbHp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NzEwMzIsImV4cCI6MjEwMDE0NzAzMn0.ysFIVxKkUIZEdma74PYlINR-ZfI9BU_J4beHMB0Xf80'
+    ) || jsonb_build_object(
+      'X-Scheduler-Secret',
+      (SELECT token FROM public.scheduler_credentials WHERE name = 'release-calendar')
     ),
     body := '{"source":"cron","limit":3}'::jsonb,
     timeout_milliseconds := 300000
@@ -155,6 +178,9 @@ SELECT net.http_post(
   headers := jsonb_build_object(
     'Content-Type', 'application/json',
     'apikey', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYXNlIiwicmVmIjoiaXRmd29qaW14dXh3bXhqY29senQiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc4NDU3MTAzMiwiZXhwIjoyMTAwMTQ3MDMyfQ.ysFIVxKkUIZEdma74PYlINR-ZfI9BU_J4beHMB0Xf80'
+  ) || jsonb_build_object(
+    'X-Scheduler-Secret',
+    (SELECT token FROM public.scheduler_credentials WHERE name = 'release-calendar')
   ),
   body := '{"source":"migration"}'::jsonb,
   timeout_milliseconds := 300000

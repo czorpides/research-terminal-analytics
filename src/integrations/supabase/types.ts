@@ -1854,6 +1854,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      scheduler_credentials: {
+        Row: {
+          created_at: string;
+          name: string;
+          token: string;
+        };
+        Insert: {
+          created_at?: string;
+          name: string;
+          token: string;
+        };
+        Update: {
+          created_at?: string;
+          name?: string;
+          token?: string;
+        };
+        Relationships: [];
+      };
       scheduled_data_events: {
         Row: {
           asset_id: string | null;

@@ -4,10 +4,8 @@ export const Route = createFileRoute("/api/public/calendar/sync")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (
-          !process.env.SUPABASE_PUBLISHABLE_KEY ||
-          request.headers.get("apikey") !== process.env.SUPABASE_PUBLISHABLE_KEY
-        )
+        const { isCalendarSchedulerRequest } = await import("@/lib/calendar/auth.server");
+        if (!(await isCalendarSchedulerRequest(request)))
           return new Response("Unauthorized", { status: 401 });
         try {
           const { syncReleaseCalendar } = await import("@/lib/calendar/sync.server");
