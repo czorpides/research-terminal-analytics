@@ -9,113 +9,72 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
-import { Route as AuthenticatedAltDataRouteImport } from './routes/_authenticated/alt-data'
-import { Route as AuthenticatedDataHealthRouteImport } from './routes/_authenticated/data-health'
-import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
-import { Route as AuthenticatedMacroRouteImport } from './routes/_authenticated/macro'
-import { Route as AuthenticatedOvervaluationRouteImport } from './routes/_authenticated/overvaluation'
-import { Route as AuthenticatedRadarRouteImport } from './routes/_authenticated/radar'
-import { Route as AuthenticatedScreenersRouteImport } from './routes/_authenticated/screeners'
 import { Route as AuthenticatedUndervaluationRouteImport } from './routes/_authenticated/undervaluation'
-import { Route as AuthenticatedAltDataSplatRouteImport } from './routes/_authenticated/alt-data.$'
-import { Route as AuthenticatedAltDataAnomaliesRouteImport } from './routes/_authenticated/alt-data.anomalies'
-import { Route as AuthenticatedAltDataAttentionRouteImport } from './routes/_authenticated/alt-data.attention'
-import { Route as AuthenticatedAltDataModelHealthRouteImport } from './routes/_authenticated/alt-data.model-health'
-import { Route as AuthenticatedHistorySplatRouteImport } from './routes/_authenticated/history.$'
-import { Route as AuthenticatedHistoryEventIdRouteImport } from './routes/_authenticated/history.$eventId'
-import { Route as AuthenticatedHistoryAnaloguesRouteImport } from './routes/_authenticated/history.analogues'
-import { Route as AuthenticatedHistoryLibraryRouteImport } from './routes/_authenticated/history.library'
-import { Route as AuthenticatedHistoryModelHealthRouteImport } from './routes/_authenticated/history.model-health'
-import { Route as AuthenticatedHistoryPlaybooksRouteImport } from './routes/_authenticated/history.playbooks'
-import { Route as AuthenticatedHistorySectorImpactsRouteImport } from './routes/_authenticated/history.sector-impacts'
-import { Route as AuthenticatedHistoryStudyRouteImport } from './routes/_authenticated/history.study'
-import { Route as AuthenticatedHistoryVerificationRouteImport } from './routes/_authenticated/history.verification'
-import { Route as AuthenticatedMacroIndexRouteImport } from './routes/_authenticated/macro.index'
-import { Route as AuthenticatedMacroSplatRouteImport } from './routes/_authenticated/macro.$'
-import { Route as AuthenticatedMacroGrowthRouteImport } from './routes/_authenticated/macro.growth'
-import { Route as AuthenticatedMacroInflationRouteImport } from './routes/_authenticated/macro.inflation'
-import { Route as AuthenticatedMacroLabourRouteImport } from './routes/_authenticated/macro.labour'
-import { Route as AuthenticatedMacroLiquidityRouteImport } from './routes/_authenticated/macro.liquidity'
-import { Route as AuthenticatedMacroMarketRouteImport } from './routes/_authenticated/macro.market'
-import { Route as AuthenticatedMacroModelHealthRouteImport } from './routes/_authenticated/macro.model-health'
-import { Route as AuthenticatedMacroRegimeRouteImport } from './routes/_authenticated/macro.regime'
+import { Route as AuthenticatedScreenersRouteImport } from './routes/_authenticated/screeners'
+import { Route as AuthenticatedRadarRouteImport } from './routes/_authenticated/radar'
+import { Route as AuthenticatedOvervaluationRouteImport } from './routes/_authenticated/overvaluation'
+import { Route as AuthenticatedMacroRouteImport } from './routes/_authenticated/macro'
+import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
+import { Route as AuthenticatedDataHealthRouteImport } from './routes/_authenticated/data-health'
+import { Route as AuthenticatedAltDataRouteImport } from './routes/_authenticated/alt-data'
+import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security.index'
+import { Route as AuthenticatedMacroIndexRouteImport } from './routes/_authenticated/macro.index'
 import { Route as AuthenticatedSecuritySymbolRouteImport } from './routes/_authenticated/security.$symbol'
-import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
-import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/ingest/altdata'
-import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
-import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
-import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
-import { Route as ApiPublicIngestMacroNativeRouteImport } from './routes/api/public/ingest/macro-native'
-import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
-import { Route as ApiPublicIngestUsGrowthFredRouteImport } from './routes/api/public/ingest/us-growth-fred'
-import { Route as ApiPublicIngestUsInflationFredRouteImport } from './routes/api/public/ingest/us-inflation-fred'
-import { Route as ApiPublicIngestUsLabourFredRouteImport } from './routes/api/public/ingest/us-labour-fred'
-import { Route as ApiPublicIngestUsLiquidityFredRouteImport } from './routes/api/public/ingest/us-liquidity-fred'
-import { Route as ApiPublicIngestUsMarketFredRouteImport } from './routes/api/public/ingest/us-market-fred'
-import { Route as ApiPublicModelsUsMarketRegimeRouteImport } from './routes/api/public/models/us-market-regime'
-import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
-import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
+import { Route as AuthenticatedMacroRegimeRouteImport } from './routes/_authenticated/macro.regime'
+import { Route as AuthenticatedMacroModelHealthRouteImport } from './routes/_authenticated/macro.model-health'
+import { Route as AuthenticatedMacroMarketRouteImport } from './routes/_authenticated/macro.market'
+import { Route as AuthenticatedMacroLiquidityRouteImport } from './routes/_authenticated/macro.liquidity'
+import { Route as AuthenticatedMacroLabourRouteImport } from './routes/_authenticated/macro.labour'
+import { Route as AuthenticatedMacroInflationRouteImport } from './routes/_authenticated/macro.inflation'
+import { Route as AuthenticatedMacroGrowthRouteImport } from './routes/_authenticated/macro.growth'
+import { Route as AuthenticatedMacroSplatRouteImport } from './routes/_authenticated/macro.$'
+import { Route as AuthenticatedHistoryVerificationRouteImport } from './routes/_authenticated/history.verification'
+import { Route as AuthenticatedHistoryStudyRouteImport } from './routes/_authenticated/history.study'
+import { Route as AuthenticatedHistorySectorImpactsRouteImport } from './routes/_authenticated/history.sector-impacts'
+import { Route as AuthenticatedHistoryPlaybooksRouteImport } from './routes/_authenticated/history.playbooks'
+import { Route as AuthenticatedHistoryModelHealthRouteImport } from './routes/_authenticated/history.model-health'
+import { Route as AuthenticatedHistoryLibraryRouteImport } from './routes/_authenticated/history.library'
+import { Route as AuthenticatedHistoryAnaloguesRouteImport } from './routes/_authenticated/history.analogues'
+import { Route as AuthenticatedHistoryEventIdRouteImport } from './routes/_authenticated/history.$eventId'
+import { Route as AuthenticatedHistorySplatRouteImport } from './routes/_authenticated/history.$'
+import { Route as AuthenticatedAltDataModelHealthRouteImport } from './routes/_authenticated/alt-data.model-health'
+import { Route as AuthenticatedAltDataAttentionRouteImport } from './routes/_authenticated/alt-data.attention'
+import { Route as AuthenticatedAltDataAnomaliesRouteImport } from './routes/_authenticated/alt-data.anomalies'
+import { Route as AuthenticatedAltDataSplatRouteImport } from './routes/_authenticated/alt-data.$'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
+import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
+import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
+import { Route as ApiPublicModelsUsMarketRegimeRouteImport } from './routes/api/public/models/us-market-regime'
+import { Route as ApiPublicIngestUsMarketFredRouteImport } from './routes/api/public/ingest/us-market-fred'
+import { Route as ApiPublicIngestUsLiquidityFredRouteImport } from './routes/api/public/ingest/us-liquidity-fred'
+import { Route as ApiPublicIngestUsLabourFredRouteImport } from './routes/api/public/ingest/us-labour-fred'
+import { Route as ApiPublicIngestUsInflationFredRouteImport } from './routes/api/public/ingest/us-inflation-fred'
+import { Route as ApiPublicIngestUsGrowthFredRouteImport } from './routes/api/public/ingest/us-growth-fred'
+import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
+import { Route as ApiPublicIngestMacroNativeRouteImport } from './routes/api/public/ingest/macro-native'
+import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
+import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
+import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
+import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/ingest/altdata'
+import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAlertsRoute = AuthenticatedAlertsRouteImport.update({
-  id: '/alerts',
-  path: '/alerts',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAltDataRoute = AuthenticatedAltDataRouteImport.update({
-  id: '/alt-data',
-  path: '/alt-data',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedDataHealthRoute = AuthenticatedDataHealthRouteImport.update({
-  id: '/data-health',
-  path: '/data-health',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedMacroRoute = AuthenticatedMacroRouteImport.update({
-  id: '/macro',
-  path: '/macro',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedOvervaluationRoute =
-  AuthenticatedOvervaluationRouteImport.update({
-    id: '/overvaluation',
-    path: '/overvaluation',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedRadarRoute = AuthenticatedRadarRouteImport.update({
-  id: '/radar',
-  path: '/radar',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedScreenersRoute = AuthenticatedScreenersRouteImport.update({
-  id: '/screeners',
-  path: '/screeners',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedUndervaluationRoute =
@@ -124,122 +83,68 @@ const AuthenticatedUndervaluationRoute =
     path: '/undervaluation',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedAltDataSplatRoute =
-  AuthenticatedAltDataSplatRouteImport.update({
-    id: '/$',
-    path: '/$',
-    getParentRoute: () => AuthenticatedAltDataRoute,
+const AuthenticatedScreenersRoute = AuthenticatedScreenersRouteImport.update({
+  id: '/screeners',
+  path: '/screeners',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedRadarRoute = AuthenticatedRadarRouteImport.update({
+  id: '/radar',
+  path: '/radar',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOvervaluationRoute =
+  AuthenticatedOvervaluationRouteImport.update({
+    id: '/overvaluation',
+    path: '/overvaluation',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedAltDataAnomaliesRoute =
-  AuthenticatedAltDataAnomaliesRouteImport.update({
-    id: '/anomalies',
-    path: '/anomalies',
-    getParentRoute: () => AuthenticatedAltDataRoute,
-  } as any)
-const AuthenticatedAltDataAttentionRoute =
-  AuthenticatedAltDataAttentionRouteImport.update({
-    id: '/attention',
-    path: '/attention',
-    getParentRoute: () => AuthenticatedAltDataRoute,
-  } as any)
-const AuthenticatedAltDataModelHealthRoute =
-  AuthenticatedAltDataModelHealthRouteImport.update({
-    id: '/model-health',
-    path: '/model-health',
-    getParentRoute: () => AuthenticatedAltDataRoute,
-  } as any)
-const AuthenticatedHistorySplatRoute =
-  AuthenticatedHistorySplatRouteImport.update({
-    id: '/$',
-    path: '/$',
-    getParentRoute: () => AuthenticatedHistoryRoute,
-  } as any)
-const AuthenticatedHistoryEventIdRoute =
-  AuthenticatedHistoryEventIdRouteImport.update({
-    id: '/$eventId',
-    path: '/$eventId',
-    getParentRoute: () => AuthenticatedHistoryRoute,
-  } as any)
-const AuthenticatedHistoryAnaloguesRoute =
-  AuthenticatedHistoryAnaloguesRouteImport.update({
-    id: '/analogues',
-    path: '/analogues',
-    getParentRoute: () => AuthenticatedHistoryRoute,
-  } as any)
-const AuthenticatedHistoryLibraryRoute =
-  AuthenticatedHistoryLibraryRouteImport.update({
-    id: '/library',
-    path: '/library',
-    getParentRoute: () => AuthenticatedHistoryRoute,
-  } as any)
-const AuthenticatedHistoryModelHealthRoute =
-  AuthenticatedHistoryModelHealthRouteImport.update({
-    id: '/model-health',
-    path: '/model-health',
-    getParentRoute: () => AuthenticatedHistoryRoute,
-  } as any)
-const AuthenticatedHistoryPlaybooksRoute =
-  AuthenticatedHistoryPlaybooksRouteImport.update({
-    id: '/playbooks',
-    path: '/playbooks',
-    getParentRoute: () => AuthenticatedHistoryRoute,
-  } as any)
-const AuthenticatedHistorySectorImpactsRoute =
-  AuthenticatedHistorySectorImpactsRouteImport.update({
-    id: '/sector-impacts',
-    path: '/sector-impacts',
-    getParentRoute: () => AuthenticatedHistoryRoute,
-  } as any)
-const AuthenticatedHistoryStudyRoute =
-  AuthenticatedHistoryStudyRouteImport.update({
-    id: '/study',
-    path: '/study',
-    getParentRoute: () => AuthenticatedHistoryRoute,
-  } as any)
-const AuthenticatedHistoryVerificationRoute =
-  AuthenticatedHistoryVerificationRouteImport.update({
-    id: '/verification',
-    path: '/verification',
-    getParentRoute: () => AuthenticatedHistoryRoute,
+const AuthenticatedMacroRoute = AuthenticatedMacroRouteImport.update({
+  id: '/macro',
+  path: '/macro',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDataHealthRoute = AuthenticatedDataHealthRouteImport.update({
+  id: '/data-health',
+  path: '/data-health',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAltDataRoute = AuthenticatedAltDataRouteImport.update({
+  id: '/alt-data',
+  path: '/alt-data',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAlertsRoute = AuthenticatedAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSecurityIndexRoute =
+  AuthenticatedSecurityIndexRouteImport.update({
+    id: '/security/',
+    path: '/security/',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedMacroIndexRoute = AuthenticatedMacroIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedMacroRoute,
 } as any)
-const AuthenticatedMacroSplatRoute = AuthenticatedMacroSplatRouteImport.update({
-  id: '/$',
-  path: '/$',
-  getParentRoute: () => AuthenticatedMacroRoute,
-} as any)
-const AuthenticatedMacroGrowthRoute =
-  AuthenticatedMacroGrowthRouteImport.update({
-    id: '/growth',
-    path: '/growth',
-    getParentRoute: () => AuthenticatedMacroRoute,
+const AuthenticatedSecuritySymbolRoute =
+  AuthenticatedSecuritySymbolRouteImport.update({
+    id: '/security/$symbol',
+    path: '/security/$symbol',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedMacroInflationRoute =
-  AuthenticatedMacroInflationRouteImport.update({
-    id: '/inflation',
-    path: '/inflation',
-    getParentRoute: () => AuthenticatedMacroRoute,
-  } as any)
-const AuthenticatedMacroLabourRoute =
-  AuthenticatedMacroLabourRouteImport.update({
-    id: '/labour',
-    path: '/labour',
-    getParentRoute: () => AuthenticatedMacroRoute,
-  } as any)
-const AuthenticatedMacroLiquidityRoute =
-  AuthenticatedMacroLiquidityRouteImport.update({
-    id: '/liquidity',
-    path: '/liquidity',
-    getParentRoute: () => AuthenticatedMacroRoute,
-  } as any)
-const AuthenticatedMacroMarketRoute =
-  AuthenticatedMacroMarketRouteImport.update({
-    id: '/market',
-    path: '/market',
+const AuthenticatedMacroRegimeRoute =
+  AuthenticatedMacroRegimeRouteImport.update({
+    id: '/regime',
+    path: '/regime',
     getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
 const AuthenticatedMacroModelHealthRoute =
@@ -248,85 +153,138 @@ const AuthenticatedMacroModelHealthRoute =
     path: '/model-health',
     getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
-const AuthenticatedMacroRegimeRoute =
-  AuthenticatedMacroRegimeRouteImport.update({
-    id: '/regime',
-    path: '/regime',
+const AuthenticatedMacroMarketRoute =
+  AuthenticatedMacroMarketRouteImport.update({
+    id: '/market',
+    path: '/market',
     getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
-const AuthenticatedSecurityIndexRoute =
-  AuthenticatedSecurityIndexRouteImport.update({
-    id: '/security/',
-    path: '/security/',
-    getParentRoute: () => AuthenticatedRouteRoute,
+const AuthenticatedMacroLiquidityRoute =
+  AuthenticatedMacroLiquidityRouteImport.update({
+    id: '/liquidity',
+    path: '/liquidity',
+    getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
-const AuthenticatedSecuritySymbolRoute =
-  AuthenticatedSecuritySymbolRouteImport.update({
-    id: '/security/$symbol',
-    path: '/security/$symbol',
-    getParentRoute: () => AuthenticatedRouteRoute,
+const AuthenticatedMacroLabourRoute =
+  AuthenticatedMacroLabourRouteImport.update({
+    id: '/labour',
+    path: '/labour',
+    getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
-const ApiPublicHistoryVerifyNarrativesRoute =
-  ApiPublicHistoryVerifyNarrativesRouteImport.update({
-    id: '/api/public/history/verify-narratives',
-    path: '/api/public/history/verify-narratives',
-    getParentRoute: () => rootRouteImport,
+const AuthenticatedMacroInflationRoute =
+  AuthenticatedMacroInflationRouteImport.update({
+    id: '/inflation',
+    path: '/inflation',
+    getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
-const ApiPublicIngestAltdataRoute = ApiPublicIngestAltdataRouteImport.update({
-  id: '/api/public/ingest/altdata',
-  path: '/api/public/ingest/altdata',
+const AuthenticatedMacroGrowthRoute =
+  AuthenticatedMacroGrowthRouteImport.update({
+    id: '/growth',
+    path: '/growth',
+    getParentRoute: () => AuthenticatedMacroRoute,
+  } as any)
+const AuthenticatedMacroSplatRoute = AuthenticatedMacroSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AuthenticatedMacroRoute,
+} as any)
+const AuthenticatedHistoryVerificationRoute =
+  AuthenticatedHistoryVerificationRouteImport.update({
+    id: '/verification',
+    path: '/verification',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryStudyRoute =
+  AuthenticatedHistoryStudyRouteImport.update({
+    id: '/study',
+    path: '/study',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistorySectorImpactsRoute =
+  AuthenticatedHistorySectorImpactsRouteImport.update({
+    id: '/sector-impacts',
+    path: '/sector-impacts',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryPlaybooksRoute =
+  AuthenticatedHistoryPlaybooksRouteImport.update({
+    id: '/playbooks',
+    path: '/playbooks',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryModelHealthRoute =
+  AuthenticatedHistoryModelHealthRouteImport.update({
+    id: '/model-health',
+    path: '/model-health',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryLibraryRoute =
+  AuthenticatedHistoryLibraryRouteImport.update({
+    id: '/library',
+    path: '/library',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryAnaloguesRoute =
+  AuthenticatedHistoryAnaloguesRouteImport.update({
+    id: '/analogues',
+    path: '/analogues',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryEventIdRoute =
+  AuthenticatedHistoryEventIdRouteImport.update({
+    id: '/$eventId',
+    path: '/$eventId',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistorySplatRoute =
+  AuthenticatedHistorySplatRouteImport.update({
+    id: '/$',
+    path: '/$',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedAltDataModelHealthRoute =
+  AuthenticatedAltDataModelHealthRouteImport.update({
+    id: '/model-health',
+    path: '/model-health',
+    getParentRoute: () => AuthenticatedAltDataRoute,
+  } as any)
+const AuthenticatedAltDataAttentionRoute =
+  AuthenticatedAltDataAttentionRouteImport.update({
+    id: '/attention',
+    path: '/attention',
+    getParentRoute: () => AuthenticatedAltDataRoute,
+  } as any)
+const AuthenticatedAltDataAnomaliesRoute =
+  AuthenticatedAltDataAnomaliesRouteImport.update({
+    id: '/anomalies',
+    path: '/anomalies',
+    getParentRoute: () => AuthenticatedAltDataRoute,
+  } as any)
+const AuthenticatedAltDataSplatRoute =
+  AuthenticatedAltDataSplatRouteImport.update({
+    id: '/$',
+    path: '/$',
+    getParentRoute: () => AuthenticatedAltDataRoute,
+  } as any)
+const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
+  id: '/api/public/verify/run',
+  path: '/api/public/verify/run',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicIngestCommoditiesRoute =
-  ApiPublicIngestCommoditiesRouteImport.update({
-    id: '/api/public/ingest/commodities',
-    path: '/api/public/ingest/commodities',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicIngestFredRoute = ApiPublicIngestFredRouteImport.update({
-  id: '/api/public/ingest/fred',
-  path: '/api/public/ingest/fred',
+const ApiPublicScoresRunRoute = ApiPublicScoresRunRouteImport.update({
+  id: '/api/public/scores/run',
+  path: '/api/public/scores/run',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicIngestFundamentalsRoute =
-  ApiPublicIngestFundamentalsRouteImport.update({
-    id: '/api/public/ingest/fundamentals',
-    path: '/api/public/ingest/fundamentals',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicIngestMacroNativeRoute =
-  ApiPublicIngestMacroNativeRouteImport.update({
-    id: '/api/public/ingest/macro-native',
-    path: '/api/public/ingest/macro-native',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
-  id: '/api/public/ingest/stooq',
-  path: '/api/public/ingest/stooq',
+const ApiPublicProvidersPingRoute = ApiPublicProvidersPingRouteImport.update({
+  id: '/api/public/providers/ping',
+  path: '/api/public/providers/ping',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicIngestUsGrowthFredRoute =
-  ApiPublicIngestUsGrowthFredRouteImport.update({
-    id: '/api/public/ingest/us-growth-fred',
-    path: '/api/public/ingest/us-growth-fred',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicIngestUsInflationFredRoute =
-  ApiPublicIngestUsInflationFredRouteImport.update({
-    id: '/api/public/ingest/us-inflation-fred',
-    path: '/api/public/ingest/us-inflation-fred',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicIngestUsLabourFredRoute =
-  ApiPublicIngestUsLabourFredRouteImport.update({
-    id: '/api/public/ingest/us-labour-fred',
-    path: '/api/public/ingest/us-labour-fred',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicIngestUsLiquidityFredRoute =
-  ApiPublicIngestUsLiquidityFredRouteImport.update({
-    id: '/api/public/ingest/us-liquidity-fred',
-    path: '/api/public/ingest/us-liquidity-fred',
+const ApiPublicModelsUsMarketRegimeRoute =
+  ApiPublicModelsUsMarketRegimeRouteImport.update({
+    id: '/api/public/models/us-market-regime',
+    path: '/api/public/models/us-market-regime',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicIngestUsMarketFredRoute =
@@ -335,27 +293,69 @@ const ApiPublicIngestUsMarketFredRoute =
     path: '/api/public/ingest/us-market-fred',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicModelsUsMarketRegimeRoute =
-  ApiPublicModelsUsMarketRegimeRouteImport.update({
-    id: '/api/public/models/us-market-regime',
-    path: '/api/public/models/us-market-regime',
+const ApiPublicIngestUsLiquidityFredRoute =
+  ApiPublicIngestUsLiquidityFredRouteImport.update({
+    id: '/api/public/ingest/us-liquidity-fred',
+    path: '/api/public/ingest/us-liquidity-fred',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicProvidersPingRoute = ApiPublicProvidersPingRouteImport.update({
-  id: '/api/public/providers/ping',
-  path: '/api/public/providers/ping',
+const ApiPublicIngestUsLabourFredRoute =
+  ApiPublicIngestUsLabourFredRouteImport.update({
+    id: '/api/public/ingest/us-labour-fred',
+    path: '/api/public/ingest/us-labour-fred',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIngestUsInflationFredRoute =
+  ApiPublicIngestUsInflationFredRouteImport.update({
+    id: '/api/public/ingest/us-inflation-fred',
+    path: '/api/public/ingest/us-inflation-fred',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIngestUsGrowthFredRoute =
+  ApiPublicIngestUsGrowthFredRouteImport.update({
+    id: '/api/public/ingest/us-growth-fred',
+    path: '/api/public/ingest/us-growth-fred',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
+  id: '/api/public/ingest/stooq',
+  path: '/api/public/ingest/stooq',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicScoresRunRoute = ApiPublicScoresRunRouteImport.update({
-  id: '/api/public/scores/run',
-  path: '/api/public/scores/run',
+const ApiPublicIngestMacroNativeRoute =
+  ApiPublicIngestMacroNativeRouteImport.update({
+    id: '/api/public/ingest/macro-native',
+    path: '/api/public/ingest/macro-native',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIngestFundamentalsRoute =
+  ApiPublicIngestFundamentalsRouteImport.update({
+    id: '/api/public/ingest/fundamentals',
+    path: '/api/public/ingest/fundamentals',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIngestFredRoute = ApiPublicIngestFredRouteImport.update({
+  id: '/api/public/ingest/fred',
+  path: '/api/public/ingest/fred',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
-  id: '/api/public/verify/run',
-  path: '/api/public/verify/run',
+const ApiPublicIngestCommoditiesRoute =
+  ApiPublicIngestCommoditiesRouteImport.update({
+    id: '/api/public/ingest/commodities',
+    path: '/api/public/ingest/commodities',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicIngestAltdataRoute = ApiPublicIngestAltdataRouteImport.update({
+  id: '/api/public/ingest/altdata',
+  path: '/api/public/ingest/altdata',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHistoryVerifyNarrativesRoute =
+  ApiPublicHistoryVerifyNarrativesRouteImport.update({
+    id: '/api/public/history/verify-narratives',
+    path: '/api/public/history/verify-narratives',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicRadarsUndervaluationRefreshRoute =
   ApiPublicRadarsUndervaluationRefreshRouteImport.update({
     id: '/api/public/radars/undervaluation/refresh',
@@ -715,18 +715,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth': {
       id: '/auth'
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/': {
@@ -736,53 +736,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/alerts': {
-      id: '/_authenticated/alerts'
-      path: '/alerts'
-      fullPath: '/alerts'
-      preLoaderRoute: typeof AuthenticatedAlertsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/alt-data': {
-      id: '/_authenticated/alt-data'
-      path: '/alt-data'
-      fullPath: '/alt-data'
-      preLoaderRoute: typeof AuthenticatedAltDataRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/data-health': {
-      id: '/_authenticated/data-health'
-      path: '/data-health'
-      fullPath: '/data-health'
-      preLoaderRoute: typeof AuthenticatedDataHealthRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/history': {
-      id: '/_authenticated/history'
-      path: '/history'
-      fullPath: '/history'
-      preLoaderRoute: typeof AuthenticatedHistoryRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/macro': {
-      id: '/_authenticated/macro'
-      path: '/macro'
-      fullPath: '/macro'
-      preLoaderRoute: typeof AuthenticatedMacroRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/overvaluation': {
-      id: '/_authenticated/overvaluation'
-      path: '/overvaluation'
-      fullPath: '/overvaluation'
-      preLoaderRoute: typeof AuthenticatedOvervaluationRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/radar': {
-      id: '/_authenticated/radar'
-      path: '/radar'
-      fullPath: '/radar'
-      preLoaderRoute: typeof AuthenticatedRadarRouteImport
+    '/_authenticated/undervaluation': {
+      id: '/_authenticated/undervaluation'
+      path: '/undervaluation'
+      fullPath: '/undervaluation'
+      preLoaderRoute: typeof AuthenticatedUndervaluationRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/screeners': {
@@ -792,103 +750,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedScreenersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/undervaluation': {
-      id: '/_authenticated/undervaluation'
-      path: '/undervaluation'
-      fullPath: '/undervaluation'
-      preLoaderRoute: typeof AuthenticatedUndervaluationRouteImport
+    '/_authenticated/radar': {
+      id: '/_authenticated/radar'
+      path: '/radar'
+      fullPath: '/radar'
+      preLoaderRoute: typeof AuthenticatedRadarRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/alt-data/$': {
-      id: '/_authenticated/alt-data/$'
-      path: '/$'
-      fullPath: '/alt-data/$'
-      preLoaderRoute: typeof AuthenticatedAltDataSplatRouteImport
-      parentRoute: typeof AuthenticatedAltDataRoute
+    '/_authenticated/overvaluation': {
+      id: '/_authenticated/overvaluation'
+      path: '/overvaluation'
+      fullPath: '/overvaluation'
+      preLoaderRoute: typeof AuthenticatedOvervaluationRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/alt-data/anomalies': {
-      id: '/_authenticated/alt-data/anomalies'
-      path: '/anomalies'
-      fullPath: '/alt-data/anomalies'
-      preLoaderRoute: typeof AuthenticatedAltDataAnomaliesRouteImport
-      parentRoute: typeof AuthenticatedAltDataRoute
+    '/_authenticated/macro': {
+      id: '/_authenticated/macro'
+      path: '/macro'
+      fullPath: '/macro'
+      preLoaderRoute: typeof AuthenticatedMacroRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/alt-data/attention': {
-      id: '/_authenticated/alt-data/attention'
-      path: '/attention'
-      fullPath: '/alt-data/attention'
-      preLoaderRoute: typeof AuthenticatedAltDataAttentionRouteImport
-      parentRoute: typeof AuthenticatedAltDataRoute
+    '/_authenticated/history': {
+      id: '/_authenticated/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof AuthenticatedHistoryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/alt-data/model-health': {
-      id: '/_authenticated/alt-data/model-health'
-      path: '/model-health'
-      fullPath: '/alt-data/model-health'
-      preLoaderRoute: typeof AuthenticatedAltDataModelHealthRouteImport
-      parentRoute: typeof AuthenticatedAltDataRoute
+    '/_authenticated/data-health': {
+      id: '/_authenticated/data-health'
+      path: '/data-health'
+      fullPath: '/data-health'
+      preLoaderRoute: typeof AuthenticatedDataHealthRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/history/$': {
-      id: '/_authenticated/history/$'
-      path: '/$'
-      fullPath: '/history/$'
-      preLoaderRoute: typeof AuthenticatedHistorySplatRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
+    '/_authenticated/alt-data': {
+      id: '/_authenticated/alt-data'
+      path: '/alt-data'
+      fullPath: '/alt-data'
+      preLoaderRoute: typeof AuthenticatedAltDataRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/history/$eventId': {
-      id: '/_authenticated/history/$eventId'
-      path: '/$eventId'
-      fullPath: '/history/$eventId'
-      preLoaderRoute: typeof AuthenticatedHistoryEventIdRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
+    '/_authenticated/alerts': {
+      id: '/_authenticated/alerts'
+      path: '/alerts'
+      fullPath: '/alerts'
+      preLoaderRoute: typeof AuthenticatedAlertsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/history/analogues': {
-      id: '/_authenticated/history/analogues'
-      path: '/analogues'
-      fullPath: '/history/analogues'
-      preLoaderRoute: typeof AuthenticatedHistoryAnaloguesRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
-    }
-    '/_authenticated/history/library': {
-      id: '/_authenticated/history/library'
-      path: '/library'
-      fullPath: '/history/library'
-      preLoaderRoute: typeof AuthenticatedHistoryLibraryRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
-    }
-    '/_authenticated/history/model-health': {
-      id: '/_authenticated/history/model-health'
-      path: '/model-health'
-      fullPath: '/history/model-health'
-      preLoaderRoute: typeof AuthenticatedHistoryModelHealthRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
-    }
-    '/_authenticated/history/playbooks': {
-      id: '/_authenticated/history/playbooks'
-      path: '/playbooks'
-      fullPath: '/history/playbooks'
-      preLoaderRoute: typeof AuthenticatedHistoryPlaybooksRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
-    }
-    '/_authenticated/history/sector-impacts': {
-      id: '/_authenticated/history/sector-impacts'
-      path: '/sector-impacts'
-      fullPath: '/history/sector-impacts'
-      preLoaderRoute: typeof AuthenticatedHistorySectorImpactsRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
-    }
-    '/_authenticated/history/study': {
-      id: '/_authenticated/history/study'
-      path: '/study'
-      fullPath: '/history/study'
-      preLoaderRoute: typeof AuthenticatedHistoryStudyRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
-    }
-    '/_authenticated/history/verification': {
-      id: '/_authenticated/history/verification'
-      path: '/verification'
-      fullPath: '/history/verification'
-      preLoaderRoute: typeof AuthenticatedHistoryVerificationRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
+    '/_authenticated/security/': {
+      id: '/_authenticated/security/'
+      path: '/security'
+      fullPath: '/security/'
+      preLoaderRoute: typeof AuthenticatedSecurityIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/macro/': {
       id: '/_authenticated/macro/'
@@ -897,46 +813,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMacroIndexRouteImport
       parentRoute: typeof AuthenticatedMacroRoute
     }
-    '/_authenticated/macro/$': {
-      id: '/_authenticated/macro/$'
-      path: '/$'
-      fullPath: '/macro/$'
-      preLoaderRoute: typeof AuthenticatedMacroSplatRouteImport
-      parentRoute: typeof AuthenticatedMacroRoute
+    '/_authenticated/security/$symbol': {
+      id: '/_authenticated/security/$symbol'
+      path: '/security/$symbol'
+      fullPath: '/security/$symbol'
+      preLoaderRoute: typeof AuthenticatedSecuritySymbolRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/macro/growth': {
-      id: '/_authenticated/macro/growth'
-      path: '/growth'
-      fullPath: '/macro/growth'
-      preLoaderRoute: typeof AuthenticatedMacroGrowthRouteImport
-      parentRoute: typeof AuthenticatedMacroRoute
-    }
-    '/_authenticated/macro/inflation': {
-      id: '/_authenticated/macro/inflation'
-      path: '/inflation'
-      fullPath: '/macro/inflation'
-      preLoaderRoute: typeof AuthenticatedMacroInflationRouteImport
-      parentRoute: typeof AuthenticatedMacroRoute
-    }
-    '/_authenticated/macro/labour': {
-      id: '/_authenticated/macro/labour'
-      path: '/labour'
-      fullPath: '/macro/labour'
-      preLoaderRoute: typeof AuthenticatedMacroLabourRouteImport
-      parentRoute: typeof AuthenticatedMacroRoute
-    }
-    '/_authenticated/macro/liquidity': {
-      id: '/_authenticated/macro/liquidity'
-      path: '/liquidity'
-      fullPath: '/macro/liquidity'
-      preLoaderRoute: typeof AuthenticatedMacroLiquidityRouteImport
-      parentRoute: typeof AuthenticatedMacroRoute
-    }
-    '/_authenticated/macro/market': {
-      id: '/_authenticated/macro/market'
-      path: '/market'
-      fullPath: '/macro/market'
-      preLoaderRoute: typeof AuthenticatedMacroMarketRouteImport
+    '/_authenticated/macro/regime': {
+      id: '/_authenticated/macro/regime'
+      path: '/regime'
+      fullPath: '/macro/regime'
+      preLoaderRoute: typeof AuthenticatedMacroRegimeRouteImport
       parentRoute: typeof AuthenticatedMacroRoute
     }
     '/_authenticated/macro/model-health': {
@@ -946,123 +834,144 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMacroModelHealthRouteImport
       parentRoute: typeof AuthenticatedMacroRoute
     }
-    '/_authenticated/macro/regime': {
-      id: '/_authenticated/macro/regime'
-      path: '/regime'
-      fullPath: '/macro/regime'
-      preLoaderRoute: typeof AuthenticatedMacroRegimeRouteImport
+    '/_authenticated/macro/market': {
+      id: '/_authenticated/macro/market'
+      path: '/market'
+      fullPath: '/macro/market'
+      preLoaderRoute: typeof AuthenticatedMacroMarketRouteImport
       parentRoute: typeof AuthenticatedMacroRoute
     }
-    '/_authenticated/security/': {
-      id: '/_authenticated/security/'
-      path: '/security'
-      fullPath: '/security/'
-      preLoaderRoute: typeof AuthenticatedSecurityIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+    '/_authenticated/macro/liquidity': {
+      id: '/_authenticated/macro/liquidity'
+      path: '/liquidity'
+      fullPath: '/macro/liquidity'
+      preLoaderRoute: typeof AuthenticatedMacroLiquidityRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
     }
-    '/_authenticated/security/$symbol': {
-      id: '/_authenticated/security/$symbol'
-      path: '/security/$symbol'
-      fullPath: '/security/$symbol'
-      preLoaderRoute: typeof AuthenticatedSecuritySymbolRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+    '/_authenticated/macro/labour': {
+      id: '/_authenticated/macro/labour'
+      path: '/labour'
+      fullPath: '/macro/labour'
+      preLoaderRoute: typeof AuthenticatedMacroLabourRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
     }
-    '/api/public/history/verify-narratives': {
-      id: '/api/public/history/verify-narratives'
-      path: '/api/public/history/verify-narratives'
-      fullPath: '/api/public/history/verify-narratives'
-      preLoaderRoute: typeof ApiPublicHistoryVerifyNarrativesRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/macro/inflation': {
+      id: '/_authenticated/macro/inflation'
+      path: '/inflation'
+      fullPath: '/macro/inflation'
+      preLoaderRoute: typeof AuthenticatedMacroInflationRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
     }
-    '/api/public/ingest/altdata': {
-      id: '/api/public/ingest/altdata'
-      path: '/api/public/ingest/altdata'
-      fullPath: '/api/public/ingest/altdata'
-      preLoaderRoute: typeof ApiPublicIngestAltdataRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/macro/growth': {
+      id: '/_authenticated/macro/growth'
+      path: '/growth'
+      fullPath: '/macro/growth'
+      preLoaderRoute: typeof AuthenticatedMacroGrowthRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
     }
-    '/api/public/ingest/commodities': {
-      id: '/api/public/ingest/commodities'
-      path: '/api/public/ingest/commodities'
-      fullPath: '/api/public/ingest/commodities'
-      preLoaderRoute: typeof ApiPublicIngestCommoditiesRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/macro/$': {
+      id: '/_authenticated/macro/$'
+      path: '/$'
+      fullPath: '/macro/$'
+      preLoaderRoute: typeof AuthenticatedMacroSplatRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
     }
-    '/api/public/ingest/fred': {
-      id: '/api/public/ingest/fred'
-      path: '/api/public/ingest/fred'
-      fullPath: '/api/public/ingest/fred'
-      preLoaderRoute: typeof ApiPublicIngestFredRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/verification': {
+      id: '/_authenticated/history/verification'
+      path: '/verification'
+      fullPath: '/history/verification'
+      preLoaderRoute: typeof AuthenticatedHistoryVerificationRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/ingest/fundamentals': {
-      id: '/api/public/ingest/fundamentals'
-      path: '/api/public/ingest/fundamentals'
-      fullPath: '/api/public/ingest/fundamentals'
-      preLoaderRoute: typeof ApiPublicIngestFundamentalsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/study': {
+      id: '/_authenticated/history/study'
+      path: '/study'
+      fullPath: '/history/study'
+      preLoaderRoute: typeof AuthenticatedHistoryStudyRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/ingest/macro-native': {
-      id: '/api/public/ingest/macro-native'
-      path: '/api/public/ingest/macro-native'
-      fullPath: '/api/public/ingest/macro-native'
-      preLoaderRoute: typeof ApiPublicIngestMacroNativeRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/sector-impacts': {
+      id: '/_authenticated/history/sector-impacts'
+      path: '/sector-impacts'
+      fullPath: '/history/sector-impacts'
+      preLoaderRoute: typeof AuthenticatedHistorySectorImpactsRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/ingest/stooq': {
-      id: '/api/public/ingest/stooq'
-      path: '/api/public/ingest/stooq'
-      fullPath: '/api/public/ingest/stooq'
-      preLoaderRoute: typeof ApiPublicIngestStooqRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/playbooks': {
+      id: '/_authenticated/history/playbooks'
+      path: '/playbooks'
+      fullPath: '/history/playbooks'
+      preLoaderRoute: typeof AuthenticatedHistoryPlaybooksRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/ingest/us-growth-fred': {
-      id: '/api/public/ingest/us-growth-fred'
-      path: '/api/public/ingest/us-growth-fred'
-      fullPath: '/api/public/ingest/us-growth-fred'
-      preLoaderRoute: typeof ApiPublicIngestUsGrowthFredRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/model-health': {
+      id: '/_authenticated/history/model-health'
+      path: '/model-health'
+      fullPath: '/history/model-health'
+      preLoaderRoute: typeof AuthenticatedHistoryModelHealthRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/ingest/us-inflation-fred': {
-      id: '/api/public/ingest/us-inflation-fred'
-      path: '/api/public/ingest/us-inflation-fred'
-      fullPath: '/api/public/ingest/us-inflation-fred'
-      preLoaderRoute: typeof ApiPublicIngestUsInflationFredRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/library': {
+      id: '/_authenticated/history/library'
+      path: '/library'
+      fullPath: '/history/library'
+      preLoaderRoute: typeof AuthenticatedHistoryLibraryRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/ingest/us-labour-fred': {
-      id: '/api/public/ingest/us-labour-fred'
-      path: '/api/public/ingest/us-labour-fred'
-      fullPath: '/api/public/ingest/us-labour-fred'
-      preLoaderRoute: typeof ApiPublicIngestUsLabourFredRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/analogues': {
+      id: '/_authenticated/history/analogues'
+      path: '/analogues'
+      fullPath: '/history/analogues'
+      preLoaderRoute: typeof AuthenticatedHistoryAnaloguesRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/ingest/us-liquidity-fred': {
-      id: '/api/public/ingest/us-liquidity-fred'
-      path: '/api/public/ingest/us-liquidity-fred'
-      fullPath: '/api/public/ingest/us-liquidity-fred'
-      preLoaderRoute: typeof ApiPublicIngestUsLiquidityFredRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/$eventId': {
+      id: '/_authenticated/history/$eventId'
+      path: '/$eventId'
+      fullPath: '/history/$eventId'
+      preLoaderRoute: typeof AuthenticatedHistoryEventIdRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/ingest/us-market-fred': {
-      id: '/api/public/ingest/us-market-fred'
-      path: '/api/public/ingest/us-market-fred'
-      fullPath: '/api/public/ingest/us-market-fred'
-      preLoaderRoute: typeof ApiPublicIngestUsMarketFredRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/history/$': {
+      id: '/_authenticated/history/$'
+      path: '/$'
+      fullPath: '/history/$'
+      preLoaderRoute: typeof AuthenticatedHistorySplatRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
     }
-    '/api/public/models/us-market-regime': {
-      id: '/api/public/models/us-market-regime'
-      path: '/api/public/models/us-market-regime'
-      fullPath: '/api/public/models/us-market-regime'
-      preLoaderRoute: typeof ApiPublicModelsUsMarketRegimeRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/alt-data/model-health': {
+      id: '/_authenticated/alt-data/model-health'
+      path: '/model-health'
+      fullPath: '/alt-data/model-health'
+      preLoaderRoute: typeof AuthenticatedAltDataModelHealthRouteImport
+      parentRoute: typeof AuthenticatedAltDataRoute
     }
-    '/api/public/providers/ping': {
-      id: '/api/public/providers/ping'
-      path: '/api/public/providers/ping'
-      fullPath: '/api/public/providers/ping'
-      preLoaderRoute: typeof ApiPublicProvidersPingRouteImport
+    '/_authenticated/alt-data/attention': {
+      id: '/_authenticated/alt-data/attention'
+      path: '/attention'
+      fullPath: '/alt-data/attention'
+      preLoaderRoute: typeof AuthenticatedAltDataAttentionRouteImport
+      parentRoute: typeof AuthenticatedAltDataRoute
+    }
+    '/_authenticated/alt-data/anomalies': {
+      id: '/_authenticated/alt-data/anomalies'
+      path: '/anomalies'
+      fullPath: '/alt-data/anomalies'
+      preLoaderRoute: typeof AuthenticatedAltDataAnomaliesRouteImport
+      parentRoute: typeof AuthenticatedAltDataRoute
+    }
+    '/_authenticated/alt-data/$': {
+      id: '/_authenticated/alt-data/$'
+      path: '/$'
+      fullPath: '/alt-data/$'
+      preLoaderRoute: typeof AuthenticatedAltDataSplatRouteImport
+      parentRoute: typeof AuthenticatedAltDataRoute
+    }
+    '/api/public/verify/run': {
+      id: '/api/public/verify/run'
+      path: '/api/public/verify/run'
+      fullPath: '/api/public/verify/run'
+      preLoaderRoute: typeof ApiPublicVerifyRunRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/scores/run': {
@@ -1072,11 +981,102 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicScoresRunRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/verify/run': {
-      id: '/api/public/verify/run'
-      path: '/api/public/verify/run'
-      fullPath: '/api/public/verify/run'
-      preLoaderRoute: typeof ApiPublicVerifyRunRouteImport
+    '/api/public/providers/ping': {
+      id: '/api/public/providers/ping'
+      path: '/api/public/providers/ping'
+      fullPath: '/api/public/providers/ping'
+      preLoaderRoute: typeof ApiPublicProvidersPingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/models/us-market-regime': {
+      id: '/api/public/models/us-market-regime'
+      path: '/api/public/models/us-market-regime'
+      fullPath: '/api/public/models/us-market-regime'
+      preLoaderRoute: typeof ApiPublicModelsUsMarketRegimeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/us-market-fred': {
+      id: '/api/public/ingest/us-market-fred'
+      path: '/api/public/ingest/us-market-fred'
+      fullPath: '/api/public/ingest/us-market-fred'
+      preLoaderRoute: typeof ApiPublicIngestUsMarketFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/us-liquidity-fred': {
+      id: '/api/public/ingest/us-liquidity-fred'
+      path: '/api/public/ingest/us-liquidity-fred'
+      fullPath: '/api/public/ingest/us-liquidity-fred'
+      preLoaderRoute: typeof ApiPublicIngestUsLiquidityFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/us-labour-fred': {
+      id: '/api/public/ingest/us-labour-fred'
+      path: '/api/public/ingest/us-labour-fred'
+      fullPath: '/api/public/ingest/us-labour-fred'
+      preLoaderRoute: typeof ApiPublicIngestUsLabourFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/us-inflation-fred': {
+      id: '/api/public/ingest/us-inflation-fred'
+      path: '/api/public/ingest/us-inflation-fred'
+      fullPath: '/api/public/ingest/us-inflation-fred'
+      preLoaderRoute: typeof ApiPublicIngestUsInflationFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/us-growth-fred': {
+      id: '/api/public/ingest/us-growth-fred'
+      path: '/api/public/ingest/us-growth-fred'
+      fullPath: '/api/public/ingest/us-growth-fred'
+      preLoaderRoute: typeof ApiPublicIngestUsGrowthFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/stooq': {
+      id: '/api/public/ingest/stooq'
+      path: '/api/public/ingest/stooq'
+      fullPath: '/api/public/ingest/stooq'
+      preLoaderRoute: typeof ApiPublicIngestStooqRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/macro-native': {
+      id: '/api/public/ingest/macro-native'
+      path: '/api/public/ingest/macro-native'
+      fullPath: '/api/public/ingest/macro-native'
+      preLoaderRoute: typeof ApiPublicIngestMacroNativeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/fundamentals': {
+      id: '/api/public/ingest/fundamentals'
+      path: '/api/public/ingest/fundamentals'
+      fullPath: '/api/public/ingest/fundamentals'
+      preLoaderRoute: typeof ApiPublicIngestFundamentalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/fred': {
+      id: '/api/public/ingest/fred'
+      path: '/api/public/ingest/fred'
+      fullPath: '/api/public/ingest/fred'
+      preLoaderRoute: typeof ApiPublicIngestFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/commodities': {
+      id: '/api/public/ingest/commodities'
+      path: '/api/public/ingest/commodities'
+      fullPath: '/api/public/ingest/commodities'
+      preLoaderRoute: typeof ApiPublicIngestCommoditiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/altdata': {
+      id: '/api/public/ingest/altdata'
+      path: '/api/public/ingest/altdata'
+      fullPath: '/api/public/ingest/altdata'
+      preLoaderRoute: typeof ApiPublicIngestAltdataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/history/verify-narratives': {
+      id: '/api/public/history/verify-narratives'
+      path: '/api/public/history/verify-narratives'
+      fullPath: '/api/public/history/verify-narratives'
+      preLoaderRoute: typeof ApiPublicHistoryVerifyNarrativesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/radars/undervaluation/refresh': {
@@ -1219,3 +1219,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
