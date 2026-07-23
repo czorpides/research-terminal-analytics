@@ -13,10 +13,24 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "Sign in to access your private research operating system." },
       { property: "og:title", content: "Research Terminal — Sign in" },
       { property: "og:description", content: "Private research dashboard sign-in." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: AuthPage,
 });
+
+async function routeAuthenticatedUser(
+  navigate: ReturnType<typeof useNavigate>,
+  router: ReturnType<typeof useRouter>,
+) {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    throw error ?? new Error("Sign-in completed, but no active session was found.");
+  }
+  await router.invalidate();
+  navigate({ to: "/", replace: true });
+}
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -29,15 +43,15 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/" });
+      if (data.session) void routeAuthenticatedUser(navigate, router);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
-        navigate({ to: "/", replace: true });
+        void routeAuthenticatedUser(navigate, router);
       }
     });
     return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,8 +68,7 @@ function AuthPage() {
             });
       const { error } = await fn;
       if (error) throw error;
-      router.invalidate();
-      navigate({ to: "/" });
+      await routeAuthenticatedUser(navigate, router);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -65,20 +78,21 @@ function AuthPage() {
 
   async function onGoogle() {
     setError(null);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      // Return to /auth (a public route) so the session can hydrate before
-      // we navigate into the protected /_authenticated subtree. Sending
-      // users straight to "/" causes the auth gate to run before
-      // setSession completes and bounce them right back to /auth.
-      redirect_uri: `${window.location.origin}/auth`,
-    });
-    if (result.error) {
-      setError(result.error.message ?? "Google sign-in failed");
-      return;
+    setBusy(true);
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        // Full-page OAuth returns before the helper can set the session, so
+        // always land on a public callback route that completes the exchange.
+        redirect_uri: `${window.location.origin}/auth/callback`,
+      });
+      if (result.error) throw result.error;
+      if (result.redirected) return;
+      await routeAuthenticatedUser(navigate, router);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Google sign-in failed");
+    } finally {
+      setBusy(false);
     }
-    if (result.redirected) return;
-    router.invalidate();
-    navigate({ to: "/" });
   }
 
   return (
@@ -93,8 +107,8 @@ function AuthPage() {
           </h1>
         </div>
 
-        <Button type="button" variant="outline" className="w-full" onClick={onGoogle}>
-          Continue with Google
+        <Button type="button" variant="outline" className="w-full" onClick={onGoogle} disabled={busy}>
+          {busy ? "Signing in…" : "Continue with Google"}
         </Button>
 
         <div className="relative">
