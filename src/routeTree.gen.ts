@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthCallbackRouteImport } from './routes/auth-callback'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
@@ -64,11 +63,6 @@ import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth-callback',
-  path: '/auth-callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -372,7 +366,6 @@ const ApiPublicRadarsUndervaluationRefreshRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
-  '/auth-callback': typeof AuthCallbackRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/data-health': typeof AuthenticatedDataHealthRoute
@@ -426,7 +419,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
-  '/auth-callback': typeof AuthCallbackRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/data-health': typeof AuthenticatedDataHealthRoute
@@ -482,7 +474,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
-  '/auth-callback': typeof AuthCallbackRoute
   '/_authenticated/alerts': typeof AuthenticatedAlertsRoute
   '/_authenticated/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/_authenticated/data-health': typeof AuthenticatedDataHealthRoute
@@ -540,7 +531,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
-    | '/auth-callback'
     | '/alerts'
     | '/alt-data'
     | '/data-health'
@@ -594,7 +584,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
-    | '/auth-callback'
     | '/alerts'
     | '/alt-data'
     | '/data-health'
@@ -649,7 +638,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
-    | '/auth-callback'
     | '/_authenticated/alerts'
     | '/_authenticated/alt-data'
     | '/_authenticated/data-health'
@@ -706,7 +694,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  AuthCallbackRoute: typeof AuthCallbackRoute
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
   ApiPublicIngestAltdataRoute: typeof ApiPublicIngestAltdataRoute
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
@@ -728,13 +715,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/auth-callback': {
-      id: '/auth-callback'
-      path: '/auth-callback'
-      fullPath: '/auth-callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -1217,7 +1197,6 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  AuthCallbackRoute: AuthCallbackRoute,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
   ApiPublicIngestAltdataRoute: ApiPublicIngestAltdataRoute,
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
