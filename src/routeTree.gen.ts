@@ -9,10 +9,10 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthCallbackRouteImport } from './routes/auth-callback'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthenticatedUndervaluationRouteImport } from './routes/_authenticated/undervaluation'
 import { Route as AuthenticatedScreenersRouteImport } from './routes/_authenticated/screeners'
 import { Route as AuthenticatedRadarRouteImport } from './routes/_authenticated/radar'
@@ -64,6 +64,11 @@ import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth-callback',
+  path: '/auth-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -77,11 +82,6 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/callback',
-  path: '/callback',
-  getParentRoute: () => AuthRoute,
 } as any)
 const AuthenticatedUndervaluationRoute =
   AuthenticatedUndervaluationRouteImport.update({
@@ -371,7 +371,8 @@ const ApiPublicRadarsUndervaluationRefreshRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
-  '/auth': typeof AuthRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/auth-callback': typeof AuthCallbackRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/data-health': typeof AuthenticatedDataHealthRoute
@@ -381,7 +382,6 @@ export interface FileRoutesByFullPath {
   '/radar': typeof AuthenticatedRadarRoute
   '/screeners': typeof AuthenticatedScreenersRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
   '/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
@@ -425,7 +425,8 @@ export interface FileRoutesByFullPath {
   '/api/public/radars/undervaluation/refresh': typeof ApiPublicRadarsUndervaluationRefreshRoute
 }
 export interface FileRoutesByTo {
-  '/auth': typeof AuthRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/auth-callback': typeof AuthCallbackRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/data-health': typeof AuthenticatedDataHealthRoute
@@ -434,7 +435,6 @@ export interface FileRoutesByTo {
   '/radar': typeof AuthenticatedRadarRoute
   '/screeners': typeof AuthenticatedScreenersRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/': typeof AuthenticatedIndexRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
@@ -481,7 +481,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/auth': typeof AuthRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/auth-callback': typeof AuthCallbackRoute
   '/_authenticated/alerts': typeof AuthenticatedAlertsRoute
   '/_authenticated/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/_authenticated/data-health': typeof AuthenticatedDataHealthRoute
@@ -491,7 +492,6 @@ export interface FileRoutesById {
   '/_authenticated/radar': typeof AuthenticatedRadarRoute
   '/_authenticated/screeners': typeof AuthenticatedScreenersRoute
   '/_authenticated/undervaluation': typeof AuthenticatedUndervaluationRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/_authenticated/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
@@ -540,6 +540,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/auth-callback'
     | '/alerts'
     | '/alt-data'
     | '/data-health'
@@ -549,7 +550,6 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/undervaluation'
-    | '/auth/callback'
     | '/alt-data/$'
     | '/alt-data/anomalies'
     | '/alt-data/attention'
@@ -594,6 +594,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/auth-callback'
     | '/alerts'
     | '/alt-data'
     | '/data-health'
@@ -602,7 +603,6 @@ export interface FileRouteTypes {
     | '/radar'
     | '/screeners'
     | '/undervaluation'
-    | '/auth/callback'
     | '/'
     | '/alt-data/$'
     | '/alt-data/anomalies'
@@ -649,6 +649,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/auth-callback'
     | '/_authenticated/alerts'
     | '/_authenticated/alt-data'
     | '/_authenticated/data-health'
@@ -658,7 +659,6 @@ export interface FileRouteTypes {
     | '/_authenticated/radar'
     | '/_authenticated/screeners'
     | '/_authenticated/undervaluation'
-    | '/auth/callback'
     | '/_authenticated/'
     | '/_authenticated/alt-data/$'
     | '/_authenticated/alt-data/anomalies'
@@ -705,7 +705,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  AuthRoute: typeof AuthRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
   ApiPublicIngestAltdataRoute: typeof ApiPublicIngestAltdataRoute
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
@@ -727,6 +728,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth-callback': {
+      id: '/auth-callback'
+      path: '/auth-callback'
+      fullPath: '/auth-callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -747,13 +755,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof AuthRoute
     }
     '/_authenticated/undervaluation': {
       id: '/_authenticated/undervaluation'
@@ -1213,19 +1214,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
-interface AuthRouteChildren {
-  AuthCallbackRoute: typeof AuthCallbackRoute
-}
-
-const AuthRouteChildren: AuthRouteChildren = {
-  AuthCallbackRoute: AuthCallbackRoute,
-}
-
-const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  AuthRoute: AuthRouteWithChildren,
+  AuthRoute: AuthRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
   ApiPublicIngestAltdataRoute: ApiPublicIngestAltdataRoute,
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
