@@ -11,11 +11,9 @@ import {
 } from "@/lib/panels/inflation.functions";
 import { GrowthInflationMap } from "@/components/research/GrowthInflationMap";
 import { cn } from "@/lib/utils";
-import {
-  InfoTip,
-  ResearchNarrative,
-  StatisticalSparkline,
-} from "@/components/research/ResearchContext";
+import { InfoTip, ResearchNarrative } from "@/components/research/ResearchContext";
+import { StatisticalTrendChart } from "@/components/research/TrendChart";
+import { DashboardPanel } from "@/components/research/DashboardPanel";
 
 export const Route = createFileRoute("/_authenticated/macro/inflation")({
   head: () => ({
@@ -276,26 +274,25 @@ function InflationEngine() {
             </div>
           )}
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-3">
             {data.indicators.map((panel) => (
-              <div
+              <DashboardPanel
                 key={panel.concept_code}
-                className={cn("rounded border border-border bg-card p-3", zoneClass(panel.zone))}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {panel.series_code_native} · {panel.frequency}
-                    </div>
-                    <div className="text-sm font-semibold">{panel.label}</div>
-                  </div>
+                title={panel.label}
+                eyebrow={`${panel.series_code_native} · ${panel.frequency}`}
+                description={`Latest source observation ${panel.latest_date ?? "unavailable"}`}
+                className={zoneClass(panel.zone)}
+                actions={
                   <div className="text-right">
-                    <div className="text-lg font-semibold">{fmt(panel.latest_value, 2)}</div>
-                    <div className="text-[10px] text-muted-foreground">
+                    <div className="text-sm font-semibold tabular-nums">
+                      {fmt(panel.latest_value, 2)}
+                    </div>
+                    <div className="text-[9px] text-muted-foreground">
                       {panel.latest_date ?? "—"}
                     </div>
                   </div>
-                </div>
+                }
+              >
                 <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
                   <div>
                     <div className="text-muted-foreground">MoM</div>
@@ -360,13 +357,15 @@ function InflationEngine() {
                     <div className="font-mono">{fmt(panel.kalman?.slope ?? null, 3)}</div>
                   </div>
                 </div>
-                <StatisticalSparkline
+                <StatisticalTrendChart
                   points={panel.history
                     .filter(
                       (point): point is { date: string; value: number } => point.value != null,
                     )
                     .map((point) => ({ date: point.date, value: point.value }))}
                   title={`${panel.label} recent history`}
+                  height={150}
+                  format={panel.unit?.toLowerCase().includes("percent") ? "percent" : "number"}
                 />
                 {panel.latest_revision && (
                   <div className="mt-2 rounded bg-muted/50 p-1.5 text-[10px]">
@@ -385,7 +384,7 @@ function InflationEngine() {
                       : ""}
                   </span>
                 </div>
-              </div>
+              </DashboardPanel>
             ))}
           </div>
 

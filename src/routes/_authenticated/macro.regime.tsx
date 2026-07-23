@@ -8,6 +8,7 @@ import { EngineKpi, EngineSection, ModelNote } from "@/components/research/Macro
 import { toneForScore } from "@/lib/panels/macro-view";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
 import { cn } from "@/lib/utils";
+import { ResearchNarrative } from "@/components/research/ResearchContext";
 
 export const Route = createFileRoute("/_authenticated/macro/regime")({
   head: () => ({
@@ -111,6 +112,21 @@ function RegimeMonitor() {
                         : "Treat disagreement as diagnostic evidence"
                   }
                   tone={agreement == null ? "warning" : agreement ? "positive" : "warning"}
+                />
+              </div>
+
+              <div className="mb-3">
+                <ResearchNarrative
+                  summary={`The live US regime is ${humanise(data.current.label)} with ${data.current.confidence}% classification confidence. The experimental model is ${hmmLeader ? humanise(hmmLeader) : "not yet available"}, so the two methods are ${agreement == null ? "not yet comparable" : agreement ? "aligned" : "divergent"}.`}
+                  detail="The transparent classifier combines Growth, Inflation, Liquidity, Labour and Market evidence. The experimental model remains a diagnostic only. Divergence is a prompt to inspect the drivers, not permission to average two incompatible labels."
+                  watch={data.current.drivers
+                    .slice(0, 5)
+                    .map(
+                      (driver) =>
+                        `${LABELS[driver.engine as keyof typeof LABELS] ?? driver.engine}: ${driver.effect}.`,
+                    )}
+                  asOf={data.hmm.asOf}
+                  confidence={data.current.confidence}
                 />
               </div>
 

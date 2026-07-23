@@ -3,17 +3,14 @@ import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
-import {
-  BandBar,
-  InfoTip,
-  ResearchNarrative,
-  StatisticalSparkline,
-} from "@/components/research/ResearchContext";
+import { BandBar, InfoTip, ResearchNarrative } from "@/components/research/ResearchContext";
+import { StatisticalTrendChart } from "@/components/research/TrendChart";
 import {
   getAltDataWorkspace,
   type AltDataWorkspace as Workspace,
 } from "@/lib/panels/alt-data.functions";
 import { cn } from "@/lib/utils";
+import { DashboardPanel } from "@/components/research/DashboardPanel";
 
 export type AltDataMode = "attention" | "anomalies" | "model-health";
 
@@ -167,7 +164,11 @@ function AttentionCard({ row }: { row: Workspace["rows"][number] }) {
           help="Consecutive recent days where attention remained at least one normal variation away from baseline."
         />
       </div>
-      <StatisticalSparkline points={row.history} title={`${row.symbol} Wikipedia pageviews`} />
+      <StatisticalTrendChart
+        points={row.history}
+        title={`${row.symbol} Wikipedia pageviews`}
+        height={150}
+      />
       <div className="mt-2">
         <div className="mb-1 flex justify-between text-[9px] text-muted-foreground">
           <span>
@@ -326,18 +327,14 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded border border-border bg-card p-3">
-      <div className="mb-3 border-b border-border/50 pb-2">
-        <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em]">{title}</h2>
-        {description && <p className="mt-0.5 text-[10px] text-muted-foreground">{description}</p>}
-      </div>
+    <DashboardPanel title={title} description={description} eyebrow="Alternative evidence">
       {children}
-    </section>
+    </DashboardPanel>
   );
 }
 function Kpi({ label, value, help }: { label: string; value: string; help: string }) {
   return (
-    <div className="rounded border border-border bg-card p-3">
+    <div className="h-full min-h-24 rounded-md border border-border/70 bg-card/70 p-3 shadow-sm">
       <div className="font-mono text-[9px] uppercase text-muted-foreground">
         <InfoTip label={label} explanation={help} />
       </div>

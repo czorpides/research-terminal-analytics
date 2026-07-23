@@ -11,7 +11,9 @@ import {
 } from "@/lib/panels/growth-engine.functions";
 import { runUsGrowthKalmanFn } from "@/lib/analytics/analytics.functions";
 import { cn } from "@/lib/utils";
-import { ZoneLegend } from "@/components/research/ResearchContext";
+import { InfoTip, ResearchNarrative } from "@/components/research/ResearchContext";
+import { TrendChart } from "@/components/research/TrendChart";
+import { DashboardPanel } from "@/components/research/DashboardPanel";
 
 export const Route = createFileRoute("/_authenticated/macro/growth")({
   head: () => ({
@@ -101,13 +103,43 @@ function GrowthEnginePage() {
         </div>
       )}
 
-      {data && (
-        <div className="grid gap-3 md:grid-cols-2">
-          {data.indicators.map((row) => (
-            <IndicatorPanel key={row.concept_code} row={row} />
-          ))}
-        </div>
-      )}
+      {data &&
+        (() => {
+          const latestDate =
+            data.indicators
+              .map((indicator) => indicator.latest_date)
+              .filter((date): date is string => Boolean(date))
+              .sort()
+              .at(-1) ?? null;
+          const modelled = data.indicators.filter((indicator) => indicator.kalman.status === "ok");
+          return (
+            <>
+              <div className="mb-3">
+                <ResearchNarrative
+                  summary={`${data.regionLabel} growth has ${modelled.filter((indicator) => indicator.kalman.trend_direction === "improving").length} improving, ${modelled.filter((indicator) => indicator.kalman.trend_direction === "deteriorating").length} deteriorating and ${modelled.filter((indicator) => indicator.kalman.trend_direction === "stable").length} stable noise-filtered indicators.`}
+                  detail="The raw official releases remain the evidence. The noise-filtered line estimates the underlying direction so one volatile month does not dominate the research conclusion."
+                  watch={modelled
+                    .slice(0, 5)
+                    .map(
+                      (indicator) =>
+                        `${indicator.name}: ${indicator.kalman.trend_direction}, ${indicator.kalman.trend_zone} zone, latest source date ${indicator.latest_date ?? "unavailable"}.`,
+                    )}
+                  asOf={latestDate}
+                  confidence={
+                    data.indicators.length
+                      ? Math.round((modelled.length / data.indicators.length) * 100)
+                      : 0
+                  }
+                />
+              </div>
+              <div className="grid auto-rows-fr gap-3 md:grid-cols-2">
+                {data.indicators.map((row) => (
+                  <IndicatorPanel key={row.concept_code} row={row} />
+                ))}
+              </div>
+            </>
+          );
+        })()}
     </AppShell>
   );
 }
@@ -121,15 +153,13 @@ function IndicatorPanel({ row }: { row: GrowthIndicatorRow }) {
       : null;
 
   return (
-    <div className={cn("rounded-sm border bg-card/40 p-3", zoneStyles.border)}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="text-sm font-medium">{row.name}</div>
-          <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            {row.concept_code} · {row.series_code_native} · {row.frequency}
-            {row.seasonal_adj ? " · SA" : ""}
-          </div>
-        </div>
+    <DashboardPanel
+      title={row.name}
+      eyebrow="Growth indicator"
+      description={`${row.concept_code} · ${row.series_code_native} · ${row.frequency}${row.seasonal_adj ? " · seasonally adjusted" : ""}`}
+      className={zoneStyles.border}
+      bodyClassName="flex flex-col"
+      actions={
         <span
           className={cn(
             "rounded-sm border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider",
@@ -138,7 +168,8 @@ function IndicatorPanel({ row }: { row: GrowthIndicatorRow }) {
         >
           {row.kalman.trend_direction}
         </span>
-      </div>
+      }
+    >
       {row.history_source === "legacy_data_points" && (
         <div className="mt-2 rounded-sm border border-[var(--warning)]/50 bg-[var(--warning)]/10 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-[var(--warning)]">
           Legacy fallback data — vintage-aware backfill pending
@@ -208,7 +239,7 @@ function IndicatorPanel({ row }: { row: GrowthIndicatorRow }) {
         </div>
       )}
 
-      <Sparkline history={row.history} trajectory={row.kalman.trajectory} />
+      <Sparkline history={row.history} trajectory={row.kalman.trajectory} unit={row.unit} />
 
       <div className="mt-3 flex items-center justify-between font-mono text-[10px] text-muted-foreground">
         <div>
@@ -232,7 +263,7 @@ function IndicatorPanel({ row }: { row: GrowthIndicatorRow }) {
       {open && <CalcDrawer row={row} />}
 
       <AiSummary row={row} />
-    </div>
+    </DashboardPanel>
   );
 }
 
@@ -255,9 +286,11 @@ const ZONE_STYLES: Record<
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-sm border border-border/50 bg-background/30 px-2 py-1.5">
-      <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
+      <InfoTip label={label}>
+        <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+      </InfoTip>
       <div className="font-mono text-sm">{value}</div>
       {sub && <div className="font-mono text-[10px] text-muted-foreground">{sub}</div>}
     </div>
@@ -272,78 +305,67 @@ function fmt(v: number | null, unit?: string | null): string {
 function Sparkline({
   history,
   trajectory,
+  unit,
 }: {
   history: Array<{ date: string; value: number | null }>;
   trajectory: Array<{ date: string; level: number; ci_low: number; ci_high: number }>;
+  unit?: string | null;
 }) {
-  const pts = history.filter((h) => h.value !== null) as Array<{ date: string; value: number }>;
+  const pts = history
+    .filter((h): h is { date: string; value: number } => h.value !== null)
+    .slice(-120);
   if (pts.length < 2)
     return <div className="mt-3 h-16 rounded-sm border border-dashed border-border/40" />;
-  const W = 320,
-    H = 60;
   const vals = pts.map((p) => p.value);
-  const trajVals = trajectory.map((t) => t.level);
   const mean = vals.reduce((sum, value) => sum + value, 0) / vals.length;
   const variance = vals.reduce((sum, value) => sum + (value - mean) ** 2, 0) / vals.length;
   const sd = Math.sqrt(variance) || 1;
-  const min = Math.min(...vals, ...trajVals, mean - 2 * sd);
-  const max = Math.max(...vals, ...trajVals, mean + 2 * sd);
-  const range = max - min || 1;
-  const y = (value: number) => H - ((value - min) / range) * H;
-  const path = pts
-    .map((p, i) => {
-      const x = (i / (pts.length - 1)) * W;
-      const y = H - ((p.value - min) / range) * H;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const trajPath =
-    trajectory.length >= 2
-      ? trajectory
-          .map((t, i) => {
-            const x = (i / (trajectory.length - 1)) * W;
-            const y = H - ((t.level - min) / range) * H;
-            return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-          })
-          .join(" ")
-      : null;
-
   return (
-    <div
-      className="mt-3"
-      title="Green is close to the recent norm, yellow is unusual and red is exceptional. The colours show unusualness, not automatically good or bad."
-    >
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-16 w-full" role="img">
-        <title>Growth indicator trend with normality zones</title>
-        <rect x="0" y="0" width={W} height={H} fill="var(--destructive)" fillOpacity="0.06" />
-        <rect
-          x="0"
-          y={Math.min(y(mean + 0.6 * sd), y(mean - 0.6 * sd))}
-          width={W}
-          height={Math.abs(y(mean - 0.6 * sd) - y(mean + 0.6 * sd))}
-          fill="var(--positive)"
-          fillOpacity="0.12"
-        />
-        <rect
-          x="0"
-          y={Math.min(y(mean + 1.5 * sd), y(mean + 0.6 * sd))}
-          width={W}
-          height={Math.abs(y(mean + 0.6 * sd) - y(mean + 1.5 * sd))}
-          fill="var(--warning)"
-          fillOpacity="0.1"
-        />
-        <rect
-          x="0"
-          y={Math.min(y(mean - 0.6 * sd), y(mean - 1.5 * sd))}
-          width={W}
-          height={Math.abs(y(mean - 1.5 * sd) - y(mean - 0.6 * sd))}
-          fill="var(--warning)"
-          fillOpacity="0.1"
-        />
-        <path d={path} fill="none" stroke="currentColor" strokeOpacity="0.4" strokeWidth="1" />
-        {trajPath && <path d={trajPath} fill="none" stroke="var(--primary)" strokeWidth="1.5" />}
-      </svg>
-      <ZoneLegend zones={[{ kind: "good" }, { kind: "warn" }, { kind: "bad" }]} compact />
+    <div className="mt-3">
+      <TrendChart
+        height={155}
+        compact
+        series={{
+          points: pts.map((point) => ({ t: point.date, v: point.value })),
+          compare:
+            trajectory.length >= 2
+              ? {
+                  label: "Noise-filtered trend",
+                  points: trajectory
+                    .slice(-120)
+                    .map((point) => ({ t: point.date, v: point.level })),
+                }
+              : undefined,
+          zones: [
+            { to: mean - 1.5 * sd, kind: "bad", label: "Exceptionally low" },
+            {
+              from: mean - 1.5 * sd,
+              to: mean - 0.6 * sd,
+              kind: "warn",
+              label: "Unusually low",
+            },
+            {
+              from: mean - 0.6 * sd,
+              to: mean + 0.6 * sd,
+              kind: "good",
+              label: "Near its recent norm",
+            },
+            {
+              from: mean + 0.6 * sd,
+              to: mean + 1.5 * sd,
+              kind: "warn",
+              label: "Unusually high",
+            },
+            { from: mean + 1.5 * sd, kind: "bad", label: "Exceptionally high" },
+          ],
+          yLabel: "Official observation",
+          format: unit?.toLowerCase().includes("percent") ? "percent" : "number",
+        }}
+      />
+      <p className="mt-1 text-[9px] text-muted-foreground">
+        Zones show unusualness around this series&apos; recent norm; direction determines whether a
+        high or low reading is supportive.
+      </p>
     </div>
   );
 }
@@ -428,7 +450,7 @@ function AiSummary({ row }: { row: GrowthIndicatorRow }) {
   return (
     <div className="mt-2 rounded-sm border border-border/40 bg-background/40 px-2 py-1.5 text-xs text-muted-foreground">
       <span className="mr-1 font-mono text-[9px] uppercase tracking-wider text-foreground/70">
-        AI note
+        Research note
       </span>
       {text}
     </div>

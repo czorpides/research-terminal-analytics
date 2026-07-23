@@ -1,8 +1,6 @@
-import { useState } from "react";
 import {
   ArrowUpRight,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Clock,
   Minus,
@@ -23,14 +21,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SOURCE_TIER_META, type SourceTier } from "@/lib/reliability/tiers";
 import { TrendChart } from "./TrendChart";
@@ -256,10 +253,8 @@ function VerifyRow({ v, dense = false }: { v: VerifyCheck; dense?: boolean }) {
 }
 
 export function ResearchPanel({ data }: { data: PanelData }) {
-  const [showCalc, setShowCalc] = useState(false);
-
   return (
-    <Card className="flex flex-col gap-3 p-3 bg-card/60 border-border/70">
+    <Card className="flex h-[540px] min-w-0 flex-col gap-3 overflow-hidden border-border/70 bg-card/60 p-3">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -270,18 +265,18 @@ export function ResearchPanel({ data }: { data: PanelData }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <ConfidenceMeter value={data.confidence.value} penalties={data.confidence.penalties} />
-          <Sheet>
-            <SheetTrigger asChild>
+          <Dialog>
+            <DialogTrigger asChild>
               <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-[11px]">
                 Expand
                 <ChevronRight className="h-3 w-3" />
               </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
-              <SheetHeader>
-                <SheetTitle>{data.title}</SheetTitle>
-                <SheetDescription>{data.purpose}</SheetDescription>
-              </SheetHeader>
+            </DialogTrigger>
+            <DialogContent className="max-h-[92vh] w-[min(96vw,1180px)] max-w-none overflow-y-auto">
+              <DialogHeader className="border-b border-border/60 pb-3 text-left">
+                <DialogTitle>{data.title}</DialogTitle>
+                <DialogDescription>{data.purpose}</DialogDescription>
+              </DialogHeader>
               <div className="mt-4 space-y-5">
                 {data.background && <BackgroundBlock bg={data.background} />}
                 <Section title="Metrics">
@@ -376,133 +371,43 @@ export function ResearchPanel({ data }: { data: PanelData }) {
                   </Section>
                 )}
               </div>
-            </SheetContent>
-          </Sheet>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
       {/* Compact metrics */}
       <MetricGrid metrics={data.metrics} />
 
-      <PanelNarrative data={data} compact />
+      <div className="max-h-[92px] overflow-hidden">
+        <PanelNarrative data={data} compact />
+      </div>
 
       {/* Trend chart */}
       {data.chart && (
         <div className="rounded-md border border-border/60 bg-background/40 p-2">
-          <TrendChart series={data.chart} height={120} compact />
+          <TrendChart series={data.chart} height={145} compact />
         </div>
       )}
 
-      {/* Why */}
-      <div className="space-y-1.5 border-t border-border/60 pt-2 text-[11px]">
+      {/* Compact interpretation. Full evidence, checks and maths live in Expand. */}
+      <div className="mt-auto grid grid-cols-2 gap-3 border-t border-border/60 pt-2 text-[11px]">
         <div>
           <div className="uppercase tracking-wider text-muted-foreground">What changed</div>
-          <p className="mt-0.5 leading-snug">{data.whatChanged}</p>
+          <p className="mt-0.5 line-clamp-3 leading-snug">{data.whatChanged}</p>
         </div>
         <div>
-          <div className="uppercase tracking-wider text-muted-foreground">Why it matters</div>
-          <p className="mt-0.5 leading-snug">{data.whyItMatters}</p>
-          {data.whyBullets && data.whyBullets.length > 0 && (
-            <ul className="mt-1 space-y-0.5 list-disc pl-4 marker:text-[var(--primary)]">
-              {data.whyBullets.map((b, i) => (
-                <li key={i} className="leading-snug">
-                  {b}
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="uppercase tracking-wider text-muted-foreground">What it means</div>
+          <p className="mt-0.5 line-clamp-3 leading-snug">{data.whyItMatters}</p>
         </div>
       </div>
 
-      {/* Evidence compact */}
-      {data.evidence.length > 0 && (
-        <div className="border-t border-border/60 pt-2">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-            Evidence · {data.evidence.length}
-          </div>
-          <div>
-            {data.evidence.slice(0, 3).map((e) => (
-              <EvidenceRow key={e.id} e={e} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Positives / deductions */}
-      <div className="grid grid-cols-2 gap-3 border-t border-border/60 pt-2">
-        <div>
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-            Positives · {data.positives.length}
-          </div>
-          <PointList points={data.positives} kind="positive" />
-        </div>
-        <div>
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-            Deductions · {data.deductions.length}
-          </div>
-          <PointList points={data.deductions} kind="deduction" />
-        </div>
+      <div className="flex items-center justify-between border-t border-border/60 pt-2 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+        <span>{data.evidence.length} evidence items</span>
+        <span>
+          {data.positives.length} supportive · {data.deductions.length} risks
+        </span>
       </div>
-
-      {/* Verify next */}
-      {data.verifyNext.length > 0 && (
-        <div className="border-t border-border/60 pt-2">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-            Verified by platform
-          </div>
-          <ul className="space-y-0.5 text-[11px]">
-            {data.verifyNext.slice(0, 3).map((v) => (
-              <VerifyRow key={v.id} v={v} dense />
-            ))}
-          </ul>
-          <div className="mt-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
-            Secondary — the core fundamental, technical & macro metrics above remain the primary
-            evidence.
-          </div>
-        </div>
-      )}
-
-      {/* External catalysts */}
-      {data.catalysts && data.catalysts.length > 0 && (
-        <div className="border-t border-border/60 pt-2">
-          <div className="mb-1 flex items-center justify-between">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              External catalysts · {data.catalysts.length}
-            </div>
-            <div className="text-[9px] font-mono text-muted-foreground/70">
-              macro · commodity · alt-data
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            {data.catalysts.slice(0, 4).map((c) => (
-              <CatalystRow key={c.id} c={c} dense />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Calculation drawer */}
-      {data.calculation && (
-        <Collapsible
-          open={showCalc}
-          onOpenChange={setShowCalc}
-          className="border-t border-border/60 pt-2"
-        >
-          <CollapsibleTrigger className="flex w-full items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground">
-            <span>Show calculation</span>
-            <ChevronDown className={cn("h-3 w-3 transition-transform", showCalc && "rotate-180")} />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-2">
-            <div className="rounded-md border border-border bg-muted/30 p-2 text-[11px] font-mono">
-              <div className="text-[var(--primary)]">{data.calculation.formula}</div>
-              <div className="mt-1.5 text-[10px] text-muted-foreground">
-                v{data.calculation.calcVersion} ·{" "}
-                {new Date(data.calculation.computedAt).toLocaleString()}
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
     </Card>
   );
 }

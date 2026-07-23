@@ -14,6 +14,7 @@ import {
 } from "@/components/research/MacroEngineView";
 import { getMarketEngine } from "@/lib/panels/market.functions";
 import { toneForScore } from "@/lib/panels/macro-view";
+import { ResearchNarrative } from "@/components/research/ResearchContext";
 
 export const Route = createFileRoute("/_authenticated/macro/market")({
   head: () => ({
@@ -102,6 +103,26 @@ function MarketEngine() {
                   tone={data.pca.status === "shadow" ? "primary" : "warning"}
                   badge={data.pca.version ?? undefined}
                   explanation="An experimental check asks whether equities, volatility, credit, rates, the dollar and commodities are moving together. It does not affect the live score."
+                />
+              </div>
+
+              <div className="mb-3">
+                <ResearchNarrative
+                  summary={`US markets are in a ${data.score.regime.replaceAll("_", " ")} state. The stress score is ${score?.toFixed(2) ?? "unavailable"}, led by ${dominant?.label ?? "no single active signal"}.`}
+                  detail="The live score puts equities, volatility, credit, real yields, the dollar and commodities onto a common direction-aware scale. The experimental co-movement model is shown separately and never overrides the transparent score."
+                  watch={data.score.components
+                    .filter((component) => component.contribution != null)
+                    .sort(
+                      (first, second) =>
+                        Math.abs(second.contribution ?? 0) - Math.abs(first.contribution ?? 0),
+                    )
+                    .slice(0, 4)
+                    .map(
+                      (component) =>
+                        `${component.label} ${component.contribution! > 0 ? "adds" : "reduces"} stress by ${Math.abs(component.contribution!).toFixed(2)}.`,
+                    )}
+                  asOf={latestDate}
+                  confidence={data.score.confidence}
                 />
               </div>
 
