@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_authenticated/macro/labour")({
       {
         name: "description",
         content:
-          "US employment, slack, worker demand and wage pressure standardised into an auditable Labour Heat Score.",
+          "US employment, slack, worker demand and wage pressure compared with history in an auditable Labour Heat Score.",
       },
     ],
   }),
@@ -41,7 +41,9 @@ function LabourEngine() {
   const { data, error, isLoading } = useQuery({
     queryKey: ["labour-engine"],
     queryFn: () => load(),
-    refetchOnWindowFocus: false,
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   return (
@@ -49,7 +51,7 @@ function LabourEngine() {
       <SectionHeader
         code="MA · Stage 4 · US Labour"
         title="Is the US labour market heating, balanced or breaking?"
-        purpose="Employment momentum, labour slack, worker demand and wage pressure, standardised into one auditable cycle score with the model and source evidence left visible."
+        purpose="Employment momentum, labour slack, worker demand and wage pressure, compared with their histories and combined into one auditable cycle score."
       />
 
       {isLoading && <div className="text-xs text-muted-foreground">Loading Labour Engine…</div>}
@@ -100,11 +102,12 @@ function LabourEngine() {
                   tone={toneForScore(dominantFamily?.[1] ?? null, false)}
                 />
                 <EngineKpi
-                  label="Kalman trend model"
+                  label="Noise-filtered trend"
                   value={normaliseStatus(data.kalman.status)}
                   sub={`${data.kalman.version ?? "not run"} · ${formatDate(data.kalman.asOf ?? latestDate)}`}
                   tone={data.kalman.status === "success" ? "positive" : "warning"}
-                  badge="latent trend"
+                  badge="experimental model"
+                  explanation="A statistical filter removes some short-term noise to estimate the underlying labour trend. The raw releases remain visible below."
                 />
               </div>
 
@@ -138,7 +141,7 @@ function LabourEngine() {
 
               <EngineSection
                 title="Contribution ledger"
-                description="Signed z-scores show which releases are heating or cooling the combined labour signal."
+                description="Shows how much each release heats or cools the combined labour signal after its direction and importance are applied."
                 className="mb-3"
               >
                 <ContributionLedger

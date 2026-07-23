@@ -34,7 +34,9 @@ function MarketEngine() {
   const { data, error, isLoading } = useQuery({
     queryKey: ["market-engine"],
     queryFn: () => load(),
-    refetchOnWindowFocus: false,
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   return (
@@ -94,11 +96,12 @@ function MarketEngine() {
                   tone={toneForScore(dominant?.contribution ?? null)}
                 />
                 <EngineKpi
-                  label="Shadow PCA"
-                  value={data.pca.status === "shadow" ? "Shadow" : "Not run"}
-                  sub={`${data.pca.explainedVariance == null ? "—" : `${(data.pca.explainedVariance * 100).toFixed(1)}%`} first-factor variance · ${latestDate ?? "no date"}`}
+                  label="Experimental market pattern"
+                  value={data.pca.status === "shadow" ? "Monitoring" : "Not run"}
+                  sub={`${data.pca.explainedVariance == null ? "—" : `${(data.pca.explainedVariance * 100).toFixed(1)}%`} of common market movement captured · ${latestDate ?? "no date"}`}
                   tone={data.pca.status === "shadow" ? "primary" : "warning"}
                   badge={data.pca.version ?? undefined}
+                  explanation="An experimental check asks whether equities, volatility, credit, rates, the dollar and commodities are moving together. It does not affect the live score."
                 />
               </div>
 
@@ -142,7 +145,7 @@ function MarketEngine() {
 
               <ModelNote>
                 {data.note} The live methodology is{" "}
-                <span className="font-mono">{data.score.methodology}</span>. PCA label:{" "}
+                <span className="font-mono">{data.score.methodology}</span>. Experimental model:{" "}
                 <span className="font-mono">{data.pca.label}</span>.
               </ModelNote>
             </>

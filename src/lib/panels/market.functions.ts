@@ -79,7 +79,7 @@ export const getMarketEngine = createServerFn({ method: "GET" }).handler(
         explainedVariance: variance?.first_factor ?? null,
         label: (model?.label as string | null) ?? "Market co-movement factor",
       },
-      note: "The transparent stress score is the live decision aid. PCA remains a shadow diagnostic until its loadings and stability have been reviewed across vintages.",
+      note: "The transparent stress score is the live decision aid. The experimental common-movement model remains a comparison only until it proves stable across different data updates.",
     };
   },
 );

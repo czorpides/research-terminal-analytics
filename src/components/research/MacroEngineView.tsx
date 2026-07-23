@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import type { EngineTone } from "@/lib/panels/macro-view";
 import { cn } from "@/lib/utils";
+import { InfoTip, StatisticalSparkline } from "./ResearchContext";
+import { Sparkles } from "lucide-react";
 
 const TONE_CLASS: Record<EngineTone, string> = {
   positive: "text-[var(--positive)]",
@@ -17,18 +19,20 @@ export function EngineKpi({
   sub,
   tone = "neutral",
   badge,
+  explanation,
 }: {
   label: string;
   value: string;
   sub: string;
   tone?: EngineTone;
   badge?: string;
+  explanation?: string;
 }) {
   return (
     <div className="relative overflow-hidden rounded border border-border bg-card p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          {label}
+          <InfoTip label={label} explanation={explanation ?? sub} />
         </div>
         {badge && (
           <span className="rounded-sm border border-border/70 bg-background/40 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
@@ -36,9 +40,13 @@ export function EngineKpi({
           </span>
         )}
       </div>
-      <div className={cn("mt-1 text-2xl font-semibold capitalize tabular-nums", TONE_CLASS[tone])}>
-        {value}
-      </div>
+      <InfoTip label={`${label}: ${value}`} explanation={explanation ?? sub}>
+        <span
+          className={cn("mt-1 text-2xl font-semibold capitalize tabular-nums", TONE_CLASS[tone])}
+        >
+          {value}
+        </span>
+      </InfoTip>
       <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{sub}</div>
     </div>
   );
@@ -58,7 +66,10 @@ export function ScoreScale({
     <div className="rounded border border-border bg-card p-3">
       <div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
         <span>{lowLabel}</span>
-        <span>Historical z-score range</span>
+        <InfoTip
+          label="Distance from the historical norm"
+          explanation="Zero means close to the indicator's own historical norm. A move toward either end is more unusual; the direction labels explain whether that is supportive or risky here."
+        />
         <span>{highLabel}</span>
       </div>
       <div className="relative mt-3 h-2 rounded-full bg-gradient-to-r from-[var(--positive)]/70 via-muted to-[var(--negative)]/70">
@@ -125,10 +136,16 @@ export function ContributionLedger({ rows }: { rows: ContributionRow[] }) {
     <div className="space-y-0.5">
       <div className="hidden grid-cols-[minmax(150px,1fr)_70px_70px_minmax(120px,0.8fr)_64px] gap-3 border-b border-border/50 pb-1 font-mono text-[9px] uppercase tracking-wider text-muted-foreground md:grid">
         <span>Indicator</span>
-        <span className="text-right">z-score</span>
-        <span className="text-right">weight</span>
-        <span>signed impact</span>
-        <span className="text-right">contrib.</span>
+        <span className="text-right">
+          <InfoTip label="Normal gap" />
+        </span>
+        <span className="text-right">
+          <InfoTip label="Weight" />
+        </span>
+        <span>
+          <InfoTip label="Effect on score" />
+        </span>
+        <span className="text-right">Effect</span>
       </div>
       {rows.map((row) => {
         const contribution = row.contribution ?? 0;
@@ -238,12 +255,15 @@ export function IndicatorGrid({ rows }: { rows: IndicatorViewRow[] }) {
                 <div className="text-muted-foreground">latest change</div>
               </div>
             </div>
-            <MiniTrend points={row.history} />
+            <StatisticalSparkline points={row.history} title={`${row.label} recent trend`} />
             <div className="mt-2 flex items-center justify-between border-t border-border/40 pt-2 font-mono text-[9px] text-muted-foreground">
               <span>
                 {(row.observationCount ?? row.history.length).toLocaleString()} observations
               </span>
-              <span>z {row.zScore?.toFixed(2) ?? "—"}</span>
+              <InfoTip
+                label={`Distance from usual ${row.zScore?.toFixed(2) ?? "—"}`}
+                explanation="Shows how far this reading is from its own history. Around zero is normal; about +2 or −2 is unusually far away."
+              />
             </div>
           </article>
         );
@@ -252,50 +272,17 @@ export function IndicatorGrid({ rows }: { rows: IndicatorViewRow[] }) {
   );
 }
 
-function MiniTrend({ points }: { points: Array<{ date: string; value: number }> }) {
-  const data = points.slice(-36).filter((point) => Number.isFinite(point.value));
-  if (data.length < 2) {
-    return <div className="mt-3 h-14 rounded-sm border border-dashed border-border/50" />;
-  }
-  const width = 320;
-  const height = 54;
-  const values = data.map((point) => point.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const path = data
-    .map((point, index) => {
-      const x = (index / (data.length - 1)) * width;
-      const y = height - ((point.value - min) / range) * (height - 6) - 3;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-14 w-full" role="img">
-      <title>Latest 36 transformed observations</title>
-      <line
-        x1="0"
-        x2={width}
-        y1={height - 1}
-        y2={height - 1}
-        stroke="currentColor"
-        strokeOpacity="0.12"
-      />
-      <path
-        d={path}
-        fill="none"
-        stroke="var(--primary)"
-        strokeWidth="1.5"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
-
 export function ModelNote({ children }: { children: ReactNode }) {
   return (
-    <div className="mt-4 rounded border border-border/60 bg-card/50 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-      {children}
+    <div className="mt-4 rounded border border-[var(--primary)]/30 bg-[var(--primary)]/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+      <div className="mb-1 flex items-center gap-1.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-[var(--primary)]">
+        <Sparkles className="h-3 w-3" /> AI research narrative
+      </div>
+      <div>{children}</div>
+      <div className="mt-1 text-[9px] text-muted-foreground/75">
+        Plain-English synthesis of the live model output. It explains the score and does not alter
+        it.
+      </div>
     </div>
   );
 }

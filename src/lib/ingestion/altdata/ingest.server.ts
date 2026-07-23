@@ -31,17 +31,23 @@ export interface AltDataIngestSummary {
 }
 
 const USER_AGENT = "LovableResearchTerminal/0.1 (alt-data attention signal; contact via project)";
-const WIKI_HOST = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/all-agents";
+const WIKI_HOST =
+  "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/all-agents";
 
 function fmtDate(d: Date): string {
   return d.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
-async function fetchPageviews(article: string, days = 90): Promise<Array<{ date: string; views: number }>> {
+async function fetchPageviews(
+  article: string,
+  days = 90,
+): Promise<Array<{ date: string; views: number }>> {
   const end = new Date(Date.now() - 2 * 86_400_000); // Wikipedia trails ~2d
   const start = new Date(end.getTime() - days * 86_400_000);
   const url = `${WIKI_HOST}/${article}/daily/${fmtDate(start)}/${fmtDate(end)}`;
-  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT, "Accept": "application/json" } });
+  const res = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+  });
   if (!res.ok) throw new Error(`Wikipedia ${res.status} for ${article}`);
   const json = (await res.json()) as { items?: Array<{ timestamp: string; views: number }> };
   return (json.items ?? []).map((it) => ({
@@ -58,24 +64,61 @@ function zScore(latest: number, series: number[]): { z: number; mean: number; sd
   return { z: sd === 0 ? 0 : (latest - mean) / sd, mean, sd };
 }
 
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function robustZScore(
+  latest: number,
+  series: number[],
+): { z: number; median: number; mad: number } {
+  if (series.length < 5) return { z: 0, median: latest, mad: 0 };
+  const centre = median(series);
+  const mad = median(series.map((value) => Math.abs(value - centre)));
+  return { z: mad === 0 ? 0 : (0.6745 * (latest - centre)) / mad, median: centre, mad };
+}
+
+function persistenceDays(values: number[]): number {
+  let count = 0;
+  for (let index = values.length - 1; index >= Math.max(60, values.length - 5); index -= 1) {
+    const baseline = values.slice(Math.max(0, index - 60), index);
+    if (Math.abs(zScore(values[index], baseline).z) >= 1) count += 1;
+    else break;
+  }
+  return count;
+}
+
 export async function runAltDataIngest(): Promise<AltDataIngestSummary> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: source } = await supabaseAdmin
-    .from("data_sources").select("id").eq("provider_code", "wikipedia_pv").maybeSingle();
+    .from("data_sources")
+    .select("id")
+    .eq("provider_code", "wikipedia_pv")
+    .maybeSingle();
   if (!source) throw new Error("Wikipedia data_source row missing");
 
   const symbols = Object.keys(WIKIPEDIA_TITLES);
   const { data: assets } = await supabaseAdmin
-    .from("assets").select("id, symbol").in("symbol", symbols);
+    .from("assets")
+    .select("id, symbol")
+    .in("symbol", symbols);
   const idBySym = new Map<string, string>();
   for (const a of assets ?? []) idBySym.set(a.symbol as string, a.id as string);
 
   const { data: run } = await supabaseAdmin
-    .from("ingestion_runs").insert({
-      source_id: source.id, data_category: "alt_data",
-      status: "running", details: { provider: "wikipedia_pv", symbols: symbols.length },
-    }).select("id").single();
+    .from("ingestion_runs")
+    .insert({
+      source_id: source.id,
+      data_category: "alt_data",
+      status: "running",
+      details: { provider: "wikipedia_pv", symbols: symbols.length },
+    })
+    .select("id")
+    .single();
   const runId = run!.id as string;
 
   const results: AssetIngestResult[] = [];
@@ -91,7 +134,12 @@ export async function runAltDataIngest(): Promise<AltDataIngestSummary> {
     try {
       const rows = await fetchPageviews(article, 90);
       if (rows.length < 10) {
-        results.push({ symbol, status: "skipped", rowsInserted: 0, error: `only ${rows.length} datapoints` });
+        results.push({
+          symbol,
+          status: "skipped",
+          rowsInserted: 0,
+          error: `only ${rows.length} datapoints`,
+        });
         continue;
       }
       // Persist daily raw pageviews (upsert)
@@ -105,14 +153,20 @@ export async function runAltDataIngest(): Promise<AltDataIngestSummary> {
         source_id: source.id,
       }));
       const { error: eDaily } = await supabaseAdmin
-        .from("alt_data_signals").upsert(dailyPayload, { onConflict: "signal_code,subject_type,subject_id,ts" });
+        .from("alt_data_signals")
+        .upsert(dailyPayload, { onConflict: "signal_code,subject_type,subject_id,ts" });
       if (eDaily) throw new Error(eDaily.message);
 
       // Anomaly: today's views vs trailing 60 days
       const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
       const latest = sorted[sorted.length - 1];
       const baseline = sorted.slice(-61, -1).map((r) => r.views);
-      const { z, mean, sd } = zScore(latest.views, baseline);
+      const conventional = zScore(latest.views, baseline);
+      const robust = robustZScore(latest.views, baseline);
+      const combinedZ = (conventional.z + robust.z) / 2;
+      const methodAgreement = Math.max(0, 1 - Math.min(1, Math.abs(conventional.z - robust.z) / 3));
+      const persistence = persistenceDays(sorted.map((row) => row.views));
+      const { mean, sd } = conventional;
       const spikePct = mean > 0 ? ((latest.views - mean) / mean) * 100 : 0;
 
       const attentionRow = {
@@ -120,19 +174,36 @@ export async function runAltDataIngest(): Promise<AltDataIngestSummary> {
         subject_type: "asset" as const,
         subject_id: subjectId,
         ts: new Date(`${latest.date}T00:00:00Z`).toISOString(),
-        value: Number(z.toFixed(3)),
+        value: Number(combinedZ.toFixed(3)),
         meta: {
-          article, symbol, latestViews: latest.views, baselineMean: Math.round(mean),
-          baselineSd: Math.round(sd), spikePct: Number(spikePct.toFixed(1)),
+          article,
+          symbol,
+          latestViews: latest.views,
+          baselineMean: Math.round(mean),
+          baselineSd: Math.round(sd),
+          spikePct: Number(spikePct.toFixed(1)),
+          conventionalZ: Number(conventional.z.toFixed(3)),
+          robustZ: Number(robust.z.toFixed(3)),
+          robustMedian: Math.round(robust.median),
+          robustMad: Math.round(robust.mad),
+          methodAgreement: Number(methodAgreement.toFixed(3)),
+          persistenceDays: persistence,
+          baselineDays: baseline.length,
           version: WIKIPEDIA_ATTENTION_VERSION,
         } as unknown as import("@/integrations/supabase/types").Json,
         source_id: source.id,
       };
       const { error: eAtt } = await supabaseAdmin
-        .from("alt_data_signals").upsert([attentionRow], { onConflict: "signal_code,subject_type,subject_id,ts" });
+        .from("alt_data_signals")
+        .upsert([attentionRow], { onConflict: "signal_code,subject_type,subject_id,ts" });
       if (eAtt) throw new Error(eAtt.message);
 
-      results.push({ symbol, status: "success", rowsInserted: dailyPayload.length + 1, zScore: z });
+      results.push({
+        symbol,
+        status: "success",
+        rowsInserted: dailyPayload.length + 1,
+        zScore: combinedZ,
+      });
       totalRows += dailyPayload.length + 1;
     } catch (e) {
       results.push({ symbol, status: "failed", rowsInserted: 0, error: (e as Error).message });
@@ -146,12 +217,21 @@ export async function runAltDataIngest(): Promise<AltDataIngestSummary> {
     rows: totalRows,
   };
 
-  await supabaseAdmin.from("ingestion_runs").update({
-    status: totals.failed === 0 ? "success" : totals.success > 0 ? "partial" : "failed",
-    finished_at: new Date().toISOString(),
-    rows_ingested: totalRows,
-    error: totals.failed > 0 ? `${totals.failed}/${symbols.length} assets failed` : null,
-  }).eq("id", runId);
+  await supabaseAdmin
+    .from("ingestion_runs")
+    .update({
+      status: totals.failed === 0 ? "success" : totals.success > 0 ? "partial" : "failed",
+      finished_at: new Date().toISOString(),
+      rows_ingested: totalRows,
+      error: totals.failed > 0 ? `${totals.failed}/${symbols.length} assets failed` : null,
+    })
+    .eq("id", runId);
 
-  return { ranAt: new Date().toISOString(), provider: "wikipedia_pv", version: WIKIPEDIA_ATTENTION_VERSION, results, totals };
+  return {
+    ranAt: new Date().toISOString(),
+    provider: "wikipedia_pv",
+    version: WIKIPEDIA_ATTENTION_VERSION,
+    results,
+    totals,
+  };
 }

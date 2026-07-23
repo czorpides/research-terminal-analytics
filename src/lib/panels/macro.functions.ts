@@ -13,7 +13,10 @@ export type MacroRegion = "US" | "EZ" | "UK";
 
 const RegionInput = z.object({ region: z.enum(["US", "EZ", "UK"]) });
 
-interface Obs { asOf: string; value: number }
+interface Obs {
+  asOf: string;
+  value: number;
+}
 type ByMetric = Map<string, Obs[]>;
 
 /**
@@ -33,39 +36,58 @@ export const getMacroPanelsForRegion = createServerFn({ method: "POST" })
  * rate, 10Y yield, unemployment) for US / EZ / UK, each as its own panel
  * with three trend lines side by side (rendered by the /macro page).
  */
-export const getMacroCompare = createServerFn({ method: "GET" }).handler(async (): Promise<PanelData[]> => {
-  return buildComparePanels();
-});
+export const getMacroCompare = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PanelData[]> => {
+    return buildComparePanels();
+  },
+);
 
-async function loadPoints(region: MacroRegion): Promise<{ byMetric: ByMetric; sourceName: string; regionLabel: string }> {
+async function loadPoints(
+  region: MacroRegion,
+): Promise<{ byMetric: ByMetric; sourceName: string; regionLabel: string }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const [{ data: source }, { data: indicators }] = await Promise.all([
     supabaseAdmin.from("data_sources").select("id, name").eq("provider_code", "fred").maybeSingle(),
-    supabaseAdmin.from("economic_indicators").select("id, code, provider_series_code").not("provider_series_code", "is", null),
+    supabaseAdmin
+      .from("economic_indicators")
+      .select("id, code, provider_series_code")
+      .not("provider_series_code", "is", null),
   ]);
 
   const wanted = new Set(FRED_SERIES.filter((s) => s.region === region).map((s) => s.seriesCode));
   const nativeWanted = new Set(
     NATIVE_SERIES.filter((s) => s.region === region).map((s) => s.seriesCode),
   );
-  const ids = (indicators ?? [])
-    .filter((i) => {
-      const code = i.provider_series_code as string | null;
-      return !!code && (wanted.has(code) || nativeWanted.has(code));
-    })
-    .map((i) => i.id);
+  const selectedIndicators = (indicators ?? []).filter((i) => {
+    const code = i.provider_series_code as string | null;
+    return !!code && (wanted.has(code) || nativeWanted.has(code));
+  });
+  const ids = selectedIndicators.map((i) => i.id);
 
   const byMetric: ByMetric = new Map();
   if (ids.length === 0) {
     return { byMetric, sourceName: source?.name ?? "FRED", regionLabel: REGION_LABEL[region] };
   }
 
-  const { data: points } = await supabaseAdmin
-    .from("data_points")
-    .select("metric_code, value_num, as_of")
-    .in("subject_id", ids)
-    .order("as_of", { ascending: true })
-    .limit(20000);
+  // Pull a bounded, newest-first history for every series independently. The
+  // old global oldest-first limit could fill up before reaching recent dates,
+  // which made the overview appear to stop in 2024 after a long backfill.
+  const cutoff = new Date();
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 7);
+  const pointGroups = await Promise.all(
+    ids.map(async (id) => {
+      const { data, error } = await supabaseAdmin
+        .from("data_points")
+        .select("metric_code, value_num, as_of")
+        .eq("subject_id", id)
+        .gte("as_of", cutoff.toISOString())
+        .order("as_of", { ascending: false })
+        .limit(2600);
+      if (error) throw error;
+      return (data ?? []).reverse();
+    }),
+  );
+  const points = pointGroups.flat();
 
   (points ?? []).forEach((p) => {
     if (p.value_num === null) return;
@@ -96,7 +118,8 @@ const REGION_LABEL: Record<MacroRegion, string> = {
 };
 
 async function buildRegionPanels(region: MacroRegion): Promise<PanelData[]> {
-  const { checkAboveMovingAverage, checkSpreadSign, checkFreshness, pendingAiCheck } = await import("@/lib/verify/runners.server");
+  const { checkAboveMovingAverage, checkSpreadSign, checkFreshness, pendingAiCheck } =
+    await import("@/lib/verify/runners.server");
   const { getLatestVerifyChecksForPanel } = await import("@/lib/verify/executor.server");
 
   const { byMetric, sourceName, regionLabel } = await loadPoints(region);
@@ -104,32 +127,69 @@ async function buildRegionPanels(region: MacroRegion): Promise<PanelData[]> {
 
   const panels: PanelData[] = [];
   if (region === "US") {
-    panels.push(usRatesPanel(byMetric, sourceName, checkAboveMovingAverage, checkSpreadSign, checkFreshness, pendingAiCheck));
+    panels.push(
+      usRatesPanel(
+        byMetric,
+        sourceName,
+        checkAboveMovingAverage,
+        checkSpreadSign,
+        checkFreshness,
+        pendingAiCheck,
+      ),
+    );
     panels.push(inflationPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(laborPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(housingPanel(byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(creditPanel(byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(businessGrowthPanel(byMetric, sourceName, checkFreshness, pendingAiCheck));
   } else if (region === "EZ") {
-    panels.push(genericRatesPanel(region, byMetric, sourceName, "ECBDFR", "IRLTLT01EZM156N", "ECB deposit rate", "EA 10Y yield", checkFreshness, pendingAiCheck));
+    panels.push(
+      genericRatesPanel(
+        region,
+        byMetric,
+        sourceName,
+        "ECBDFR",
+        "IRLTLT01EZM156N",
+        "ECB deposit rate",
+        "EA 10Y yield",
+        checkFreshness,
+        pendingAiCheck,
+      ),
+    );
     panels.push(inflationPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(laborPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
   } else {
-    panels.push(genericRatesPanel(region, byMetric, sourceName, "IUDSOIA", "IRLTLT01GBM156N", "UK SONIA (BoE proxy)", "UK 10Y gilt", checkFreshness, pendingAiCheck));
+    panels.push(
+      genericRatesPanel(
+        region,
+        byMetric,
+        sourceName,
+        "IUDSOIA",
+        "IRLTLT01GBM156N",
+        "UK SONIA (BoE proxy)",
+        "UK 10Y gilt",
+        checkFreshness,
+        pendingAiCheck,
+      ),
+    );
     panels.push(inflationPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(laborPanel(region, byMetric, sourceName, checkFreshness, pendingAiCheck));
     panels.push(ukBusinessPanel(byMetric, checkFreshness, pendingAiCheck));
   }
 
   // Overlay any recorded verify_runs (algo/api/ai) per panel.
-  const overlaid = await Promise.all(panels.map(async (p) => {
-    const live = await getLatestVerifyChecksForPanel(p.id);
-    if (live.length === 0) return p;
-    const byId = new Map(live.map((c) => [c.id, c]));
-    const merged: VerifyCheck[] = p.verifyNext.map((c) => byId.get(c.id) ?? c);
-    live.forEach((c) => { if (!p.verifyNext.find((x) => x.id === c.id)) merged.push(c); });
-    return { ...p, verifyNext: merged };
-  }));
+  const overlaid = await Promise.all(
+    panels.map(async (p) => {
+      const live = await getLatestVerifyChecksForPanel(p.id);
+      if (live.length === 0) return p;
+      const byId = new Map(live.map((c) => [c.id, c]));
+      const merged: VerifyCheck[] = p.verifyNext.map((c) => byId.get(c.id) ?? c);
+      live.forEach((c) => {
+        if (!p.verifyNext.find((x) => x.id === c.id)) merged.push(c);
+      });
+      return { ...p, verifyNext: merged };
+    }),
+  );
   return overlaid;
 }
 
@@ -137,8 +197,14 @@ async function buildRegionPanels(region: MacroRegion): Promise<PanelData[]> {
 // helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function latest(arr?: Obs[]) { return arr && arr.length > 0 ? arr[arr.length - 1] : undefined; }
-function toChartPoints(arr?: Obs[], tail = 120, cadence: Cadence = "monthly"): { t: string; v: number; stale?: boolean }[] {
+function latest(arr?: Obs[]) {
+  return arr && arr.length > 0 ? arr[arr.length - 1] : undefined;
+}
+function toChartPoints(
+  arr?: Obs[],
+  tail = 120,
+  cadence: Cadence = "monthly",
+): { t: string; v: number; stale?: boolean }[] {
   const pts = (arr ?? []).slice(-tail).map((p) => ({ t: p.asOf, v: p.value }));
   // Guarantee every macro chart extends to today so lines don't stop in 2024.
   return extendSeriesToToday(pts, cadence);
@@ -168,16 +234,20 @@ function fredEvidence(seriesCode: string, sourceName: string, asOf: string): Evi
     url: `https://fred.stlouisfed.org/series/${seriesCode}`,
   };
 }
-function makeTrend(arr: Obs[] | undefined, opts: { format?: TrendSeries["format"]; zones?: ChartZone[]; project?: number; tail?: number }): TrendSeries | undefined {
+function makeTrend(
+  arr: Obs[] | undefined,
+  opts: { format?: TrendSeries["format"]; zones?: ChartZone[]; project?: number; tail?: number },
+): TrendSeries | undefined {
   const pts = toChartPoints(arr, opts.tail ?? 120);
   if (pts.length === 0) return undefined;
   const forecast = opts.project ? ensembleForecast(pts, opts.project) : undefined;
   return {
     points: pts,
     projection: forecast?.projection,
-    projectionBand: forecast && forecast.upper.length > 0
-      ? { upper: forecast.upper, lower: forecast.lower }
-      : undefined,
+    projectionBand:
+      forecast && forecast.upper.length > 0
+        ? { upper: forecast.upper, lower: forecast.lower }
+        : undefined,
     zones: opts.zones,
     format: opts.format,
   };
@@ -185,20 +255,20 @@ function makeTrend(arr: Obs[] | undefined, opts: { format?: TrendSeries["format"
 
 // zone presets
 const ZONE_UNRATE: ChartZone[] = [
-  { from: 0,   to: 4.5, kind: "good", label: "Full employment" },
+  { from: 0, to: 4.5, kind: "good", label: "Full employment" },
   { from: 4.5, to: 5.5, kind: "warn", label: "Softening" },
-  { from: 5.5, to: 15,  kind: "bad",  label: "Recessionary" },
+  { from: 5.5, to: 15, kind: "bad", label: "Recessionary" },
 ];
 const ZONE_CPI_YOY: ChartZone[] = [
-  { from: 1,  to: 3,  kind: "good", label: "Near target" },
-  { from: 3,  to: 5,  kind: "warn", label: "Above target" },
-  { from: 5,  to: 20, kind: "bad",  label: "Hot" },
-  { from: -5, to: 1,  kind: "warn", label: "Below target" },
+  { from: 1, to: 3, kind: "good", label: "Near target" },
+  { from: 3, to: 5, kind: "warn", label: "Above target" },
+  { from: 5, to: 20, kind: "bad", label: "Hot" },
+  { from: -5, to: 1, kind: "warn", label: "Below target" },
 ];
 const ZONE_SPREAD: ChartZone[] = [
-  { from: 0.5,  to: 5,  kind: "good", label: "Steep" },
-  { from: 0,    to: 0.5,kind: "warn", label: "Flat" },
-  { from: -5,   to: 0,  kind: "bad",  label: "Inverted" },
+  { from: 0.5, to: 5, kind: "good", label: "Steep" },
+  { from: 0, to: 0.5, kind: "warn", label: "Flat" },
+  { from: -5, to: 0, kind: "bad", label: "Inverted" },
 ];
 const ZONE_MORTGAGE: ChartZone[] = [
   { from: 0, to: 5, kind: "good" },
@@ -209,6 +279,17 @@ const ZONE_DELINQ: ChartZone[] = [
   { from: 0, to: 3, kind: "good" },
   { from: 3, to: 5, kind: "warn" },
   { from: 5, to: 20, kind: "bad" },
+];
+const ZONE_POLICY_RATE: ChartZone[] = [
+  { from: -1, to: 2.5, kind: "good", label: "Supportive" },
+  { from: 2.5, to: 5, kind: "warn", label: "Restrictive" },
+  { from: 5, to: 25, kind: "bad", label: "Highly restrictive" },
+];
+const ZONE_GROWTH_YOY: ChartZone[] = [
+  { from: -30, to: 0, kind: "bad", label: "Contracting" },
+  { from: 0, to: 1, kind: "warn", label: "Weak growth" },
+  { from: 1, to: 5, kind: "good", label: "Healthy growth" },
+  { from: 5, to: 30, kind: "warn", label: "Unusually fast" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,8 +304,14 @@ function usRatesPanel(
   checkFresh: typeof import("@/lib/verify/runners.server").checkFreshness,
   pendingAi: typeof import("@/lib/verify/runners.server").pendingAiCheck,
 ): PanelData {
-  const ten = byMetric.get("DGS10"), two = byMetric.get("DGS2"), spread = byMetric.get("T10Y2Y"), dff = byMetric.get("DFF");
-  const l10 = latest(ten), l2 = latest(two), lSpread = latest(spread), lDff = latest(dff);
+  const ten = byMetric.get("DGS10"),
+    two = byMetric.get("DGS2"),
+    spread = byMetric.get("T10Y2Y"),
+    dff = byMetric.get("DFF");
+  const l10 = latest(ten),
+    l2 = latest(two),
+    lSpread = latest(spread),
+    lDff = latest(dff);
 
   const evidence: Evidence[] = [];
   if (l10) evidence.push(fredEvidence("DGS10", sourceName, l10.asOf));
@@ -233,17 +320,55 @@ function usRatesPanel(
   if (lDff) evidence.push(fredEvidence("DFF", sourceName, lDff.asOf));
 
   const ageSec = l10 ? (Date.now() - new Date(l10.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
-  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+  const conf = computeConfidence({
+    tier: "tier1_official",
+    category: "macro_release",
+    ageSeconds: ageSec,
+  });
 
-  const positives = [], deductions = [];
-  if (lSpread && lSpread.value < 0) deductions.push({ id: "curve-inv", label: "10Y − 2Y is inverted", detail: `${lSpread.value.toFixed(2)}pp` });
-  if (lSpread && lSpread.value > 0) positives.push({ id: "curve-pos", label: "10Y − 2Y positive", detail: `${lSpread.value.toFixed(2)}pp` });
-  if (l10 && lDff && l10.value > lDff.value) positives.push({ id: "10y-above-ff", label: "10Y trades above Fed Funds", detail: `${l10.value.toFixed(2)}% vs ${lDff.value.toFixed(2)}%` });
+  const positives = [],
+    deductions = [];
+  if (lSpread && lSpread.value < 0)
+    deductions.push({
+      id: "curve-inv",
+      label: "10Y − 2Y is inverted",
+      detail: `${lSpread.value.toFixed(2)}pp`,
+    });
+  if (lSpread && lSpread.value > 0)
+    positives.push({
+      id: "curve-pos",
+      label: "10Y − 2Y positive",
+      detail: `${lSpread.value.toFixed(2)}pp`,
+    });
+  if (l10 && lDff && l10.value > lDff.value)
+    positives.push({
+      id: "10y-above-ff",
+      label: "10Y trades above Fed Funds",
+      detail: `${l10.value.toFixed(2)}% vs ${lDff.value.toFixed(2)}%`,
+    });
 
   const verifyNext: VerifyCheck[] = [];
-  if (ten) verifyNext.push(checkMA("v-10y-ma", "10Y above 60-day moving average", ten.map((p) => ({ asOf: p.asOf, value: p.value })), 60));
-  verifyNext.push(checkSpread("v-curve-sign", "Yield curve non-inverted", lSpread?.value ?? null, "positive"));
-  if (l10) verifyNext.push(checkFresh("v-10y-fresh", "10Y freshness within policy", l10.asOf, DEFAULT_FRESHNESS.macro_release.maxAgeSeconds));
+  if (ten)
+    verifyNext.push(
+      checkMA(
+        "v-10y-ma",
+        "10Y above 60-day moving average",
+        ten.map((p) => ({ asOf: p.asOf, value: p.value })),
+        60,
+      ),
+    );
+  verifyNext.push(
+    checkSpread("v-curve-sign", "Yield curve non-inverted", lSpread?.value ?? null, "positive"),
+  );
+  if (l10)
+    verifyNext.push(
+      checkFresh(
+        "v-10y-fresh",
+        "10Y freshness within policy",
+        l10.asOf,
+        DEFAULT_FRESHNESS.macro_release.maxAgeSeconds,
+      ),
+    );
   verifyNext.push(pendingAi("v-10y-ai", "Explain 10Y move in context of recent Fed speak"));
 
   const chart = makeTrend(spread, { format: "percent", zones: ZONE_SPREAD, project: 6 });
@@ -253,7 +378,8 @@ function usRatesPanel(
     title: "US rates & yield curve",
     purpose: "Policy rate, long-end pricing and the 10Y − 2Y term spread.",
     background: {
-      overview: "The Fed Funds rate anchors the front end. The 10Y yield reflects growth, inflation and term premium expectations. Their difference — the yield curve — is one of the most historically reliable recession signals.",
+      overview:
+        "The Fed Funds rate anchors the front end. The 10Y yield reflects growth, inflation and term premium expectations. Their difference — the yield curve — is one of the most historically reliable recession signals.",
       whatCauses: [
         "Fed policy path (hikes, cuts, pauses)",
         "Inflation surprises and inflation expectations",
@@ -266,21 +392,38 @@ function usRatesPanel(
         { label: "Housing & REITs", note: "Mortgage rates track the 10Y" },
         { label: "USD & EM assets", note: "Rate differentials drive FX" },
       ],
-      whatToWatch: ["Next FOMC dot plot", "10Y break-evens vs real yields", "T-bill supply pressure"],
+      whatToWatch: [
+        "Next FOMC dot plot",
+        "10Y break-evens vs real yields",
+        "T-bill supply pressure",
+      ],
     },
     metrics: [
-      { label: "US 10Y",   value: l10 ? `${l10.value.toFixed(2)}%` : "—" },
-      { label: "US 2Y",    value: l2 ? `${l2.value.toFixed(2)}%` : "—" },
-      { label: "10Y − 2Y", value: lSpread ? `${lSpread.value.toFixed(2)}pp` : "—", tone: lSpread ? tone(lSpread.value, true) : "neutral" },
+      { label: "US 10Y", value: l10 ? `${l10.value.toFixed(2)}%` : "—" },
+      { label: "US 2Y", value: l2 ? `${l2.value.toFixed(2)}%` : "—" },
+      {
+        label: "10Y − 2Y",
+        value: lSpread ? `${lSpread.value.toFixed(2)}pp` : "—",
+        tone: lSpread ? tone(lSpread.value, true) : "neutral",
+      },
     ],
     chart,
-    whatChanged: l10 ? `Latest 10Y print: ${l10.value.toFixed(2)}% (${new Date(l10.asOf).toLocaleDateString()}).` : "No 10Y observations yet.",
-    whyItMatters: "Steepness and level of the curve drive equity duration risk, bank NIMs and credit spreads.",
-    evidence, positives, deductions, verifyNext,
+    whatChanged: l10
+      ? `Latest 10Y print: ${l10.value.toFixed(2)}% (${new Date(l10.asOf).toLocaleDateString()}).`
+      : "No 10Y observations yet.",
+    whyItMatters:
+      "Steepness and level of the curve drive equity duration risk, bank NIMs and credit spreads.",
+    evidence,
+    positives,
+    deductions,
+    verifyNext,
     confidence: { value: conf.value, penalties: conf.penalties },
     calculation: {
       formula: "spread = DGS10 − DGS2",
-      ...stampCalculation("macro.us_rates.v0.2", { DGS10: l10?.value ?? null, DGS2: l2?.value ?? null }),
+      ...stampCalculation("macro.us_rates.v0.2", {
+        DGS10: l10?.value ?? null,
+        DGS2: l2?.value ?? null,
+      }),
       inputs: { DGS10: l10?.value ?? null, DGS2: l2?.value ?? null, DFF: lDff?.value ?? null },
     },
   };
@@ -297,19 +440,33 @@ function genericRatesPanel(
   checkFresh: typeof import("@/lib/verify/runners.server").checkFreshness,
   pendingAi: typeof import("@/lib/verify/runners.server").pendingAiCheck,
 ): PanelData {
-  const policy = byMetric.get(policyCode), ten = byMetric.get(tenCode);
-  const lP = latest(policy), l10 = latest(ten);
+  const policy = byMetric.get(policyCode),
+    ten = byMetric.get(tenCode);
+  const lP = latest(policy),
+    l10 = latest(ten);
   const spread = lP && l10 ? l10.value - lP.value : null;
 
   const evidence: Evidence[] = [];
-  if (lP)  evidence.push(fredEvidence(policyCode, sourceName, lP.asOf));
+  if (lP) evidence.push(fredEvidence(policyCode, sourceName, lP.asOf));
   if (l10) evidence.push(fredEvidence(tenCode, sourceName, l10.asOf));
 
   const ageSec = l10 ? (Date.now() - new Date(l10.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
-  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+  const conf = computeConfidence({
+    tier: "tier1_official",
+    category: "macro_release",
+    ageSeconds: ageSec,
+  });
 
   const verifyNext: VerifyCheck[] = [];
-  if (l10) verifyNext.push(checkFresh("v-10y-fresh", `${tenLabel} freshness within policy`, l10.asOf, DEFAULT_FRESHNESS.macro_release.maxAgeSeconds));
+  if (l10)
+    verifyNext.push(
+      checkFresh(
+        "v-10y-fresh",
+        `${tenLabel} freshness within policy`,
+        l10.asOf,
+        DEFAULT_FRESHNESS.macro_release.maxAgeSeconds,
+      ),
+    );
   verifyNext.push(pendingAi("v-rates-ai", `Interpret ${region} policy stance vs long-end pricing`));
 
   return {
@@ -322,13 +479,22 @@ function genericRatesPanel(
     },
     metrics: [
       { label: policyLabel, value: lP ? `${lP.value.toFixed(2)}%` : "—" },
-      { label: tenLabel,    value: l10 ? `${l10.value.toFixed(2)}%` : "—" },
-      { label: "10Y − policy", value: spread !== null ? `${spread.toFixed(2)}pp` : "—", tone: spread !== null ? tone(spread, true) : "neutral" },
+      { label: tenLabel, value: l10 ? `${l10.value.toFixed(2)}%` : "—" },
+      {
+        label: "10Y − policy",
+        value: spread !== null ? `${spread.toFixed(2)}pp` : "—",
+        tone: spread !== null ? tone(spread, true) : "neutral",
+      },
     ],
-    chart: makeTrend(ten, { format: "percent", project: 6 }),
-    whatChanged: l10 ? `Latest ${tenLabel}: ${l10.value.toFixed(2)}% (${new Date(l10.asOf).toLocaleDateString()}).` : "No observations yet.",
+    chart: makeTrend(ten, { format: "percent", zones: ZONE_POLICY_RATE, project: 6 }),
+    whatChanged: l10
+      ? `Latest ${tenLabel}: ${l10.value.toFixed(2)}% (${new Date(l10.asOf).toLocaleDateString()}).`
+      : "No observations yet.",
     whyItMatters: "The policy path plus long-end yield drives local equity, credit and FX pricing.",
-    evidence, positives: [], deductions: [], verifyNext,
+    evidence,
+    positives: [],
+    deductions: [],
+    verifyNext,
     confidence: { value: conf.value, penalties: conf.penalties },
   };
 }
@@ -340,7 +506,8 @@ function inflationPanel(
   checkFresh: typeof import("@/lib/verify/runners.server").checkFreshness,
   pendingAi: typeof import("@/lib/verify/runners.server").pendingAiCheck,
 ): PanelData {
-  const cpiCode = region === "US" ? "CPIAUCSL" : region === "EZ" ? "CP0000EZ19M086NEST" : "CPALTT01GBM657N";
+  const cpiCode =
+    region === "US" ? "CPIAUCSL" : region === "EZ" ? "CP0000EZ19M086NEST" : "CPALTT01GBM657N";
   const coreCode = region === "US" ? "CPILFESL" : undefined;
   const cpi = byMetric.get(cpiCode);
   const core = coreCode ? byMetric.get(coreCode) : undefined;
@@ -349,22 +516,37 @@ function inflationPanel(
   const isAlreadyYoY = region === "UK";
   const cpiYoY = isAlreadyYoY ? (latest(cpi)?.value ?? null) : pctChangeYoY(cpi);
   const coreYoY = pctChangeYoY(core);
-  const lCpi = latest(cpi), lCore = latest(core);
+  const lCpi = latest(cpi),
+    lCore = latest(core);
 
   const evidence: Evidence[] = [];
-  if (lCpi)  evidence.push(fredEvidence(cpiCode, sourceName, lCpi.asOf));
+  if (lCpi) evidence.push(fredEvidence(cpiCode, sourceName, lCpi.asOf));
   if (lCore && coreCode) evidence.push(fredEvidence(coreCode, sourceName, lCore.asOf));
 
-  const ageSec = lCpi ? (Date.now() - new Date(lCpi.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
-  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+  const ageSec = lCpi
+    ? (Date.now() - new Date(lCpi.asOf).getTime()) / 1000
+    : Number.MAX_SAFE_INTEGER;
+  const conf = computeConfidence({
+    tier: "tier1_official",
+    category: "macro_release",
+    ageSeconds: ageSec,
+  });
 
-  const positives = [], deductions = [];
-  if (cpiYoY !== null && cpiYoY < 3) positives.push({ id: "cpi-cool", label: "CPI YoY under 3%", detail: `${cpiYoY.toFixed(2)}%` });
-  if (cpiYoY !== null && cpiYoY > 4) deductions.push({ id: "cpi-hot", label: "CPI YoY above 4%", detail: `${cpiYoY.toFixed(2)}%` });
+  const positives = [],
+    deductions = [];
+  if (cpiYoY !== null && cpiYoY < 3)
+    positives.push({ id: "cpi-cool", label: "CPI YoY under 3%", detail: `${cpiYoY.toFixed(2)}%` });
+  if (cpiYoY !== null && cpiYoY > 4)
+    deductions.push({ id: "cpi-hot", label: "CPI YoY above 4%", detail: `${cpiYoY.toFixed(2)}%` });
 
   const verifyNext: VerifyCheck[] = [];
-  if (lCpi) verifyNext.push(checkFresh("v-cpi-fresh", "CPI print within policy window", lCpi.asOf, 60 * 60 * 24 * 40));
-  verifyNext.push(pendingAi("v-cpi-ai", "Decompose CPI drivers (shelter, services, goods, energy)"));
+  if (lCpi)
+    verifyNext.push(
+      checkFresh("v-cpi-fresh", "CPI print within policy window", lCpi.asOf, 60 * 60 * 24 * 40),
+    );
+  verifyNext.push(
+    pendingAi("v-cpi-ai", "Decompose CPI drivers (shelter, services, goods, energy)"),
+  );
 
   // Trend chart: prefer YoY series if we can compute one; else raw index.
   let chart: TrendSeries | undefined;
@@ -384,20 +566,49 @@ function inflationPanel(
     title: `${REGION_LABEL[region]} inflation`,
     purpose: "Headline (and where available core) CPI year-on-year vs the 2% target.",
     background: {
-      overview: "Consumer price inflation, year-on-year, is the primary target of most major central banks. Persistence in core (ex food & energy) matters more than headline swings.",
-      whatCauses: ["Energy price shocks", "Wage growth / services inflation", "Currency depreciation", "Fiscal impulse & tariffs"],
-      assetsAffected: [{ label: "Rates & duration" }, { label: "Consumer discretionary" }, { label: "Precious metals" }],
+      overview:
+        "Consumer price inflation, year-on-year, is the primary target of most major central banks. Persistence in core (ex food & energy) matters more than headline swings.",
+      whatCauses: [
+        "Energy price shocks",
+        "Wage growth / services inflation",
+        "Currency depreciation",
+        "Fiscal impulse & tariffs",
+      ],
+      assetsAffected: [
+        { label: "Rates & duration" },
+        { label: "Consumer discretionary" },
+        { label: "Precious metals" },
+      ],
       whatToWatch: ["Next CPI release", "Wage tracker prints", "Energy futures"],
     },
     metrics: [
-      { label: "CPI YoY",     value: cpiYoY !== null ? `${cpiYoY.toFixed(2)}%` : "—", tone: cpiYoY !== null ? tone(cpiYoY - 2, false) : "neutral" },
-      { label: "Core CPI YoY", value: coreYoY !== null ? `${coreYoY.toFixed(2)}%` : "—", tone: coreYoY !== null ? tone(coreYoY - 2, false) : "neutral" },
-      { label: "Latest month", value: lCpi ? new Date(lCpi.asOf).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—" },
+      {
+        label: "CPI YoY",
+        value: cpiYoY !== null ? `${cpiYoY.toFixed(2)}%` : "—",
+        tone: cpiYoY !== null ? tone(cpiYoY - 2, false) : "neutral",
+      },
+      {
+        label: "Core CPI YoY",
+        value: coreYoY !== null ? `${coreYoY.toFixed(2)}%` : "—",
+        tone: coreYoY !== null ? tone(coreYoY - 2, false) : "neutral",
+      },
+      {
+        label: "Latest month",
+        value: lCpi
+          ? new Date(lCpi.asOf).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+          : "—",
+      },
     ],
     chart,
-    whatChanged: lCpi ? `Latest CPI print for ${new Date(lCpi.asOf).toLocaleDateString(undefined, { month: "long", year: "numeric" })}.` : "No CPI data yet.",
-    whyItMatters: "Sticky inflation delays rate cuts, compresses valuation multiples and pressures long-duration assets.",
-    evidence, positives, deductions, verifyNext,
+    whatChanged: lCpi
+      ? `Latest CPI print for ${new Date(lCpi.asOf).toLocaleDateString(undefined, { month: "long", year: "numeric" })}.`
+      : "No CPI data yet.",
+    whyItMatters:
+      "Sticky inflation delays rate cuts, compresses valuation multiples and pressures long-duration assets.",
+    evidence,
+    positives,
+    deductions,
+    verifyNext,
     confidence: { value: conf.value, penalties: conf.penalties },
   };
 }
@@ -409,56 +620,111 @@ function laborPanel(
   checkFresh: typeof import("@/lib/verify/runners.server").checkFreshness,
   pendingAi: typeof import("@/lib/verify/runners.server").pendingAiCheck,
 ): PanelData {
-  const unCode = region === "US" ? "UNRATE" : region === "EZ" ? "LRHUTTTTEZM156S" : "LRHUTTTTGBM156S";
+  const unCode =
+    region === "US" ? "UNRATE" : region === "EZ" ? "LRHUTTTTEZM156S" : "LRHUTTTTGBM156S";
   const payCode = region === "US" ? "PAYEMS" : undefined;
   const unrate = byMetric.get(unCode);
   const payems = payCode ? byMetric.get(payCode) : undefined;
-  const lUn = latest(unrate), lPay = latest(payems);
-  const payChg = payems && payems.length >= 2 ? payems[payems.length - 1].value - payems[payems.length - 2].value : null;
+  const lUn = latest(unrate),
+    lPay = latest(payems);
+  const payChg =
+    payems && payems.length >= 2
+      ? payems[payems.length - 1].value - payems[payems.length - 2].value
+      : null;
 
   const evidence: Evidence[] = [];
-  if (lUn)  evidence.push(fredEvidence(unCode, sourceName, lUn.asOf));
+  if (lUn) evidence.push(fredEvidence(unCode, sourceName, lUn.asOf));
   if (lPay && payCode) evidence.push(fredEvidence(payCode, sourceName, lPay.asOf));
 
   const ageSec = lUn ? (Date.now() - new Date(lUn.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
-  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+  const conf = computeConfidence({
+    tier: "tier1_official",
+    category: "macro_release",
+    ageSeconds: ageSec,
+  });
 
-  const positives = [], deductions = [];
-  if (lUn && lUn.value < 4.5) positives.push({ id: "un-low", label: "Unemployment below 4.5%", detail: `${lUn.value.toFixed(2)}%` });
-  if (lUn && lUn.value > 5.5) deductions.push({ id: "un-high", label: "Unemployment above 5.5%", detail: `${lUn.value.toFixed(2)}%` });
+  const positives = [],
+    deductions = [];
+  if (lUn && lUn.value < 4.5)
+    positives.push({
+      id: "un-low",
+      label: "Unemployment below 4.5%",
+      detail: `${lUn.value.toFixed(2)}%`,
+    });
+  if (lUn && lUn.value > 5.5)
+    deductions.push({
+      id: "un-high",
+      label: "Unemployment above 5.5%",
+      detail: `${lUn.value.toFixed(2)}%`,
+    });
 
   const verifyNext: VerifyCheck[] = [];
-  if (lUn) verifyNext.push(checkFresh("v-un-fresh", "Unemployment print fresh", lUn.asOf, 60 * 60 * 24 * 40));
-  verifyNext.push(pendingAi("v-labor-ai", `Interpret ${region} labour data vs central-bank reaction function`));
+  if (lUn)
+    verifyNext.push(
+      checkFresh("v-un-fresh", "Unemployment print fresh", lUn.asOf, 60 * 60 * 24 * 40),
+    );
+  verifyNext.push(
+    pendingAi("v-labor-ai", `Interpret ${region} labour data vs central-bank reaction function`),
+  );
 
   return {
     id: `macro-${region.toLowerCase()}-labor`,
     title: `${REGION_LABEL[region]} labour market`,
     purpose: "Unemployment rate" + (payCode ? " and nonfarm payrolls MoM change." : "."),
     background: {
-      overview: "Labour tightness drives wage pressure, consumer resilience and central-bank reaction. Rapid rises historically precede recessions (Sahm rule).",
+      overview:
+        "Labour tightness drives wage pressure, consumer resilience and central-bank reaction. Rapid rises historically precede recessions (Sahm rule).",
       whatToWatch: ["Next employment print", "Wage growth", "Job-openings trend"],
     },
     metrics: [
-      { label: "Unemployment", value: lUn ? `${lUn.value.toFixed(2)}%` : "—", tone: lUn && lUn.value < 5 ? "positive" : "warning" },
-      ...(payCode ? [{ label: "Payrolls Δ (MoM, k)", value: payChg !== null ? `${payChg > 0 ? "+" : ""}${payChg.toFixed(0)}` : "—", tone: (payChg !== null ? tone(payChg, true) : "neutral") as Metric["tone"] }] : []),
-      { label: "Latest month", value: lUn ? new Date(lUn.asOf).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—" },
+      {
+        label: "Unemployment",
+        value: lUn ? `${lUn.value.toFixed(2)}%` : "—",
+        tone: lUn && lUn.value < 5 ? "positive" : "warning",
+      },
+      ...(payCode
+        ? [
+            {
+              label: "Payrolls Δ (MoM, k)",
+              value: payChg !== null ? `${payChg > 0 ? "+" : ""}${payChg.toFixed(0)}` : "—",
+              tone: (payChg !== null ? tone(payChg, true) : "neutral") as Metric["tone"],
+            },
+          ]
+        : []),
+      {
+        label: "Latest month",
+        value: lUn
+          ? new Date(lUn.asOf).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+          : "—",
+      },
     ],
     chart: makeTrend(unrate, { format: "percent", zones: ZONE_UNRATE, project: 6 }),
-    whatChanged: lPay ? `Latest payrolls: ${Math.round(lPay.value).toLocaleString()}k jobs.` : (lUn ? `Latest unemployment: ${lUn.value.toFixed(2)}%.` : "No data yet."),
+    whatChanged: lPay
+      ? `Latest payrolls: ${Math.round(lPay.value).toLocaleString()}k jobs.`
+      : lUn
+        ? `Latest unemployment: ${lUn.value.toFixed(2)}%.`
+        : "No data yet.",
     whyItMatters: "Labour tightness determines wage pressure, policy path and consumer resilience.",
-    evidence, positives, deductions, verifyNext,
+    evidence,
+    positives,
+    deductions,
+    verifyNext,
     confidence: { value: conf.value, penalties: conf.penalties },
   };
 }
 
 function housingPanel(
-  byMetric: ByMetric, sourceName: string,
+  byMetric: ByMetric,
+  sourceName: string,
   checkFresh: typeof import("@/lib/verify/runners.server").checkFreshness,
   pendingAi: typeof import("@/lib/verify/runners.server").pendingAiCheck,
 ): PanelData {
-  const mort = byMetric.get("MORTGAGE30US"), starts = byMetric.get("HOUST"), mtgDel = byMetric.get("DRSFRMACBS");
-  const lM = latest(mort), lS = latest(starts), lD = latest(mtgDel);
+  const mort = byMetric.get("MORTGAGE30US"),
+    starts = byMetric.get("HOUST"),
+    mtgDel = byMetric.get("DRSFRMACBS");
+  const lM = latest(mort),
+    lS = latest(starts),
+    lD = latest(mtgDel);
 
   const evidence: Evidence[] = [];
   if (lM) evidence.push(fredEvidence("MORTGAGE30US", sourceName, lM.asOf));
@@ -466,15 +732,43 @@ function housingPanel(
   if (lD) evidence.push(fredEvidence("DRSFRMACBS", sourceName, lD.asOf));
 
   const ageSec = lM ? (Date.now() - new Date(lM.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
-  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+  const conf = computeConfidence({
+    tier: "tier1_official",
+    category: "macro_release",
+    ageSeconds: ageSec,
+  });
 
-  const positives = [], deductions = [];
-  if (lM && lM.value < 5) positives.push({ id: "mtg-low", label: "30Y mortgage rate below 5%", detail: `${lM.value.toFixed(2)}%` });
-  if (lM && lM.value > 7) deductions.push({ id: "mtg-high", label: "30Y mortgage rate above 7%", detail: `${lM.value.toFixed(2)}%` });
-  if (lD && lD.value > 4) deductions.push({ id: "mtg-del", label: "Mortgage delinquencies elevated", detail: `${lD.value.toFixed(2)}%` });
+  const positives = [],
+    deductions = [];
+  if (lM && lM.value < 5)
+    positives.push({
+      id: "mtg-low",
+      label: "30Y mortgage rate below 5%",
+      detail: `${lM.value.toFixed(2)}%`,
+    });
+  if (lM && lM.value > 7)
+    deductions.push({
+      id: "mtg-high",
+      label: "30Y mortgage rate above 7%",
+      detail: `${lM.value.toFixed(2)}%`,
+    });
+  if (lD && lD.value > 4)
+    deductions.push({
+      id: "mtg-del",
+      label: "Mortgage delinquencies elevated",
+      detail: `${lD.value.toFixed(2)}%`,
+    });
 
   const verifyNext: VerifyCheck[] = [];
-  if (lM) verifyNext.push(checkFresh("v-mort-fresh", "30Y mortgage rate fresh", lM.asOf, DEFAULT_FRESHNESS.macro_release.maxAgeSeconds));
+  if (lM)
+    verifyNext.push(
+      checkFresh(
+        "v-mort-fresh",
+        "30Y mortgage rate fresh",
+        lM.asOf,
+        DEFAULT_FRESHNESS.macro_release.maxAgeSeconds,
+      ),
+    );
   verifyNext.push(pendingAi("v-housing-ai", "Cross-check affordability vs price index momentum"));
 
   return {
@@ -482,46 +776,92 @@ function housingPanel(
     title: "US housing & mortgages",
     purpose: "30Y mortgage rate, housing starts and single-family mortgage delinquency.",
     background: {
-      overview: "Housing is the single largest household balance-sheet item. Mortgage rates gate affordability, delinquencies flag stress, starts flag builder confidence.",
-      whatCauses: ["Long-end Treasury yields", "MBS spreads", "Household income growth", "Regulation & underwriting standards"],
-      assetsAffected: [{ label: "Homebuilders" }, { label: "REITs" }, { label: "Regional banks" }, { label: "Mortgage insurers" }],
+      overview:
+        "Housing is the single largest household balance-sheet item. Mortgage rates gate affordability, delinquencies flag stress, starts flag builder confidence.",
+      whatCauses: [
+        "Long-end Treasury yields",
+        "MBS spreads",
+        "Household income growth",
+        "Regulation & underwriting standards",
+      ],
+      assetsAffected: [
+        { label: "Homebuilders" },
+        { label: "REITs" },
+        { label: "Regional banks" },
+        { label: "Mortgage insurers" },
+      ],
       whatToWatch: ["Existing home sales", "Case-Shiller HPI", "Refi index"],
     },
     metrics: [
-      { label: "30Y mortgage", value: lM ? `${lM.value.toFixed(2)}%` : "—", tone: lM && lM.value > 7 ? "negative" : lM && lM.value < 5 ? "positive" : "neutral" },
+      {
+        label: "30Y mortgage",
+        value: lM ? `${lM.value.toFixed(2)}%` : "—",
+        tone: lM && lM.value > 7 ? "negative" : lM && lM.value < 5 ? "positive" : "neutral",
+      },
       { label: "Housing starts (k)", value: lS ? Math.round(lS.value).toLocaleString() : "—" },
-      { label: "Mortgage delinq.", value: lD ? `${lD.value.toFixed(2)}%` : "—", tone: lD && lD.value > 4 ? "negative" : "neutral" },
+      {
+        label: "Mortgage delinq.",
+        value: lD ? `${lD.value.toFixed(2)}%` : "—",
+        tone: lD && lD.value > 4 ? "negative" : "neutral",
+      },
     ],
     chart: makeTrend(mort, { format: "percent", zones: ZONE_MORTGAGE, project: 6 }),
-    whatChanged: lM ? `30Y mortgage rate at ${lM.value.toFixed(2)}% (${new Date(lM.asOf).toLocaleDateString()}).` : "No mortgage data yet.",
-    whyItMatters: "Affordability drives the housing cycle; delinquencies are an early credit-stress signal.",
-    evidence, positives, deductions, verifyNext,
+    whatChanged: lM
+      ? `30Y mortgage rate at ${lM.value.toFixed(2)}% (${new Date(lM.asOf).toLocaleDateString()}).`
+      : "No mortgage data yet.",
+    whyItMatters:
+      "Affordability drives the housing cycle; delinquencies are an early credit-stress signal.",
+    evidence,
+    positives,
+    deductions,
+    verifyNext,
     confidence: { value: conf.value, penalties: conf.penalties },
   };
 }
 
 function creditPanel(
-  byMetric: ByMetric, sourceName: string,
+  byMetric: ByMetric,
+  sourceName: string,
   checkFresh: typeof import("@/lib/verify/runners.server").checkFreshness,
   pendingAi: typeof import("@/lib/verify/runners.server").pendingAiCheck,
 ): PanelData {
-  const cc = byMetric.get("DRCCLACBS"), cons = byMetric.get("TOTALSL");
-  const lCc = latest(cc), lCons = latest(cons);
+  const cc = byMetric.get("DRCCLACBS"),
+    cons = byMetric.get("TOTALSL");
+  const lCc = latest(cc),
+    lCons = latest(cons);
   const consChgYoY = pctChangeYoY(cons);
 
   const evidence: Evidence[] = [];
-  if (lCc)   evidence.push(fredEvidence("DRCCLACBS", sourceName, lCc.asOf));
+  if (lCc) evidence.push(fredEvidence("DRCCLACBS", sourceName, lCc.asOf));
   if (lCons) evidence.push(fredEvidence("TOTALSL", sourceName, lCons.asOf));
 
   const ageSec = lCc ? (Date.now() - new Date(lCc.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
-  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+  const conf = computeConfidence({
+    tier: "tier1_official",
+    category: "macro_release",
+    ageSeconds: ageSec,
+  });
 
-  const positives = [], deductions = [];
-  if (lCc && lCc.value < 3) positives.push({ id: "cc-low", label: "Credit-card delinquency contained", detail: `${lCc.value.toFixed(2)}%` });
-  if (lCc && lCc.value > 4) deductions.push({ id: "cc-high", label: "Credit-card delinquency rising", detail: `${lCc.value.toFixed(2)}%` });
+  const positives = [],
+    deductions = [];
+  if (lCc && lCc.value < 3)
+    positives.push({
+      id: "cc-low",
+      label: "Credit-card delinquency contained",
+      detail: `${lCc.value.toFixed(2)}%`,
+    });
+  if (lCc && lCc.value > 4)
+    deductions.push({
+      id: "cc-high",
+      label: "Credit-card delinquency rising",
+      detail: `${lCc.value.toFixed(2)}%`,
+    });
 
   const verifyNext: VerifyCheck[] = [];
-  if (lCc) verifyNext.push(checkFresh("v-cc-fresh", "Credit card delinquency print fresh", lCc.asOf, 60 * 60 * 24 * 120));
+  if (lCc)
+    verifyNext.push(
+      checkFresh("v-cc-fresh", "Credit card delinquency print fresh", lCc.asOf, 60 * 60 * 24 * 120),
+    );
   verifyNext.push(pendingAi("v-credit-ai", "Assess consumer credit stress vs labour market"));
 
   return {
@@ -529,61 +869,129 @@ function creditPanel(
     title: "US household credit stress",
     purpose: "Credit-card delinquency, consumer credit outstanding and YoY growth.",
     background: {
-      overview: "Household credit stress is where a slowdown shows up first. Rising delinquencies precede tightening lending standards and a broader credit contraction.",
+      overview:
+        "Household credit stress is where a slowdown shows up first. Rising delinquencies precede tightening lending standards and a broader credit contraction.",
       whatToWatch: ["SLOOS bank lending survey", "Auto loan delinquencies", "Charge-off rates"],
     },
     metrics: [
-      { label: "Credit-card delinq.", value: lCc ? `${lCc.value.toFixed(2)}%` : "—", tone: lCc && lCc.value > 4 ? "negative" : "neutral" },
-      { label: "Consumer credit ($bn)", value: lCons ? Math.round(lCons.value).toLocaleString() : "—" },
-      { label: "Consumer credit YoY", value: consChgYoY !== null ? `${consChgYoY.toFixed(2)}%` : "—", tone: consChgYoY !== null ? tone(consChgYoY, true) : "neutral" },
+      {
+        label: "Credit-card delinq.",
+        value: lCc ? `${lCc.value.toFixed(2)}%` : "—",
+        tone: lCc && lCc.value > 4 ? "negative" : "neutral",
+      },
+      {
+        label: "Consumer credit ($bn)",
+        value: lCons ? Math.round(lCons.value).toLocaleString() : "—",
+      },
+      {
+        label: "Consumer credit YoY",
+        value: consChgYoY !== null ? `${consChgYoY.toFixed(2)}%` : "—",
+        tone: consChgYoY !== null ? tone(consChgYoY, true) : "neutral",
+      },
     ],
     chart: makeTrend(cc, { format: "percent", zones: ZONE_DELINQ, project: 4 }),
-    whatChanged: lCc ? `Credit-card delinquency at ${lCc.value.toFixed(2)}% (${new Date(lCc.asOf).toLocaleDateString()}).` : "No credit data yet.",
-    whyItMatters: "Rising delinquencies flag consumer weakness before it shows in retail sales or payrolls.",
-    evidence, positives, deductions, verifyNext,
+    whatChanged: lCc
+      ? `Credit-card delinquency at ${lCc.value.toFixed(2)}% (${new Date(lCc.asOf).toLocaleDateString()}).`
+      : "No credit data yet.",
+    whyItMatters:
+      "Rising delinquencies flag consumer weakness before it shows in retail sales or payrolls.",
+    evidence,
+    positives,
+    deductions,
+    verifyNext,
     confidence: { value: conf.value, penalties: conf.penalties },
   };
 }
 
 function businessGrowthPanel(
-  byMetric: ByMetric, sourceName: string,
+  byMetric: ByMetric,
+  sourceName: string,
   checkFresh: typeof import("@/lib/verify/runners.server").checkFreshness,
   pendingAi: typeof import("@/lib/verify/runners.server").pendingAiCheck,
 ): PanelData {
-  const bus = byMetric.get("BUSLOANS"), indpro = byMetric.get("INDPRO"), sent = byMetric.get("UMCSENT"), icsa = byMetric.get("ICSA");
-  const lBus = latest(bus), lInd = latest(indpro), lSent = latest(sent), lIcsa = latest(icsa);
-  const busYoY = pctChangeYoY(bus), indYoY = pctChangeYoY(indpro);
+  const bus = byMetric.get("BUSLOANS"),
+    indpro = byMetric.get("INDPRO"),
+    sent = byMetric.get("UMCSENT"),
+    icsa = byMetric.get("ICSA");
+  const lBus = latest(bus),
+    lInd = latest(indpro),
+    lSent = latest(sent),
+    lIcsa = latest(icsa);
+  const busYoY = pctChangeYoY(bus),
+    indYoY = pctChangeYoY(indpro);
 
   const evidence: Evidence[] = [];
-  if (lBus)  evidence.push(fredEvidence("BUSLOANS", sourceName, lBus.asOf));
-  if (lInd)  evidence.push(fredEvidence("INDPRO", sourceName, lInd.asOf));
+  if (lBus) evidence.push(fredEvidence("BUSLOANS", sourceName, lBus.asOf));
+  if (lInd) evidence.push(fredEvidence("INDPRO", sourceName, lInd.asOf));
   if (lSent) evidence.push(fredEvidence("UMCSENT", sourceName, lSent.asOf));
   if (lIcsa) evidence.push(fredEvidence("ICSA", sourceName, lIcsa.asOf));
 
-  const ageSec = lInd ? (Date.now() - new Date(lInd.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
-  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+  const ageSec = lInd
+    ? (Date.now() - new Date(lInd.asOf).getTime()) / 1000
+    : Number.MAX_SAFE_INTEGER;
+  const conf = computeConfidence({
+    tier: "tier1_official",
+    category: "macro_release",
+    ageSeconds: ageSec,
+  });
 
   const verifyNext: VerifyCheck[] = [];
-  if (lInd) verifyNext.push(checkFresh("v-ind-fresh", "Industrial production print fresh", lInd.asOf, 60 * 60 * 24 * 40));
-  verifyNext.push(pendingAi("v-business-ai", "Cross-check business activity vs jobless claims trend"));
+  if (lInd)
+    verifyNext.push(
+      checkFresh("v-ind-fresh", "Industrial production print fresh", lInd.asOf, 60 * 60 * 24 * 40),
+    );
+  verifyNext.push(
+    pendingAi("v-business-ai", "Cross-check business activity vs jobless claims trend"),
+  );
+
+  const indYoYSeries: Obs[] = [];
+  if (indpro && indpro.length > 13) {
+    for (let index = 12; index < indpro.length; index += 1) {
+      const prior = indpro[index - 12].value;
+      if (prior !== 0) {
+        indYoYSeries.push({
+          asOf: indpro[index].asOf,
+          value: ((indpro[index].value - prior) / prior) * 100,
+        });
+      }
+    }
+  }
 
   return {
     id: "macro-us-business",
     title: "US business activity",
     purpose: "C&I loans, industrial production, consumer sentiment and initial jobless claims.",
     background: {
-      overview: "Business lending, industrial output, sentiment and jobless claims form an early-warning composite for the real economy.",
+      overview:
+        "Business lending, industrial output, sentiment and jobless claims form an early-warning composite for the real economy.",
       whatToWatch: ["SLOOS lending standards", "ISM Manufacturing", "Continuing claims"],
     },
     metrics: [
-      { label: "C&I loans YoY", value: busYoY !== null ? `${busYoY.toFixed(2)}%` : "—", tone: busYoY !== null ? tone(busYoY, true) : "neutral" },
-      { label: "Ind. production YoY", value: indYoY !== null ? `${indYoY.toFixed(2)}%` : "—", tone: indYoY !== null ? tone(indYoY, true) : "neutral" },
-      { label: "Initial claims (k)", value: lIcsa ? Math.round(lIcsa.value / 1000).toLocaleString() : "—", tone: lIcsa && lIcsa.value > 300000 ? "negative" : "neutral" },
+      {
+        label: "C&I loans YoY",
+        value: busYoY !== null ? `${busYoY.toFixed(2)}%` : "—",
+        tone: busYoY !== null ? tone(busYoY, true) : "neutral",
+      },
+      {
+        label: "Ind. production YoY",
+        value: indYoY !== null ? `${indYoY.toFixed(2)}%` : "—",
+        tone: indYoY !== null ? tone(indYoY, true) : "neutral",
+      },
+      {
+        label: "Initial claims (k)",
+        value: lIcsa ? Math.round(lIcsa.value / 1000).toLocaleString() : "—",
+        tone: lIcsa && lIcsa.value > 300000 ? "negative" : "neutral",
+      },
     ],
-    chart: makeTrend(indpro, { format: "index", project: 4 }),
-    whatChanged: lInd ? `Industrial production print for ${new Date(lInd.asOf).toLocaleDateString(undefined, { month: "long", year: "numeric" })}.` : "No data yet.",
+    chart: makeTrend(indYoYSeries, { format: "percent", zones: ZONE_GROWTH_YOY, project: 4 }),
+    whatChanged: lInd
+      ? `Industrial production print for ${new Date(lInd.asOf).toLocaleDateString(undefined, { month: "long", year: "numeric" })}.`
+      : "No data yet.",
     whyItMatters: "Business lending & activity trends lead earnings revisions by 1–2 quarters.",
-    evidence, positives: [], deductions: [], verifyNext,
+    evidence,
+    positives: [],
+    deductions: [],
+    verifyNext,
     confidence: { value: conf.value, penalties: conf.penalties },
   };
 }
@@ -600,48 +1008,81 @@ function ukBusinessPanel(
 ): PanelData {
   const vat = byMetric.get("hmrc-tax-and-nics-receipts/vat");
   const paye = byMetric.get("hmrc-tax-and-nics-receipts/paye_it");
-  const sa   = byMetric.get("hmrc-tax-and-nics-receipts/sa_it");
-  const lV = latest(vat), lP = latest(paye), lS = latest(sa);
-  const vatYoY = pctChangeYoY(vat), payeYoY = pctChangeYoY(paye), saYoY = pctChangeYoY(sa);
+  const sa = byMetric.get("hmrc-tax-and-nics-receipts/sa_it");
+  const lV = latest(vat),
+    lP = latest(paye),
+    lS = latest(sa);
+  const vatYoY = pctChangeYoY(vat),
+    payeYoY = pctChangeYoY(paye),
+    saYoY = pctChangeYoY(sa);
 
   const evidence: Evidence[] = [];
   const now = Date.now();
   const hmrcEvidence = (code: string, label: string, asOf: string): Evidence => {
     const ageSec = (now - new Date(asOf).getTime()) / 1000;
     return {
-      id: `ev-hmrc-${code}`, label,
-      sourceName: "HMRC Tax & Duty Bulletins", tier: "tier1_official",
-      asOf, freshness: freshnessState(ageSec, DEFAULT_FRESHNESS.macro_release),
+      id: `ev-hmrc-${code}`,
+      label,
+      sourceName: "HMRC Tax & Duty Bulletins",
+      tier: "tier1_official",
+      asOf,
+      freshness: freshnessState(ageSec, DEFAULT_FRESHNESS.macro_release),
       agrees: true,
       url: "https://www.gov.uk/government/collections/hm-revenue-and-customs-receipts",
     };
   };
-  if (lV) evidence.push(hmrcEvidence("vat",     "HMRC VAT receipts monthly bulletin", lV.asOf));
-  if (lP) evidence.push(hmrcEvidence("paye_it", "HMRC PAYE Income Tax bulletin",      lP.asOf));
-  if (lS) evidence.push(hmrcEvidence("sa_it",   "HMRC Self-Assessment bulletin",      lS.asOf));
+  if (lV) evidence.push(hmrcEvidence("vat", "HMRC VAT receipts monthly bulletin", lV.asOf));
+  if (lP) evidence.push(hmrcEvidence("paye_it", "HMRC PAYE Income Tax bulletin", lP.asOf));
+  if (lS) evidence.push(hmrcEvidence("sa_it", "HMRC Self-Assessment bulletin", lS.asOf));
 
   const ageSec = lV ? (Date.now() - new Date(lV.asOf).getTime()) / 1000 : Number.MAX_SAFE_INTEGER;
-  const conf = computeConfidence({ tier: "tier1_official", category: "macro_release", ageSeconds: ageSec });
+  const conf = computeConfidence({
+    tier: "tier1_official",
+    category: "macro_release",
+    ageSeconds: ageSec,
+  });
 
-  const positives = [], deductions = [];
-  if (vatYoY !== null && vatYoY > 3)  positives.push({ id: "vat-up",   label: "VAT receipts growing YoY",  detail: `${vatYoY.toFixed(1)}%` });
-  if (vatYoY !== null && vatYoY < 0)  deductions.push({ id: "vat-dn",  label: "VAT receipts contracting YoY", detail: `${vatYoY.toFixed(1)}%` });
-  if (payeYoY !== null && payeYoY < 0) deductions.push({ id: "paye-dn", label: "PAYE receipts contracting YoY", detail: `${payeYoY.toFixed(1)}%` });
+  const positives = [],
+    deductions = [];
+  if (vatYoY !== null && vatYoY > 3)
+    positives.push({
+      id: "vat-up",
+      label: "VAT receipts growing YoY",
+      detail: `${vatYoY.toFixed(1)}%`,
+    });
+  if (vatYoY !== null && vatYoY < 0)
+    deductions.push({
+      id: "vat-dn",
+      label: "VAT receipts contracting YoY",
+      detail: `${vatYoY.toFixed(1)}%`,
+    });
+  if (payeYoY !== null && payeYoY < 0)
+    deductions.push({
+      id: "paye-dn",
+      label: "PAYE receipts contracting YoY",
+      detail: `${payeYoY.toFixed(1)}%`,
+    });
 
   const verifyNext: VerifyCheck[] = [];
-  if (lV) verifyNext.push(checkFresh("v-hmrc-vat", "HMRC VAT bulletin fresh", lV.asOf, 60 * 60 * 24 * 45));
-  verifyNext.push(pendingAi("v-hmrc-ai", "Interpret UK business tax receipts vs consumer & payroll signals"));
+  if (lV)
+    verifyNext.push(
+      checkFresh("v-hmrc-vat", "HMRC VAT bulletin fresh", lV.asOf, 60 * 60 * 24 * 45),
+    );
+  verifyNext.push(
+    pendingAi("v-hmrc-ai", "Interpret UK business tax receipts vs consumer & payroll signals"),
+  );
 
   const chartZones: ChartZone[] = [
-    { from: -50, to: -5, kind: "bad",  label: "Sharp contraction" },
-    { from: -5,  to: 0,  kind: "warn", label: "Contracting" },
-    { from: 0,   to: 100, kind: "good", label: "Expanding" },
+    { from: -50, to: -5, kind: "bad", label: "Sharp contraction" },
+    { from: -5, to: 0, kind: "warn", label: "Contracting" },
+    { from: 0, to: 100, kind: "good", label: "Expanding" },
   ];
   const vatYoySeries: Obs[] = [];
   if (vat && vat.length > 13) {
     for (let i = 12; i < vat.length; i++) {
       const prev = vat[i - 12].value;
-      if (prev !== 0) vatYoySeries.push({ asOf: vat[i].asOf, value: ((vat[i].value - prev) / prev) * 100 });
+      if (prev !== 0)
+        vatYoySeries.push({ asOf: vat[i].asOf, value: ((vat[i].value - prev) / prev) * 100 });
     }
   }
 
@@ -650,22 +1091,60 @@ function ukBusinessPanel(
     title: "UK business payments (HMRC)",
     purpose: "VAT, PAYE and Self-Assessment receipts — real-time signal of UK business activity.",
     background: {
-      overview: "HMRC's monthly receipts bulletin captures VAT collected on turnover, PAYE income tax withheld from wages and self-assessment liabilities. Together they read business activity, wage bills and self-employed income within weeks of the underlying month.",
-      whatCauses: ["Consumer spending (VAT)", "Wage & employment trends (PAYE)", "Small-business income (SA)", "Rate/threshold changes"],
-      whatToWatch: ["VAT YoY vs retail sales", "PAYE YoY vs wage growth", "Self-assessment vs freelance economy indicators"],
+      overview:
+        "HMRC's monthly receipts bulletin captures VAT collected on turnover, PAYE income tax withheld from wages and self-assessment liabilities. Together they read business activity, wage bills and self-employed income within weeks of the underlying month.",
+      whatCauses: [
+        "Consumer spending (VAT)",
+        "Wage & employment trends (PAYE)",
+        "Small-business income (SA)",
+        "Rate/threshold changes",
+      ],
+      whatToWatch: [
+        "VAT YoY vs retail sales",
+        "PAYE YoY vs wage growth",
+        "Self-assessment vs freelance economy indicators",
+      ],
     },
     metrics: [
-      { label: "VAT receipts (£m)",  value: lV ? Math.round(lV.value).toLocaleString() : "—", tone: vatYoY !== null ? tone(vatYoY, true) : "neutral" },
-      { label: "VAT YoY",             value: vatYoY !== null ? `${vatYoY.toFixed(1)}%` : "—", tone: vatYoY !== null ? tone(vatYoY, true) : "neutral" },
-      { label: "PAYE receipts (£m)",  value: lP ? Math.round(lP.value).toLocaleString() : "—", tone: payeYoY !== null ? tone(payeYoY, true) : "neutral" },
-      { label: "SA receipts (£m)",    value: lS ? Math.round(lS.value).toLocaleString() : "—", tone: saYoY !== null ? tone(saYoY, true) : "neutral" },
+      {
+        label: "VAT receipts (£m)",
+        value: lV ? Math.round(lV.value).toLocaleString() : "—",
+        tone: vatYoY !== null ? tone(vatYoY, true) : "neutral",
+      },
+      {
+        label: "VAT YoY",
+        value: vatYoY !== null ? `${vatYoY.toFixed(1)}%` : "—",
+        tone: vatYoY !== null ? tone(vatYoY, true) : "neutral",
+      },
+      {
+        label: "PAYE receipts (£m)",
+        value: lP ? Math.round(lP.value).toLocaleString() : "—",
+        tone: payeYoY !== null ? tone(payeYoY, true) : "neutral",
+      },
+      {
+        label: "SA receipts (£m)",
+        value: lS ? Math.round(lS.value).toLocaleString() : "—",
+        tone: saYoY !== null ? tone(saYoY, true) : "neutral",
+      },
     ],
-    chart: vatYoySeries.length > 0
-      ? { points: toChartPoints(vatYoySeries, 60), zones: chartZones, format: "percent", yLabel: "VAT YoY %" }
-      : undefined,
-    whatChanged: lV ? `Latest VAT print: £${Math.round(lV.value).toLocaleString()}m for ${new Date(lV.asOf).toLocaleDateString(undefined, { month: "long", year: "numeric" })}.` : "No HMRC data yet.",
-    whyItMatters: "HMRC receipts are one of the fastest official reads on UK business activity — often available before ONS GDP prints.",
-    evidence, positives, deductions, verifyNext,
+    chart:
+      vatYoySeries.length > 0
+        ? {
+            points: toChartPoints(vatYoySeries, 60),
+            zones: chartZones,
+            format: "percent",
+            yLabel: "VAT YoY %",
+          }
+        : undefined,
+    whatChanged: lV
+      ? `Latest VAT print: £${Math.round(lV.value).toLocaleString()}m for ${new Date(lV.asOf).toLocaleDateString(undefined, { month: "long", year: "numeric" })}.`
+      : "No HMRC data yet.",
+    whyItMatters:
+      "HMRC receipts are one of the fastest official reads on UK business activity — often available before ONS GDP prints.",
+    evidence,
+    positives,
+    deductions,
+    verifyNext,
     confidence: { value: conf.value, penalties: conf.penalties },
   };
 }
@@ -673,17 +1152,36 @@ function ukBusinessPanel(
 async function _buildComparePanels(): Promise<PanelData[]> {
   const [us, ez, uk] = await Promise.all([loadPoints("US"), loadPoints("EZ"), loadPoints("UK")]);
 
-  const build = (title: string, purpose: string, series: Array<{ label: string; obs?: Obs[] }>, format: TrendSeries["format"], zones?: ChartZone[]): PanelData => {
+  const build = (
+    title: string,
+    purpose: string,
+    series: Array<{ label: string; obs?: Obs[] }>,
+    format: TrendSeries["format"],
+    zones?: ChartZone[],
+  ): PanelData => {
     const base = series[0]?.obs;
-    const chart: TrendSeries | undefined = base && base.length > 0 ? {
-      points: toChartPoints(base, 120),
-      compare: series[1]?.obs ? { label: series[1].label, points: toChartPoints(series[1].obs, 120) } : undefined,
-      zones, format,
-    } : undefined;
+    const chart: TrendSeries | undefined =
+      base && base.length > 0
+        ? {
+            points: toChartPoints(base, 120),
+            compare: series[1]?.obs
+              ? { label: series[1].label, points: toChartPoints(series[1].obs, 120) }
+              : undefined,
+            zones,
+            format,
+          }
+        : undefined;
 
     const metrics: Metric[] = series.map((s) => {
       const l = latest(s.obs);
-      return { label: s.label, value: l ? (format === "percent" ? `${l.value.toFixed(2)}%` : l.value.toLocaleString()) : "—" };
+      return {
+        label: s.label,
+        value: l
+          ? format === "percent"
+            ? `${l.value.toFixed(2)}%`
+            : l.value.toLocaleString()
+          : "—",
+      };
     });
 
     return {
@@ -693,7 +1191,8 @@ async function _buildComparePanels(): Promise<PanelData[]> {
       metrics,
       chart,
       whatChanged: "Side-by-side comparison of US, Euro area and UK for this indicator.",
-      whyItMatters: "Divergent regional dynamics create FX, rate-differential and cross-listed equity opportunities.",
+      whyItMatters:
+        "Divergent regional dynamics create FX, rate-differential and cross-listed equity opportunities.",
       evidence: [],
       positives: [],
       deductions: [],
@@ -703,35 +1202,73 @@ async function _buildComparePanels(): Promise<PanelData[]> {
   };
 
   return [
-    build("Policy rates", "Fed Funds vs ECB deposit rate vs UK SONIA (BoE proxy).", [
-      { label: "US Fed Funds",  obs: us.byMetric.get("DFF") },
-      { label: "EA ECB DFR",    obs: ez.byMetric.get("ECBDFR") },
-      { label: "UK SONIA",      obs: uk.byMetric.get("IUDSOIA") },
-    ], "percent"),
-    build("10Y sovereign yields", "US 10Y vs EA 10Y vs UK 10Y.", [
-      { label: "US 10Y", obs: us.byMetric.get("DGS10") },
-      { label: "EA 10Y", obs: ez.byMetric.get("IRLTLT01EZM156N") },
-      { label: "UK 10Y", obs: uk.byMetric.get("IRLTLT01GBM156N") },
-    ], "percent"),
-    build("Unemployment", "US vs EA vs UK unemployment rate.", [
-      { label: "US", obs: us.byMetric.get("UNRATE") },
-      { label: "EA", obs: ez.byMetric.get("LRHUTTTTEZM156S") },
-      { label: "UK", obs: uk.byMetric.get("LRHUTTTTGBM156S") },
-    ], "percent", ZONE_UNRATE),
+    build(
+      "Policy rates",
+      "Fed Funds vs ECB deposit rate vs UK SONIA (BoE proxy).",
+      [
+        { label: "US Fed Funds", obs: us.byMetric.get("DFF") },
+        { label: "EA ECB DFR", obs: ez.byMetric.get("ECBDFR") },
+        { label: "UK SONIA", obs: uk.byMetric.get("IUDSOIA") },
+      ],
+      "percent",
+      ZONE_POLICY_RATE,
+    ),
+    build(
+      "10Y sovereign yields",
+      "US 10Y vs EA 10Y vs UK 10Y.",
+      [
+        { label: "US 10Y", obs: us.byMetric.get("DGS10") },
+        { label: "EA 10Y", obs: ez.byMetric.get("IRLTLT01EZM156N") },
+        { label: "UK 10Y", obs: uk.byMetric.get("IRLTLT01GBM156N") },
+      ],
+      "percent",
+      ZONE_POLICY_RATE,
+    ),
+    build(
+      "Unemployment",
+      "US vs EA vs UK unemployment rate.",
+      [
+        { label: "US", obs: us.byMetric.get("UNRATE") },
+        { label: "EA", obs: ez.byMetric.get("LRHUTTTTEZM156S") },
+        { label: "UK", obs: uk.byMetric.get("LRHUTTTTGBM156S") },
+      ],
+      "percent",
+      ZONE_UNRATE,
+    ),
   ];
 }
 
 function placeholderPanels(region: MacroRegion, regionLabel: string): PanelData[] {
-  return [{
-    id: `macro-${region.toLowerCase()}-empty`,
-    title: `${regionLabel} macro — standing by`,
-    purpose: "The FRED ingester is wired but no observations have landed yet for this region.",
-    metrics: [{ label: "Status", value: "no data", tone: "warning" }],
-    whatChanged: "No data ingested yet.",
-    whyItMatters: "Panels populate once ingestion runs. Hit /api/public/ingest/fred or wait for the scheduler.",
-    evidence: [], positives: [],
-    deductions: [{ id: "no-data", label: "No ingested observations", detail: "Confidence pinned to 0 until data arrives." }],
-    verifyNext: [{ id: "manual-trigger", label: "POST /api/public/ingest/fred to backfill", verifier: "manual", status: "pending" }],
-    confidence: { value: 0, penalties: [{ code: "no_data", points: 100, reason: "No ingested observations yet." }] },
-  }];
+  return [
+    {
+      id: `macro-${region.toLowerCase()}-empty`,
+      title: `${regionLabel} macro — standing by`,
+      purpose: "The FRED ingester is wired but no observations have landed yet for this region.",
+      metrics: [{ label: "Status", value: "no data", tone: "warning" }],
+      whatChanged: "No data ingested yet.",
+      whyItMatters:
+        "Panels populate once ingestion runs. Hit /api/public/ingest/fred or wait for the scheduler.",
+      evidence: [],
+      positives: [],
+      deductions: [
+        {
+          id: "no-data",
+          label: "No ingested observations",
+          detail: "Confidence pinned to 0 until data arrives.",
+        },
+      ],
+      verifyNext: [
+        {
+          id: "manual-trigger",
+          label: "POST /api/public/ingest/fred to backfill",
+          verifier: "manual",
+          status: "pending",
+        },
+      ],
+      confidence: {
+        value: 0,
+        penalties: [{ code: "no_data", points: 100, reason: "No ingested observations yet." }],
+      },
+    },
+  ];
 }

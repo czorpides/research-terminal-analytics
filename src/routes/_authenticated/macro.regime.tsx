@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/macro/regime")({
       {
         name: "description",
         content:
-          "A cross-engine US macro regime call using Growth, Inflation, Liquidity, Labour and Market evidence with a shadow HMM comparison.",
+          "A cross-engine US economic-environment call using Growth, Inflation, Liquidity, Labour and Market evidence with a separate experimental comparison.",
       },
     ],
   }),
@@ -44,7 +44,9 @@ function RegimeMonitor() {
   const { data, error, isLoading } = useQuery({
     queryKey: ["regime-monitor"],
     queryFn: () => load(),
-    refetchOnWindowFocus: false,
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   return (
@@ -91,11 +93,12 @@ function RegimeMonitor() {
                   tone={data.current.confidence >= 60 ? "positive" : "warning"}
                 />
                 <EngineKpi
-                  label="Shadow HMM state"
+                  label="Experimental comparison"
                   value={hmmLeader ? humanise(hmmLeader) : "—"}
                   sub={data.hmm.asOf ? `As of ${data.hmm.asOf}` : "No shadow state available"}
                   tone="primary"
                   badge={data.hmm.status}
+                  explanation="A separate pattern model checks whether the transparent rules are missing anything. It stays experimental and never changes the live classification."
                 />
                 <EngineKpi
                   label="Model comparison"
@@ -104,7 +107,7 @@ function RegimeMonitor() {
                     agreement == null
                       ? "A complete shadow result is required"
                       : agreement
-                        ? "Rules and HMM identify the same leading state"
+                        ? "The live rules and experimental model identify the same leading state"
                         : "Treat disagreement as diagnostic evidence"
                   }
                   tone={agreement == null ? "warning" : agreement ? "positive" : "warning"}
@@ -145,28 +148,28 @@ function RegimeMonitor() {
                   />
                 </EngineSection>
                 <EngineSection
-                  title="Shadow HMM probabilities"
+                  title="Experimental model probabilities"
                   description={`${data.hmm.version ?? "Model not run"} · total ${probabilityTotal(data.hmm.probabilities)}`}
                 >
                   <ProbabilityList
                     rows={hmmProbabilities}
-                    empty="Run the Stage 5 model pipeline after ingest to populate the shadow distribution."
+                    empty="Run the Stage 5 model pipeline after ingest to populate the experimental comparison."
                   />
                 </EngineSection>
               </div>
 
               <EngineSection
                 title="Research posture"
-                description="Deterministic read-through from the current rules label. This changes what to investigate, not what to buy or sell."
+                description="Plain-English read-through from the current transparent rules. This changes what to investigate, not what to buy or sell."
               >
                 <RegimeReadThrough label={data.current.label} />
               </EngineSection>
 
               <ModelNote>
                 {data.note} Live methodology:{" "}
-                <span className="font-mono">{data.current.methodology}</span>. The HMM remains{" "}
-                <span className="font-mono">{data.hmm.status}</span> and is not promoted into the
-                live decision signal.
+                <span className="font-mono">{data.current.methodology}</span>. The experimental
+                model remains <span className="font-mono">{data.hmm.status}</span> and does not
+                change the live decision signal.
               </ModelNote>
             </>
           );

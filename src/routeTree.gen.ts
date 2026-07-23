@@ -22,8 +22,18 @@ import { Route as AuthenticatedRadarRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedScreenersRouteImport } from './routes/_authenticated/screeners'
 import { Route as AuthenticatedUndervaluationRouteImport } from './routes/_authenticated/undervaluation'
 import { Route as AuthenticatedAltDataSplatRouteImport } from './routes/_authenticated/alt-data.$'
+import { Route as AuthenticatedAltDataAnomaliesRouteImport } from './routes/_authenticated/alt-data.anomalies'
+import { Route as AuthenticatedAltDataAttentionRouteImport } from './routes/_authenticated/alt-data.attention'
+import { Route as AuthenticatedAltDataModelHealthRouteImport } from './routes/_authenticated/alt-data.model-health'
 import { Route as AuthenticatedHistorySplatRouteImport } from './routes/_authenticated/history.$'
 import { Route as AuthenticatedHistoryEventIdRouteImport } from './routes/_authenticated/history.$eventId'
+import { Route as AuthenticatedHistoryAnaloguesRouteImport } from './routes/_authenticated/history.analogues'
+import { Route as AuthenticatedHistoryLibraryRouteImport } from './routes/_authenticated/history.library'
+import { Route as AuthenticatedHistoryModelHealthRouteImport } from './routes/_authenticated/history.model-health'
+import { Route as AuthenticatedHistoryPlaybooksRouteImport } from './routes/_authenticated/history.playbooks'
+import { Route as AuthenticatedHistorySectorImpactsRouteImport } from './routes/_authenticated/history.sector-impacts'
+import { Route as AuthenticatedHistoryStudyRouteImport } from './routes/_authenticated/history.study'
+import { Route as AuthenticatedHistoryVerificationRouteImport } from './routes/_authenticated/history.verification'
 import { Route as AuthenticatedMacroIndexRouteImport } from './routes/_authenticated/macro.index'
 import { Route as AuthenticatedMacroSplatRouteImport } from './routes/_authenticated/macro.$'
 import { Route as AuthenticatedMacroGrowthRouteImport } from './routes/_authenticated/macro.growth'
@@ -31,6 +41,7 @@ import { Route as AuthenticatedMacroInflationRouteImport } from './routes/_authe
 import { Route as AuthenticatedMacroLabourRouteImport } from './routes/_authenticated/macro.labour'
 import { Route as AuthenticatedMacroLiquidityRouteImport } from './routes/_authenticated/macro.liquidity'
 import { Route as AuthenticatedMacroMarketRouteImport } from './routes/_authenticated/macro.market'
+import { Route as AuthenticatedMacroModelHealthRouteImport } from './routes/_authenticated/macro.model-health'
 import { Route as AuthenticatedMacroRegimeRouteImport } from './routes/_authenticated/macro.regime'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security.index'
 import { Route as AuthenticatedSecuritySymbolRouteImport } from './routes/_authenticated/security.$symbol'
@@ -119,6 +130,24 @@ const AuthenticatedAltDataSplatRoute =
     path: '/$',
     getParentRoute: () => AuthenticatedAltDataRoute,
   } as any)
+const AuthenticatedAltDataAnomaliesRoute =
+  AuthenticatedAltDataAnomaliesRouteImport.update({
+    id: '/anomalies',
+    path: '/anomalies',
+    getParentRoute: () => AuthenticatedAltDataRoute,
+  } as any)
+const AuthenticatedAltDataAttentionRoute =
+  AuthenticatedAltDataAttentionRouteImport.update({
+    id: '/attention',
+    path: '/attention',
+    getParentRoute: () => AuthenticatedAltDataRoute,
+  } as any)
+const AuthenticatedAltDataModelHealthRoute =
+  AuthenticatedAltDataModelHealthRouteImport.update({
+    id: '/model-health',
+    path: '/model-health',
+    getParentRoute: () => AuthenticatedAltDataRoute,
+  } as any)
 const AuthenticatedHistorySplatRoute =
   AuthenticatedHistorySplatRouteImport.update({
     id: '/$',
@@ -129,6 +158,48 @@ const AuthenticatedHistoryEventIdRoute =
   AuthenticatedHistoryEventIdRouteImport.update({
     id: '/$eventId',
     path: '/$eventId',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryAnaloguesRoute =
+  AuthenticatedHistoryAnaloguesRouteImport.update({
+    id: '/analogues',
+    path: '/analogues',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryLibraryRoute =
+  AuthenticatedHistoryLibraryRouteImport.update({
+    id: '/library',
+    path: '/library',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryModelHealthRoute =
+  AuthenticatedHistoryModelHealthRouteImport.update({
+    id: '/model-health',
+    path: '/model-health',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryPlaybooksRoute =
+  AuthenticatedHistoryPlaybooksRouteImport.update({
+    id: '/playbooks',
+    path: '/playbooks',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistorySectorImpactsRoute =
+  AuthenticatedHistorySectorImpactsRouteImport.update({
+    id: '/sector-impacts',
+    path: '/sector-impacts',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryStudyRoute =
+  AuthenticatedHistoryStudyRouteImport.update({
+    id: '/study',
+    path: '/study',
+    getParentRoute: () => AuthenticatedHistoryRoute,
+  } as any)
+const AuthenticatedHistoryVerificationRoute =
+  AuthenticatedHistoryVerificationRouteImport.update({
+    id: '/verification',
+    path: '/verification',
     getParentRoute: () => AuthenticatedHistoryRoute,
   } as any)
 const AuthenticatedMacroIndexRoute = AuthenticatedMacroIndexRouteImport.update({
@@ -169,6 +240,12 @@ const AuthenticatedMacroMarketRoute =
   AuthenticatedMacroMarketRouteImport.update({
     id: '/market',
     path: '/market',
+    getParentRoute: () => AuthenticatedMacroRoute,
+  } as any)
+const AuthenticatedMacroModelHealthRoute =
+  AuthenticatedMacroModelHealthRouteImport.update({
+    id: '/model-health',
+    path: '/model-health',
     getParentRoute: () => AuthenticatedMacroRoute,
   } as any)
 const AuthenticatedMacroRegimeRoute =
@@ -299,14 +376,25 @@ export interface FileRoutesByFullPath {
   '/screeners': typeof AuthenticatedScreenersRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
+  '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
+  '/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
+  '/alt-data/model-health': typeof AuthenticatedAltDataModelHealthRoute
   '/history/$': typeof AuthenticatedHistorySplatRoute
   '/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
+  '/history/analogues': typeof AuthenticatedHistoryAnaloguesRoute
+  '/history/library': typeof AuthenticatedHistoryLibraryRoute
+  '/history/model-health': typeof AuthenticatedHistoryModelHealthRoute
+  '/history/playbooks': typeof AuthenticatedHistoryPlaybooksRoute
+  '/history/sector-impacts': typeof AuthenticatedHistorySectorImpactsRoute
+  '/history/study': typeof AuthenticatedHistoryStudyRoute
+  '/history/verification': typeof AuthenticatedHistoryVerificationRoute
   '/macro/$': typeof AuthenticatedMacroSplatRoute
   '/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/macro/inflation': typeof AuthenticatedMacroInflationRoute
   '/macro/labour': typeof AuthenticatedMacroLabourRoute
   '/macro/liquidity': typeof AuthenticatedMacroLiquidityRoute
   '/macro/market': typeof AuthenticatedMacroMarketRoute
+  '/macro/model-health': typeof AuthenticatedMacroModelHealthRoute
   '/macro/regime': typeof AuthenticatedMacroRegimeRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/macro/': typeof AuthenticatedMacroIndexRoute
@@ -341,14 +429,25 @@ export interface FileRoutesByTo {
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/': typeof AuthenticatedIndexRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
+  '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
+  '/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
+  '/alt-data/model-health': typeof AuthenticatedAltDataModelHealthRoute
   '/history/$': typeof AuthenticatedHistorySplatRoute
   '/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
+  '/history/analogues': typeof AuthenticatedHistoryAnaloguesRoute
+  '/history/library': typeof AuthenticatedHistoryLibraryRoute
+  '/history/model-health': typeof AuthenticatedHistoryModelHealthRoute
+  '/history/playbooks': typeof AuthenticatedHistoryPlaybooksRoute
+  '/history/sector-impacts': typeof AuthenticatedHistorySectorImpactsRoute
+  '/history/study': typeof AuthenticatedHistoryStudyRoute
+  '/history/verification': typeof AuthenticatedHistoryVerificationRoute
   '/macro/$': typeof AuthenticatedMacroSplatRoute
   '/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/macro/inflation': typeof AuthenticatedMacroInflationRoute
   '/macro/labour': typeof AuthenticatedMacroLabourRoute
   '/macro/liquidity': typeof AuthenticatedMacroLiquidityRoute
   '/macro/market': typeof AuthenticatedMacroMarketRoute
+  '/macro/model-health': typeof AuthenticatedMacroModelHealthRoute
   '/macro/regime': typeof AuthenticatedMacroRegimeRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/macro': typeof AuthenticatedMacroIndexRoute
@@ -386,14 +485,25 @@ export interface FileRoutesById {
   '/_authenticated/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/alt-data/$': typeof AuthenticatedAltDataSplatRoute
+  '/_authenticated/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
+  '/_authenticated/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
+  '/_authenticated/alt-data/model-health': typeof AuthenticatedAltDataModelHealthRoute
   '/_authenticated/history/$': typeof AuthenticatedHistorySplatRoute
   '/_authenticated/history/$eventId': typeof AuthenticatedHistoryEventIdRoute
+  '/_authenticated/history/analogues': typeof AuthenticatedHistoryAnaloguesRoute
+  '/_authenticated/history/library': typeof AuthenticatedHistoryLibraryRoute
+  '/_authenticated/history/model-health': typeof AuthenticatedHistoryModelHealthRoute
+  '/_authenticated/history/playbooks': typeof AuthenticatedHistoryPlaybooksRoute
+  '/_authenticated/history/sector-impacts': typeof AuthenticatedHistorySectorImpactsRoute
+  '/_authenticated/history/study': typeof AuthenticatedHistoryStudyRoute
+  '/_authenticated/history/verification': typeof AuthenticatedHistoryVerificationRoute
   '/_authenticated/macro/$': typeof AuthenticatedMacroSplatRoute
   '/_authenticated/macro/growth': typeof AuthenticatedMacroGrowthRoute
   '/_authenticated/macro/inflation': typeof AuthenticatedMacroInflationRoute
   '/_authenticated/macro/labour': typeof AuthenticatedMacroLabourRoute
   '/_authenticated/macro/liquidity': typeof AuthenticatedMacroLiquidityRoute
   '/_authenticated/macro/market': typeof AuthenticatedMacroMarketRoute
+  '/_authenticated/macro/model-health': typeof AuthenticatedMacroModelHealthRoute
   '/_authenticated/macro/regime': typeof AuthenticatedMacroRegimeRoute
   '/_authenticated/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/_authenticated/macro/': typeof AuthenticatedMacroIndexRoute
@@ -431,14 +541,25 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/undervaluation'
     | '/alt-data/$'
+    | '/alt-data/anomalies'
+    | '/alt-data/attention'
+    | '/alt-data/model-health'
     | '/history/$'
     | '/history/$eventId'
+    | '/history/analogues'
+    | '/history/library'
+    | '/history/model-health'
+    | '/history/playbooks'
+    | '/history/sector-impacts'
+    | '/history/study'
+    | '/history/verification'
     | '/macro/$'
     | '/macro/growth'
     | '/macro/inflation'
     | '/macro/labour'
     | '/macro/liquidity'
     | '/macro/market'
+    | '/macro/model-health'
     | '/macro/regime'
     | '/security/$symbol'
     | '/macro/'
@@ -473,14 +594,25 @@ export interface FileRouteTypes {
     | '/undervaluation'
     | '/'
     | '/alt-data/$'
+    | '/alt-data/anomalies'
+    | '/alt-data/attention'
+    | '/alt-data/model-health'
     | '/history/$'
     | '/history/$eventId'
+    | '/history/analogues'
+    | '/history/library'
+    | '/history/model-health'
+    | '/history/playbooks'
+    | '/history/sector-impacts'
+    | '/history/study'
+    | '/history/verification'
     | '/macro/$'
     | '/macro/growth'
     | '/macro/inflation'
     | '/macro/labour'
     | '/macro/liquidity'
     | '/macro/market'
+    | '/macro/model-health'
     | '/macro/regime'
     | '/security/$symbol'
     | '/macro'
@@ -517,14 +649,25 @@ export interface FileRouteTypes {
     | '/_authenticated/undervaluation'
     | '/_authenticated/'
     | '/_authenticated/alt-data/$'
+    | '/_authenticated/alt-data/anomalies'
+    | '/_authenticated/alt-data/attention'
+    | '/_authenticated/alt-data/model-health'
     | '/_authenticated/history/$'
     | '/_authenticated/history/$eventId'
+    | '/_authenticated/history/analogues'
+    | '/_authenticated/history/library'
+    | '/_authenticated/history/model-health'
+    | '/_authenticated/history/playbooks'
+    | '/_authenticated/history/sector-impacts'
+    | '/_authenticated/history/study'
+    | '/_authenticated/history/verification'
     | '/_authenticated/macro/$'
     | '/_authenticated/macro/growth'
     | '/_authenticated/macro/inflation'
     | '/_authenticated/macro/labour'
     | '/_authenticated/macro/liquidity'
     | '/_authenticated/macro/market'
+    | '/_authenticated/macro/model-health'
     | '/_authenticated/macro/regime'
     | '/_authenticated/security/$symbol'
     | '/_authenticated/macro/'
@@ -663,6 +806,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAltDataSplatRouteImport
       parentRoute: typeof AuthenticatedAltDataRoute
     }
+    '/_authenticated/alt-data/anomalies': {
+      id: '/_authenticated/alt-data/anomalies'
+      path: '/anomalies'
+      fullPath: '/alt-data/anomalies'
+      preLoaderRoute: typeof AuthenticatedAltDataAnomaliesRouteImport
+      parentRoute: typeof AuthenticatedAltDataRoute
+    }
+    '/_authenticated/alt-data/attention': {
+      id: '/_authenticated/alt-data/attention'
+      path: '/attention'
+      fullPath: '/alt-data/attention'
+      preLoaderRoute: typeof AuthenticatedAltDataAttentionRouteImport
+      parentRoute: typeof AuthenticatedAltDataRoute
+    }
+    '/_authenticated/alt-data/model-health': {
+      id: '/_authenticated/alt-data/model-health'
+      path: '/model-health'
+      fullPath: '/alt-data/model-health'
+      preLoaderRoute: typeof AuthenticatedAltDataModelHealthRouteImport
+      parentRoute: typeof AuthenticatedAltDataRoute
+    }
     '/_authenticated/history/$': {
       id: '/_authenticated/history/$'
       path: '/$'
@@ -675,6 +839,55 @@ declare module '@tanstack/react-router' {
       path: '/$eventId'
       fullPath: '/history/$eventId'
       preLoaderRoute: typeof AuthenticatedHistoryEventIdRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
+    }
+    '/_authenticated/history/analogues': {
+      id: '/_authenticated/history/analogues'
+      path: '/analogues'
+      fullPath: '/history/analogues'
+      preLoaderRoute: typeof AuthenticatedHistoryAnaloguesRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
+    }
+    '/_authenticated/history/library': {
+      id: '/_authenticated/history/library'
+      path: '/library'
+      fullPath: '/history/library'
+      preLoaderRoute: typeof AuthenticatedHistoryLibraryRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
+    }
+    '/_authenticated/history/model-health': {
+      id: '/_authenticated/history/model-health'
+      path: '/model-health'
+      fullPath: '/history/model-health'
+      preLoaderRoute: typeof AuthenticatedHistoryModelHealthRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
+    }
+    '/_authenticated/history/playbooks': {
+      id: '/_authenticated/history/playbooks'
+      path: '/playbooks'
+      fullPath: '/history/playbooks'
+      preLoaderRoute: typeof AuthenticatedHistoryPlaybooksRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
+    }
+    '/_authenticated/history/sector-impacts': {
+      id: '/_authenticated/history/sector-impacts'
+      path: '/sector-impacts'
+      fullPath: '/history/sector-impacts'
+      preLoaderRoute: typeof AuthenticatedHistorySectorImpactsRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
+    }
+    '/_authenticated/history/study': {
+      id: '/_authenticated/history/study'
+      path: '/study'
+      fullPath: '/history/study'
+      preLoaderRoute: typeof AuthenticatedHistoryStudyRouteImport
+      parentRoute: typeof AuthenticatedHistoryRoute
+    }
+    '/_authenticated/history/verification': {
+      id: '/_authenticated/history/verification'
+      path: '/verification'
+      fullPath: '/history/verification'
+      preLoaderRoute: typeof AuthenticatedHistoryVerificationRouteImport
       parentRoute: typeof AuthenticatedHistoryRoute
     }
     '/_authenticated/macro/': {
@@ -724,6 +937,13 @@ declare module '@tanstack/react-router' {
       path: '/market'
       fullPath: '/macro/market'
       preLoaderRoute: typeof AuthenticatedMacroMarketRouteImport
+      parentRoute: typeof AuthenticatedMacroRoute
+    }
+    '/_authenticated/macro/model-health': {
+      id: '/_authenticated/macro/model-health'
+      path: '/model-health'
+      fullPath: '/macro/model-health'
+      preLoaderRoute: typeof AuthenticatedMacroModelHealthRouteImport
       parentRoute: typeof AuthenticatedMacroRoute
     }
     '/_authenticated/macro/regime': {
@@ -871,10 +1091,16 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAltDataRouteChildren {
   AuthenticatedAltDataSplatRoute: typeof AuthenticatedAltDataSplatRoute
+  AuthenticatedAltDataAnomaliesRoute: typeof AuthenticatedAltDataAnomaliesRoute
+  AuthenticatedAltDataAttentionRoute: typeof AuthenticatedAltDataAttentionRoute
+  AuthenticatedAltDataModelHealthRoute: typeof AuthenticatedAltDataModelHealthRoute
 }
 
 const AuthenticatedAltDataRouteChildren: AuthenticatedAltDataRouteChildren = {
   AuthenticatedAltDataSplatRoute: AuthenticatedAltDataSplatRoute,
+  AuthenticatedAltDataAnomaliesRoute: AuthenticatedAltDataAnomaliesRoute,
+  AuthenticatedAltDataAttentionRoute: AuthenticatedAltDataAttentionRoute,
+  AuthenticatedAltDataModelHealthRoute: AuthenticatedAltDataModelHealthRoute,
 }
 
 const AuthenticatedAltDataRouteWithChildren =
@@ -883,11 +1109,26 @@ const AuthenticatedAltDataRouteWithChildren =
 interface AuthenticatedHistoryRouteChildren {
   AuthenticatedHistorySplatRoute: typeof AuthenticatedHistorySplatRoute
   AuthenticatedHistoryEventIdRoute: typeof AuthenticatedHistoryEventIdRoute
+  AuthenticatedHistoryAnaloguesRoute: typeof AuthenticatedHistoryAnaloguesRoute
+  AuthenticatedHistoryLibraryRoute: typeof AuthenticatedHistoryLibraryRoute
+  AuthenticatedHistoryModelHealthRoute: typeof AuthenticatedHistoryModelHealthRoute
+  AuthenticatedHistoryPlaybooksRoute: typeof AuthenticatedHistoryPlaybooksRoute
+  AuthenticatedHistorySectorImpactsRoute: typeof AuthenticatedHistorySectorImpactsRoute
+  AuthenticatedHistoryStudyRoute: typeof AuthenticatedHistoryStudyRoute
+  AuthenticatedHistoryVerificationRoute: typeof AuthenticatedHistoryVerificationRoute
 }
 
 const AuthenticatedHistoryRouteChildren: AuthenticatedHistoryRouteChildren = {
   AuthenticatedHistorySplatRoute: AuthenticatedHistorySplatRoute,
   AuthenticatedHistoryEventIdRoute: AuthenticatedHistoryEventIdRoute,
+  AuthenticatedHistoryAnaloguesRoute: AuthenticatedHistoryAnaloguesRoute,
+  AuthenticatedHistoryLibraryRoute: AuthenticatedHistoryLibraryRoute,
+  AuthenticatedHistoryModelHealthRoute: AuthenticatedHistoryModelHealthRoute,
+  AuthenticatedHistoryPlaybooksRoute: AuthenticatedHistoryPlaybooksRoute,
+  AuthenticatedHistorySectorImpactsRoute:
+    AuthenticatedHistorySectorImpactsRoute,
+  AuthenticatedHistoryStudyRoute: AuthenticatedHistoryStudyRoute,
+  AuthenticatedHistoryVerificationRoute: AuthenticatedHistoryVerificationRoute,
 }
 
 const AuthenticatedHistoryRouteWithChildren =
@@ -900,6 +1141,7 @@ interface AuthenticatedMacroRouteChildren {
   AuthenticatedMacroLabourRoute: typeof AuthenticatedMacroLabourRoute
   AuthenticatedMacroLiquidityRoute: typeof AuthenticatedMacroLiquidityRoute
   AuthenticatedMacroMarketRoute: typeof AuthenticatedMacroMarketRoute
+  AuthenticatedMacroModelHealthRoute: typeof AuthenticatedMacroModelHealthRoute
   AuthenticatedMacroRegimeRoute: typeof AuthenticatedMacroRegimeRoute
   AuthenticatedMacroIndexRoute: typeof AuthenticatedMacroIndexRoute
 }
@@ -911,6 +1153,7 @@ const AuthenticatedMacroRouteChildren: AuthenticatedMacroRouteChildren = {
   AuthenticatedMacroLabourRoute: AuthenticatedMacroLabourRoute,
   AuthenticatedMacroLiquidityRoute: AuthenticatedMacroLiquidityRoute,
   AuthenticatedMacroMarketRoute: AuthenticatedMacroMarketRoute,
+  AuthenticatedMacroModelHealthRoute: AuthenticatedMacroModelHealthRoute,
   AuthenticatedMacroRegimeRoute: AuthenticatedMacroRegimeRoute,
   AuthenticatedMacroIndexRoute: AuthenticatedMacroIndexRoute,
 }

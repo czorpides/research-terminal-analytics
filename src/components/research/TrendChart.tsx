@@ -11,21 +11,26 @@ import {
 } from "recharts";
 import type { TrendSeries, ChartFormat, ChartZone } from "@/lib/panels/contract";
 import { ZoneEditor, loadZoneOverride } from "./ZoneEditor";
+import { ZoneLegend } from "./ResearchContext";
 
 function fmt(v: number | null | undefined, f?: ChartFormat) {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   switch (f) {
-    case "percent": return `${v.toFixed(2)}%`;
-    case "bp":      return `${v.toFixed(0)}bp`;
-    case "index":   return v.toFixed(1);
-    default:        return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    case "percent":
+      return `${v.toFixed(2)}%`;
+    case "bp":
+      return `${v.toFixed(0)}bp`;
+    case "index":
+      return v.toFixed(1);
+    default:
+      return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 }
 
 const ZONE_FILL: Record<string, string> = {
   good: "var(--positive)",
   warn: "var(--warning)",
-  bad:  "var(--negative)",
+  bad: "var(--negative)",
 };
 const ZONE_OPACITY = 0.12;
 
@@ -46,13 +51,17 @@ export function TrendChart({
   useEffect(() => {
     let cancelled = false;
     if (series.overrideKey) {
-      loadZoneOverride(series.overrideKey).then((z) => {
-        if (!cancelled && z && z.length > 0) setZones(z);
-      }).catch(() => {});
+      loadZoneOverride(series.overrideKey)
+        .then((z) => {
+          if (!cancelled && z && z.length > 0) setZones(z);
+        })
+        .catch(() => {});
     } else {
       setZones(series.zones);
     }
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [series.overrideKey, series.zones]);
 
   const historicalReal = series.points
@@ -65,7 +74,11 @@ export function TrendChart({
   const lastReal = historicalReal[historicalReal.length - 1];
   const staleBridged = lastReal && staleTail.length > 0 ? [lastReal, ...staleTail] : staleTail;
   const historical = [...historicalReal, ...staleTail];
-  const projection = (series.projection ?? []).map((p) => ({ t: p.t, v: p.v, kind: "proj" as const }));
+  const projection = (series.projection ?? []).map((p) => ({
+    t: p.t,
+    v: p.v,
+    kind: "proj" as const,
+  }));
   const band = series.projectionBand;
   const bandData = band
     ? band.upper.map((u, i) => ({
@@ -78,10 +91,9 @@ export function TrendChart({
   const data = [...historical, ...projection];
   if (data.length === 0) return null;
 
-  const values = [
-    ...data.map((d) => d.v),
-    ...bandData.flatMap((d) => [d.upper, d.lower]),
-  ].filter((v) => Number.isFinite(v));
+  const values = [...data.map((d) => d.v), ...bandData.flatMap((d) => [d.upper, d.lower])].filter(
+    (v) => Number.isFinite(v),
+  );
   const min = Math.min(...values);
   const max = Math.max(...values);
   const pad = (max - min) * 0.15 || Math.abs(max) * 0.05 || 1;
@@ -89,21 +101,20 @@ export function TrendChart({
 
   return (
     <div className="w-full relative" style={{ height }}>
+      <div className="absolute left-1 top-0 z-10 rounded bg-background/70 px-1 py-0.5 backdrop-blur-sm">
+        <ZoneLegend zones={zones} compact={compact} />
+      </div>
       {series.overrideKey && !compact && (
         <div className="absolute right-0 top-0 z-10">
-          <ZoneEditor
-            overrideKey={series.overrideKey}
-            defaults={zones ?? []}
-            onChange={setZones}
-          />
+          <ZoneEditor overrideKey={series.overrideKey} defaults={zones ?? []} onChange={setZones} />
         </div>
       )}
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 4, bottom: compact ? 0 : 14, left: 0 }}>
           <defs>
             <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor="var(--primary)" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity={0}    />
+              <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
             </linearGradient>
           </defs>
 
@@ -111,7 +122,7 @@ export function TrendChart({
             <ReferenceArea
               key={`z-${i}`}
               y1={z.from ?? yDomain[0]}
-              y2={z.to   ?? yDomain[1]}
+              y2={z.to ?? yDomain[1]}
               fill={ZONE_FILL[z.kind]}
               fillOpacity={ZONE_OPACITY}
               stroke="none"
@@ -125,7 +136,9 @@ export function TrendChart({
             tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
             tickFormatter={(v) => {
               const d = new Date(v);
-              return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+              return isNaN(d.getTime())
+                ? String(v)
+                : d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
             }}
             minTickGap={40}
             axisLine={false}
@@ -153,7 +166,18 @@ export function TrendChart({
               const d = new Date(l as string);
               return isNaN(d.getTime()) ? String(l) : d.toLocaleDateString();
             }}
-            formatter={(val: unknown) => [fmt(Number(val), series.format), series.yLabel ?? "value"]}
+            formatter={(val: unknown) => {
+              const numeric = Number(val);
+              const zone = zones?.find(
+                (item) =>
+                  (item.from == null || numeric >= item.from) &&
+                  (item.to == null || numeric <= item.to),
+              );
+              const label = zone?.label
+                ? `${series.yLabel ?? "value"} · ${zone.label}`
+                : (series.yLabel ?? "value");
+              return [fmt(numeric, series.format), label];
+            }}
           />
 
           {bandData.length > 0 && (
@@ -237,8 +261,12 @@ export function linearProjection(
   const ys = tail.map((p) => p.v);
   const meanX = xs.reduce((a, b) => a + b, 0) / n;
   const meanY = ys.reduce((a, b) => a + b, 0) / n;
-  let num = 0, den = 0;
-  for (let i = 0; i < n; i++) { num += (xs[i] - meanX) * (ys[i] - meanY); den += (xs[i] - meanX) ** 2; }
+  let num = 0,
+    den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - meanX) * (ys[i] - meanY);
+    den += (xs[i] - meanX) ** 2;
+  }
   const slope = den === 0 ? 0 : num / den;
   const intercept = meanY - slope * meanX;
   const lastT = new Date(tail[tail.length - 1].t).getTime();
