@@ -15,6 +15,7 @@ import {
 } from "@/components/research/MacroEngineView";
 import { getLiquidityEngine } from "@/lib/panels/liquidity.functions";
 import { toneForScore, type EngineTone } from "@/lib/panels/macro-view";
+import { ResearchNarrative } from "@/components/research/ResearchContext";
 
 export const Route = createFileRoute("/_authenticated/macro/liquidity")({
   head: () => ({
@@ -100,6 +101,26 @@ function LiquidityEngine() {
                   value={totalObservations.toLocaleString()}
                   sub={`Latest observation ${latestDate ?? "unavailable"}`}
                   tone="primary"
+                />
+              </div>
+
+              <div className="mb-3">
+                <ResearchNarrative
+                  summary={`US financial conditions are ${data.score.regime}. The live index is ${score?.toFixed(2) ?? "unavailable"}, and ${dominant?.label ?? "no single component"} is the largest current driver.`}
+                  detail="Positive contributions mean tighter conditions; negative contributions mean easier conditions. The reading is compared with each indicator's own history, so it describes unusual pressure rather than an arbitrary level."
+                  watch={components
+                    .filter((component) => component.contribution != null)
+                    .sort(
+                      (first, second) =>
+                        Math.abs(second.contribution ?? 0) - Math.abs(first.contribution ?? 0),
+                    )
+                    .slice(0, 4)
+                    .map(
+                      (component) =>
+                        `${component.label}: ${component.contribution! > 0 ? "tightening" : "easing"} contribution ${signed(component.contribution!)}`,
+                    )}
+                  asOf={latestDate}
+                  confidence={data.score.confidence}
                 />
               </div>
 

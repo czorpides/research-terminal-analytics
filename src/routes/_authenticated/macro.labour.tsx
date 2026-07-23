@@ -14,6 +14,7 @@ import {
 } from "@/components/research/MacroEngineView";
 import { getLabourEngine } from "@/lib/panels/labour.functions";
 import { toneForScore } from "@/lib/panels/macro-view";
+import { ResearchNarrative } from "@/components/research/ResearchContext";
 
 export const Route = createFileRoute("/_authenticated/macro/labour")({
   head: () => ({
@@ -108,6 +109,21 @@ function LabourEngine() {
                   tone={data.kalman.status === "success" ? "positive" : "warning"}
                   badge="experimental model"
                   explanation="A statistical filter removes some short-term noise to estimate the underlying labour trend. The raw releases remain visible below."
+                />
+              </div>
+
+              <div className="mb-3">
+                <ResearchNarrative
+                  summary={`The US labour market is classified as ${data.score.regime}. The heat score is ${score?.toFixed(2) ?? "unavailable"}, with ${dominantFamily ? FAMILY_LABELS[dominantFamily[0]] : "no single family"} furthest from its normal range.`}
+                  detail="The score combines employment momentum, slack, worker demand and wage pressure after adjusting every component so the direction is consistent. A cooling labour market can ease inflation pressure, but deeper weakness can become a growth risk."
+                  watch={familyRows
+                    .slice(0, 4)
+                    .map(
+                      ([family, value]) =>
+                        `${FAMILY_LABELS[family]} is ${value > 0 ? "above" : value < 0 ? "below" : "near"} its adjusted historical norm at ${signed(value)}.`,
+                    )}
+                  asOf={latestDate}
+                  confidence={data.score.confidence}
                 />
               </div>
 

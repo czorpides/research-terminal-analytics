@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 
 import type { EngineTone } from "@/lib/panels/macro-view";
 import { cn } from "@/lib/utils";
-import { InfoTip, StatisticalSparkline } from "./ResearchContext";
+import { InfoTip } from "./ResearchContext";
 import { Sparkles } from "lucide-react";
+import { DashboardPanel } from "./DashboardPanel";
+import { StatisticalTrendChart } from "./TrendChart";
 
 const TONE_CLASS: Record<EngineTone, string> = {
   positive: "text-[var(--positive)]",
@@ -29,7 +31,7 @@ export function EngineKpi({
   explanation?: string;
 }) {
   return (
-    <div className="relative overflow-hidden rounded border border-border bg-card p-3">
+    <div className="relative h-full overflow-hidden rounded-md border border-border/70 bg-card/70 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
           <InfoTip label={label} explanation={explanation ?? sub} />
@@ -106,17 +108,15 @@ export function EngineSection({
   className?: string;
 }) {
   return (
-    <section className={cn("rounded border border-border bg-card p-3", className)}>
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-border/50 pb-2">
-        <div>
-          <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-foreground">
-            {title}
-          </h2>
-          {description && <p className="mt-0.5 text-[10px] text-muted-foreground">{description}</p>}
-        </div>
-      </div>
+    <DashboardPanel
+      title={title}
+      description={description}
+      eyebrow="Research evidence"
+      className={className}
+      equalHeight={false}
+    >
       {children}
-    </section>
+    </DashboardPanel>
   );
 }
 
@@ -217,29 +217,13 @@ export interface IndicatorViewRow {
 
 export function IndicatorGrid({ rows }: { rows: IndicatorViewRow[] }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-3">
       {rows.map((row) => {
         const change =
           row.latest != null && row.previous != null ? row.latest - row.previous : null;
-        return (
-          <article
-            key={row.concept}
-            className="rounded border border-border/70 bg-background/20 p-3"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-                  {row.series} · {row.frequency}
-                </div>
-                <h3 className="truncate text-sm font-semibold">{row.label}</h3>
-              </div>
-              {row.family && (
-                <span className="shrink-0 rounded-sm border border-border/60 px-1.5 py-0.5 font-mono text-[9px] uppercase text-muted-foreground">
-                  {row.family}
-                </span>
-              )}
-            </div>
-            <div className="mt-3 flex items-end justify-between gap-3">
+        const content = (
+          <>
+            <div className="flex items-end justify-between gap-3">
               <div>
                 <div className="text-2xl font-semibold tabular-nums">
                   {formatNumber(row.latest)}
@@ -255,8 +239,13 @@ export function IndicatorGrid({ rows }: { rows: IndicatorViewRow[] }) {
                 <div className="text-muted-foreground">latest change</div>
               </div>
             </div>
-            <StatisticalSparkline points={row.history} title={`${row.label} recent trend`} />
-            <div className="mt-2 flex items-center justify-between border-t border-border/40 pt-2 font-mono text-[9px] text-muted-foreground">
+            <StatisticalTrendChart
+              points={row.history}
+              title={`${row.label} recent trend`}
+              height={150}
+              format={row.unit?.toLowerCase().includes("percent") ? "percent" : "number"}
+            />
+            <div className="mt-auto flex items-center justify-between border-t border-border/40 pt-2 font-mono text-[9px] text-muted-foreground">
               <span>
                 {(row.observationCount ?? row.history.length).toLocaleString()} observations
               </span>
@@ -265,7 +254,23 @@ export function IndicatorGrid({ rows }: { rows: IndicatorViewRow[] }) {
                 explanation="Shows how far this reading is from its own history. Around zero is normal; about +2 or −2 is unusually far away."
               />
             </div>
-          </article>
+          </>
+        );
+        return (
+          <DashboardPanel
+            key={row.concept}
+            eyebrow={`${row.series} · ${row.frequency}`}
+            title={row.label}
+            description={
+              row.family
+                ? `${row.family} indicator · ${row.unit ?? "transformed value"}`
+                : `${row.unit ?? "transformed value"}`
+            }
+            className="min-h-[270px]"
+            bodyClassName="flex flex-col"
+          >
+            {content}
+          </DashboardPanel>
         );
       })}
     </div>

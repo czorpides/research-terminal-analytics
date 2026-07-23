@@ -5,19 +5,34 @@ import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { SOURCE_TIER_META } from "@/lib/reliability/tiers";
 import { DEFAULT_FRESHNESS } from "@/lib/reliability/freshness";
-import { getDataHealthOverview, getPhase45Health, triggerVerifierRun } from "@/lib/panels/data-health.functions";
+import {
+  getDataHealthOverview,
+  getPhase45Health,
+  triggerVerifierRun,
+} from "@/lib/panels/data-health.functions";
 import { getSourceFreshness } from "@/lib/freshness/freshness.functions";
 import { getGrowthHealth } from "@/lib/panels/growth-health.functions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { DashboardGrid, DashboardPanel } from "@/components/research/DashboardPanel";
+import { InfoTip } from "@/components/research/ResearchContext";
+import {
+  getReleaseCalendarDashboard,
+  type ReleaseCalendarDashboard,
+} from "@/lib/panels/release-calendar.functions";
 
 export const Route = createFileRoute("/_authenticated/data-health")({
-  head: () => ({ meta: [
-    { title: "Data Health — Research Terminal" },
-    { name: "description", content: "Source tiers, freshness policies, ingestion runs and model governance." },
-  ]}),
+  head: () => ({
+    meta: [
+      { title: "Data Health — Research Terminal" },
+      {
+        name: "description",
+        content: "Source tiers, freshness policies, ingestion runs and model governance.",
+      },
+    ],
+  }),
   component: DataHealth,
 });
 
@@ -27,9 +42,14 @@ function DataHealth() {
   const fetchFreshness = useServerFn(getSourceFreshness);
   const fetchGrowth = useServerFn(getGrowthHealth);
   const fetchPhase45 = useServerFn(getPhase45Health);
+  const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
   const [running, setRunning] = useState(false);
-  const { data } = useQuery({ queryKey: ["data-health"], queryFn: () => fetchOverview(), refetchOnWindowFocus: false });
+  const { data } = useQuery({
+    queryKey: ["data-health"],
+    queryFn: () => fetchOverview(),
+    refetchOnWindowFocus: false,
+  });
   const { data: freshness } = useQuery({
     queryKey: ["source-freshness"],
     queryFn: () => fetchFreshness(),
@@ -40,12 +60,26 @@ function DataHealth() {
     queryFn: () => fetchGrowth(),
     refetchInterval: 60_000,
   });
-  const { data: phase45 } = useQuery({ queryKey: ["phase4-5-health"], queryFn: () => fetchPhase45(), refetchInterval: 60_000 });
+  const { data: phase45 } = useQuery({
+    queryKey: ["phase4-5-health"],
+    queryFn: () => fetchPhase45(),
+    refetchInterval: 60_000,
+  });
+  const { data: calendar } = useQuery({
+    queryKey: ["release-calendar", "data-health"],
+    queryFn: () => fetchCalendar(),
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
+  });
 
   async function onRun() {
     setRunning(true);
-    try { await runVerifier({ data: {} }); await qc.invalidateQueries({ queryKey: ["data-health"] }); }
-    finally { setRunning(false); }
+    try {
+      await runVerifier({ data: {} });
+      await qc.invalidateQueries({ queryKey: ["data-health"] });
+    } finally {
+      setRunning(false);
+    }
   }
 
   return (
@@ -55,6 +89,28 @@ function DataHealth() {
         title="Is the underlying data trustworthy right now?"
         purpose="The reliability framework driving every panel's confidence score. Owner-only administration lives here."
       />
+
+      {calendar && (
+        <DashboardPanel
+          title="Release-aware refresh health"
+          eyebrow="Automatic scheduler"
+          description="Provider calendar coverage and unresolved post-release checks."
+          className="mb-6"
+          expandedChildren={
+            <div className="space-y-3">
+              <CalendarHealthGrid calendar={calendar} />
+              <div className="text-xs leading-relaxed text-muted-foreground">
+                Calendar dates start targeted ingestion; they do not mark data current by
+                themselves. A release becomes verified only after the worker stores a new or revised
+                observation. Waiting events retry automatically, while delayed and failed events
+                remain visible for investigation.
+              </div>
+            </div>
+          }
+        >
+          <CalendarHealthGrid calendar={calendar} />
+        </DashboardPanel>
+      )}
 
       <section className="mb-6 rounded-md border border-border/70 bg-card/60 p-3">
         <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -76,39 +132,94 @@ function DataHealth() {
               <tr key={r.sourceCode} className="border-b border-border/40 last:border-b-0">
                 <td className="py-1 pr-2 uppercase">{r.sourceCode}</td>
                 <td className="pr-2 text-muted-foreground">{r.cadence}</td>
-                <td className="pr-2 text-muted-foreground">{r.latestAsOf ? new Date(r.latestAsOf).toLocaleString() : "—"}</td>
-                <td className="text-right tabular-nums">{r.lagMinutes !== null ? formatDur(r.lagMinutes * 60) : "—"}</td>
-                <td className="text-right tabular-nums text-muted-foreground">{formatDur(r.maxLagMinutes * 60)}</td>
+                <td className="pr-2 text-muted-foreground">
+                  {r.latestAsOf ? new Date(r.latestAsOf).toLocaleString() : "—"}
+                </td>
+                <td className="text-right tabular-nums">
+                  {r.lagMinutes !== null ? formatDur(r.lagMinutes * 60) : "—"}
+                </td>
+                <td className="text-right tabular-nums text-muted-foreground">
+                  {formatDur(r.maxLagMinutes * 60)}
+                </td>
                 <td className="pr-2">
-                  <span className={
-                    r.state === "fresh" ? "text-[var(--positive)]" :
-                    r.state === "lagging" ? "text-[var(--warning)]" :
-                    "text-[var(--negative)]"
-                  }>{r.state}</span>
+                  <span
+                    className={
+                      r.state === "fresh"
+                        ? "text-[var(--positive)]"
+                        : r.state === "lagging"
+                          ? "text-[var(--warning)]"
+                          : "text-[var(--negative)]"
+                    }
+                  >
+                    {r.state}
+                  </span>
                 </td>
               </tr>
             ))}
-            {!freshness && <tr><td colSpan={6} className="py-2 text-muted-foreground">Loading…</td></tr>}
+            {!freshness && (
+              <tr>
+                <td colSpan={6} className="py-2 text-muted-foreground">
+                  Loading…
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
 
       <section className="mb-6 rounded-md border border-primary/40 bg-card/60 p-3">
-        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Phases 4–5 · US Labour, Market & Regime health</h2>
+        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+          Phases 4–5 · US Labour, Market & Regime health
+        </h2>
         {!phase45 && <div className="py-2 text-xs text-muted-foreground">Loading…</div>}
-        {phase45 && <div className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">{phase45.engines.map((engine) => <div key={engine.engine} className="rounded border border-border/70 p-2">
-            <div className="mb-2 font-mono text-[10px] uppercase">{engine.engine} engine</div>
-            <div className="grid grid-cols-3 gap-2 font-mono text-[10px]"><Kv k="Registered" v={String(engine.registered)} /><Kv k="With data" v={String(engine.withData)} bad={engine.withData < engine.registered} /><Kv k="Min-history ready" v={String(engine.eligible)} bad={engine.eligible < engine.registered} /></div>
-          </div>)}</div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
-            <Kv k="PCA/HMM pipeline" v={phase45.model?.status as string ?? "not run"} bad={!phase45.model || phase45.model.status !== "success"} />
-            <Kv k="Model version" v={phase45.model?.model_version as string ?? "—"} />
-            <Kv k="Last started" v={phase45.model?.started_at ? new Date(phase45.model.started_at as string).toLocaleString() : "—"} />
-            <Kv k="Persistence" v="shadow only" />
+        {phase45 && (
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              {phase45.engines.map((engine) => (
+                <div key={engine.engine} className="rounded border border-border/70 p-2">
+                  <div className="mb-2 font-mono text-[10px] uppercase">{engine.engine} engine</div>
+                  <div className="grid grid-cols-3 gap-2 font-mono text-[10px]">
+                    <Kv k="Registered" v={String(engine.registered)} />
+                    <Kv
+                      k="With data"
+                      v={String(engine.withData)}
+                      bad={engine.withData < engine.registered}
+                    />
+                    <Kv
+                      k="Min-history ready"
+                      v={String(engine.eligible)}
+                      bad={engine.eligible < engine.registered}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
+              <Kv
+                k="PCA/HMM pipeline"
+                v={(phase45.model?.status as string) ?? "not run"}
+                bad={!phase45.model || phase45.model.status !== "success"}
+              />
+              <Kv k="Model version" v={(phase45.model?.model_version as string) ?? "—"} />
+              <Kv
+                k="Last started"
+                v={
+                  phase45.model?.started_at
+                    ? new Date(phase45.model.started_at as string).toLocaleString()
+                    : "—"
+                }
+              />
+              <Kv k="Persistence" v="shadow only" />
+            </div>
+            {phase45.warnings.length > 0 && (
+              <ul className="list-inside list-disc text-[11px] text-[var(--warning)]">
+                {phase45.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            )}
           </div>
-          {phase45.warnings.length > 0 && <ul className="list-inside list-disc text-[11px] text-[var(--warning)]">{phase45.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
-        </div>}
+        )}
       </section>
 
       <section className="mb-6 rounded-md border border-primary/40 bg-card/60 p-3">
@@ -119,11 +230,27 @@ function DataHealth() {
         {growth && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
-              <Kv k="Analytics URL" v={growth.analytics.urlConfigured ? "configured" : "missing"} bad={!growth.analytics.urlConfigured} />
-              <Kv k="Analytics token" v={growth.analytics.tokenConfigured ? "configured" : "missing"} bad={!growth.analytics.tokenConfigured} />
-              <Kv k="Service reachable"
-                  v={growth.analytics.reachable === null ? "not probed" : growth.analytics.reachable ? "yes" : "no"}
-                  bad={growth.analytics.reachable === false} />
+              <Kv
+                k="Analytics URL"
+                v={growth.analytics.urlConfigured ? "configured" : "missing"}
+                bad={!growth.analytics.urlConfigured}
+              />
+              <Kv
+                k="Analytics token"
+                v={growth.analytics.tokenConfigured ? "configured" : "missing"}
+                bad={!growth.analytics.tokenConfigured}
+              />
+              <Kv
+                k="Service reachable"
+                v={
+                  growth.analytics.reachable === null
+                    ? "not probed"
+                    : growth.analytics.reachable
+                      ? "yes"
+                      : "no"
+                }
+                bad={growth.analytics.reachable === false}
+              />
               <Kv k="Service ver" v={growth.analytics.serviceVersion ?? "—"} />
               <Kv k="Data version" v="raw_observations.v1" />
               <Kv k="Model version" v={growth.model.currentModelVersion ?? "—"} />
@@ -131,42 +258,100 @@ function DataHealth() {
               <Kv k="Successful runs" v={String(growth.model.successfulRunCount)} />
               <Kv k="Eligible" v={String(growth.counts.eligible)} />
               <Kv k="With Kalman output" v={String(growth.counts.withOutput)} />
-              <Kv k="Skipped (min-history)" v={String(growth.counts.skipped)} bad={growth.counts.skipped > 0} />
-              <Kv k="Data changed since run" v={growth.model.dataChangedSinceLastRun ? "yes — rerun due" : "no"} bad={growth.model.dataChangedSinceLastRun} />
+              <Kv
+                k="Skipped (min-history)"
+                v={String(growth.counts.skipped)}
+                bad={growth.counts.skipped > 0}
+              />
+              <Kv
+                k="Data changed since run"
+                v={growth.model.dataChangedSinceLastRun ? "yes — rerun due" : "no"}
+                bad={growth.model.dataChangedSinceLastRun}
+              />
             </div>
             <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Recurring scheduler</div>
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Recurring scheduler
+              </div>
               {growth.scheduler ? (
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
-                  <Kv k="Cron heartbeat" v={growth.scheduler.silentCron ? "silent >26h" : "active"} bad={growth.scheduler.silentCron} />
-                  <Kv k="Failures 24h" v={String(growth.scheduler.failuresLast24h)} bad={growth.scheduler.failuresLast24h > 0} />
-                  <Kv k="Last run status" v={growth.scheduler.lastRunStatus ?? "—"} bad={growth.scheduler.lastRunStatus === "failed"} />
-                  <Kv k="Last run scope" v={(growth.scheduler.lastRunScope ?? []).join(", ") || "—"} />
-                  <Kv k="Stale indicators" v={String(growth.scheduler.staleIndicators.length)} bad={growth.scheduler.staleIndicators.length > 0} />
+                  <Kv
+                    k="Cron heartbeat"
+                    v={growth.scheduler.silentCron ? "silent >26h" : "active"}
+                    bad={growth.scheduler.silentCron}
+                  />
+                  <Kv
+                    k="Failures 24h"
+                    v={String(growth.scheduler.failuresLast24h)}
+                    bad={growth.scheduler.failuresLast24h > 0}
+                  />
+                  <Kv
+                    k="Last run status"
+                    v={growth.scheduler.lastRunStatus ?? "—"}
+                    bad={growth.scheduler.lastRunStatus === "failed"}
+                  />
+                  <Kv
+                    k="Last run scope"
+                    v={(growth.scheduler.lastRunScope ?? []).join(", ") || "—"}
+                  />
+                  <Kv
+                    k="Stale indicators"
+                    v={String(growth.scheduler.staleIndicators.length)}
+                    bad={growth.scheduler.staleIndicators.length > 0}
+                  />
                 </div>
-              ) : <div className="text-xs text-muted-foreground">Scheduler view not populated yet.</div>}
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  Scheduler view not populated yet.
+                </div>
+              )}
             </div>
             <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Ingestion · last US Growth FRED run (detail)</div>
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Ingestion · last US Growth FRED run (detail)
+              </div>
               {growth.ingestion.lastRun ? (
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
-                  <Kv k="Started" v={new Date(growth.ingestion.lastRun.startedAt).toLocaleString()} />
-                  <Kv k="Status" v={growth.ingestion.lastRun.status} bad={growth.ingestion.lastRun.status !== "success"} />
+                  <Kv
+                    k="Started"
+                    v={new Date(growth.ingestion.lastRun.startedAt).toLocaleString()}
+                  />
+                  <Kv
+                    k="Status"
+                    v={growth.ingestion.lastRun.status}
+                    bad={growth.ingestion.lastRun.status !== "success"}
+                  />
                   <Kv k="Rows" v={String(growth.ingestion.lastRun.rowsIngested ?? 0)} />
-                  <Kv k="New / revisions / failed" v={`${growth.ingestion.lastRun.newObservations} / ${growth.ingestion.lastRun.revisions} / ${growth.ingestion.lastRun.failedCount}`} />
+                  <Kv
+                    k="New / revisions / failed"
+                    v={`${growth.ingestion.lastRun.newObservations} / ${growth.ingestion.lastRun.revisions} / ${growth.ingestion.lastRun.failedCount}`}
+                  />
                 </div>
-              ) : <div className="text-xs text-muted-foreground">No ingestion run recorded yet.</div>}
+              ) : (
+                <div className="text-xs text-muted-foreground">No ingestion run recorded yet.</div>
+              )}
             </div>
             <div>
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Latest Kalman run</div>
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Latest Kalman run
+              </div>
               {growth.model.lastRun ? (
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4 font-mono text-[10px]">
                   <Kv k="Started" v={new Date(growth.model.lastRun.startedAt).toLocaleString()} />
-                  <Kv k="Status" v={growth.model.lastRun.status} bad={growth.model.lastRun.status !== "success"} />
-                  <Kv k="Processed / skipped" v={`${growth.model.lastRun.indicatorsProcessed ?? 0} / ${growth.model.lastRun.indicatorsSkipped ?? 0}`} />
+                  <Kv
+                    k="Status"
+                    v={growth.model.lastRun.status}
+                    bad={growth.model.lastRun.status !== "success"}
+                  />
+                  <Kv
+                    k="Processed / skipped"
+                    v={`${growth.model.lastRun.indicatorsProcessed ?? 0} / ${growth.model.lastRun.indicatorsSkipped ?? 0}`}
+                  />
                   <Kv k="Output rows" v={String(growth.model.lastRun.outputRows ?? 0)} />
                 </div>
-              ) : <div className="text-xs text-muted-foreground">No Kalman run recorded yet.</div>}
+              ) : (
+                <div className="text-xs text-muted-foreground">No Kalman run recorded yet.</div>
+              )}
             </div>
             <table className="w-full text-xs">
               <thead className="text-[10px] uppercase text-muted-foreground">
@@ -193,11 +378,28 @@ function DataHealth() {
                     <td className="text-right tabular-nums">{i.vintage_count}</td>
                     <td className="pr-2 text-muted-foreground">{i.earliest_observation ?? "—"}</td>
                     <td className="pr-2 text-muted-foreground">{i.latest_observation ?? "—"}</td>
-                    <td className={"text-right tabular-nums " + ((i.staleness_days ?? 0) > 45 ? "text-[var(--warning)]" : "")}>{i.staleness_days ?? "—"}</td>
-                    <td className={"pr-2 " + (i.meets_min_history ? "text-[var(--positive)]" : "text-[var(--warning)]")}>
+                    <td
+                      className={
+                        "text-right tabular-nums " +
+                        ((i.staleness_days ?? 0) > 45 ? "text-[var(--warning)]" : "")
+                      }
+                    >
+                      {i.staleness_days ?? "—"}
+                    </td>
+                    <td
+                      className={
+                        "pr-2 " +
+                        (i.meets_min_history ? "text-[var(--positive)]" : "text-[var(--warning)]")
+                      }
+                    >
                       {i.observation_count}/{i.min_history ?? "?"}
                     </td>
-                    <td className={"pr-2 " + (i.has_kalman_output ? "text-[var(--positive)]" : "text-muted-foreground")}>
+                    <td
+                      className={
+                        "pr-2 " +
+                        (i.has_kalman_output ? "text-[var(--positive)]" : "text-muted-foreground")
+                      }
+                    >
                       {i.has_kalman_output ? `output @ ${i.latest_output_ts ?? "—"}` : "not run"}
                     </td>
                   </tr>
@@ -206,9 +408,13 @@ function DataHealth() {
             </table>
             {growth.warnings.length > 0 && (
               <div className="rounded-sm border border-[var(--warning)]/40 bg-[var(--warning)]/5 p-2">
-                <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--warning)]">Open warnings</div>
+                <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--warning)]">
+                  Open warnings
+                </div>
                 <ul className="list-inside list-disc space-y-0.5 text-[11px]">
-                  {growth.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  {growth.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
                 </ul>
               </div>
             )}
@@ -217,7 +423,9 @@ function DataHealth() {
       </section>
 
       <section className="mb-6 rounded-md border border-border/70 bg-card/60 p-3">
-        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Sources · live · full list</h2>
+        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Sources · live · full list
+        </h2>
         <table className="w-full text-xs">
           <thead className="text-[10px] uppercase text-muted-foreground">
             <tr className="border-b border-border/60">
@@ -233,22 +441,36 @@ function DataHealth() {
               <tr key={s.id} className="border-b border-border/40 last:border-b-0">
                 <td className="py-1 pr-2">{s.name}</td>
                 <td className="pr-2 text-muted-foreground">{s.tier}</td>
-                <td className="pr-2 text-muted-foreground">{s.lastRunAt ? new Date(s.lastRunAt).toLocaleString() : "—"}</td>
+                <td className="pr-2 text-muted-foreground">
+                  {s.lastRunAt ? new Date(s.lastRunAt).toLocaleString() : "—"}
+                </td>
                 <td className="pr-2">
                   {s.lastRunStatus ? (
-                    <Badge variant="outline" className="text-[10px] uppercase">{s.lastRunStatus}</Badge>
-                  ) : <span className="text-muted-foreground">idle</span>}
+                    <Badge variant="outline" className="text-[10px] uppercase">
+                      {s.lastRunStatus}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">idle</span>
+                  )}
                 </td>
                 <td className="text-right tabular-nums">{s.rowsIngested24h.toLocaleString()}</td>
               </tr>
             ))}
-            {!data && <tr><td colSpan={5} className="py-2 text-muted-foreground">Loading…</td></tr>}
+            {!data && (
+              <tr>
+                <td colSpan={5} className="py-2 text-muted-foreground">
+                  Loading…
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
 
       <section className="mb-6 rounded-md border border-border/70 bg-card/60 p-3">
-        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Recent ingestion runs</h2>
+        <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Recent ingestion runs
+        </h2>
         <table className="w-full text-xs">
           <thead className="text-[10px] uppercase text-muted-foreground">
             <tr className="border-b border-border/60">
@@ -263,19 +485,37 @@ function DataHealth() {
           <tbody className="font-mono">
             {(data?.recentRuns ?? []).map((r) => (
               <tr key={r.id} className="border-b border-border/40 last:border-b-0">
-                <td className="py-1 pr-2 text-muted-foreground">{new Date(r.startedAt).toLocaleString()}</td>
+                <td className="py-1 pr-2 text-muted-foreground">
+                  {new Date(r.startedAt).toLocaleString()}
+                </td>
                 <td className="pr-2">{r.sourceName}</td>
                 <td className="pr-2 text-muted-foreground">{r.category}</td>
                 <td className="pr-2">
-                  <span className={r.status === "success" ? "text-[var(--positive)]" : r.status === "failed" ? "text-[var(--negative)]" : "text-[var(--warning)]"}>
+                  <span
+                    className={
+                      r.status === "success"
+                        ? "text-[var(--positive)]"
+                        : r.status === "failed"
+                          ? "text-[var(--negative)]"
+                          : "text-[var(--warning)]"
+                    }
+                  >
                     {r.status}
                   </span>
                 </td>
                 <td className="text-right tabular-nums">{r.rowsIngested ?? 0}</td>
-                <td className="pr-2 text-[var(--negative)] truncate max-w-[16rem]">{r.error ?? ""}</td>
+                <td className="pr-2 text-[var(--negative)] truncate max-w-[16rem]">
+                  {r.error ?? ""}
+                </td>
               </tr>
             ))}
-            {data && data.recentRuns.length === 0 && <tr><td colSpan={6} className="py-2 text-muted-foreground">No runs recorded yet.</td></tr>}
+            {data && data.recentRuns.length === 0 && (
+              <tr>
+                <td colSpan={6} className="py-2 text-muted-foreground">
+                  No runs recorded yet.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
@@ -285,7 +525,13 @@ function DataHealth() {
           <h2 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
             Verifier audit trail · latest 25 runs
           </h2>
-          <Button size="sm" variant="outline" className="h-7 text-[10px] uppercase tracking-wider" disabled={running} onClick={onRun}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[10px] uppercase tracking-wider"
+            disabled={running}
+            onClick={onRun}
+          >
             {running ? "Running…" : "Run verifier now"}
           </Button>
         </div>
@@ -308,24 +554,51 @@ function DataHealth() {
           <tbody className="font-mono">
             {(data?.verifyRuns ?? []).map((r) => (
               <tr key={r.id} className="border-b border-border/40 last:border-b-0">
-                <td className="py-1 pr-2 text-muted-foreground">{new Date(r.startedAt).toLocaleString()}</td>
+                <td className="py-1 pr-2 text-muted-foreground">
+                  {new Date(r.startedAt).toLocaleString()}
+                </td>
                 <td className="pr-2">{r.panelId}</td>
                 <td className="pr-2 text-muted-foreground truncate max-w-[14rem]">{r.checkId}</td>
-                <td className="pr-2"><Badge variant="outline" className="text-[10px] uppercase">{r.verifier}</Badge></td>
                 <td className="pr-2">
-                  <span className={r.status === "pass" ? "text-[var(--positive)]" : r.status === "fail" || r.status === "stale" ? "text-[var(--negative)]" : "text-[var(--warning)]"}>
+                  <Badge variant="outline" className="text-[10px] uppercase">
+                    {r.verifier}
+                  </Badge>
+                </td>
+                <td className="pr-2">
+                  <span
+                    className={
+                      r.status === "pass"
+                        ? "text-[var(--positive)]"
+                        : r.status === "fail" || r.status === "stale"
+                          ? "text-[var(--negative)]"
+                          : "text-[var(--warning)]"
+                    }
+                  >
                     {r.status}
                   </span>
                 </td>
                 <td className="pr-2 text-muted-foreground">{r.trigger ?? "—"}</td>
                 <td className="pr-2 text-muted-foreground">{r.runnerKey ?? "—"}</td>
                 <td className="pr-2 text-muted-foreground">{r.calcVersion ?? "—"}</td>
-                <td className="text-right tabular-nums">{r.confidence !== null ? r.confidence.toFixed(2) : "—"}</td>
-                <td className="text-right tabular-nums text-muted-foreground">{r.durationMs ?? "—"}</td>
-                <td className="pr-2 text-muted-foreground truncate max-w-[18rem]">{r.detail ?? ""}</td>
+                <td className="text-right tabular-nums">
+                  {r.confidence !== null ? r.confidence.toFixed(2) : "—"}
+                </td>
+                <td className="text-right tabular-nums text-muted-foreground">
+                  {r.durationMs ?? "—"}
+                </td>
+                <td className="pr-2 text-muted-foreground truncate max-w-[18rem]">
+                  {r.detail ?? ""}
+                </td>
               </tr>
             ))}
-            {data && data.verifyRuns.length === 0 && <tr><td colSpan={11} className="py-2 text-muted-foreground">No verification runs yet — click "Run verifier now" or wait for the 30-minute cron.</td></tr>}
+            {data && data.verifyRuns.length === 0 && (
+              <tr>
+                <td colSpan={11} className="py-2 text-muted-foreground">
+                  No verification runs yet — click "Run verifier now" or wait for the 30-minute
+                  cron.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
@@ -337,7 +610,11 @@ function DataHealth() {
           </h2>
           <table className="w-full text-xs">
             <thead className="text-[10px] uppercase text-muted-foreground">
-              <tr className="border-b border-border/60"><th className="py-1 text-left">Tier</th><th className="text-left">Description</th><th className="text-right">Weight</th></tr>
+              <tr className="border-b border-border/60">
+                <th className="py-1 text-left">Tier</th>
+                <th className="text-left">Description</th>
+                <th className="text-right">Weight</th>
+              </tr>
             </thead>
             <tbody className="font-mono">
               {Object.entries(SOURCE_TIER_META).map(([k, v]) => (
@@ -357,7 +634,11 @@ function DataHealth() {
           </h2>
           <table className="w-full text-xs">
             <thead className="text-[10px] uppercase text-muted-foreground">
-              <tr className="border-b border-border/60"><th className="py-1 text-left">Category</th><th className="text-right">Warn</th><th className="text-right">Max</th></tr>
+              <tr className="border-b border-border/60">
+                <th className="py-1 text-left">Category</th>
+                <th className="text-right">Warn</th>
+                <th className="text-right">Max</th>
+              </tr>
             </thead>
             <tbody className="font-mono">
               {Object.entries(DEFAULT_FRESHNESS).map(([k, v]) => (
@@ -372,6 +653,67 @@ function DataHealth() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function CalendarHealthGrid({ calendar }: { calendar: ReleaseCalendarDashboard }) {
+  const attention = calendar.counts.waiting + calendar.counts.delayed + calendar.counts.failed;
+  const rows = [
+    {
+      label: "Next 7 days",
+      value: String(calendar.counts.nextSevenDays),
+      detail: "Mapped release checks",
+      explanation: "Automatic checks due during the next seven days.",
+      bad: false,
+    },
+    {
+      label: "Waiting",
+      value: String(calendar.counts.waiting),
+      detail: "Within retry window",
+      explanation:
+        "The official date passed, but the provider has not supplied a new tracked value yet.",
+      bad: false,
+    },
+    {
+      label: "Delayed",
+      value: String(calendar.counts.delayed),
+      detail: "Past expected window",
+      explanation: "No new tracked observation arrived before the verification window closed.",
+      bad: calendar.counts.delayed > 0,
+    },
+    {
+      label: "Failed",
+      value: String(calendar.counts.failed),
+      detail: attention ? "Review release log" : "No worker failures",
+      explanation: "Refreshes that exhausted their retry window after a technical failure.",
+      bad: calendar.counts.failed > 0,
+    },
+  ];
+  return (
+    <DashboardGrid columns={4}>
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          className="h-full rounded border border-border/55 bg-background/35 p-2.5"
+        >
+          <InfoTip label={row.label} explanation={row.explanation}>
+            <span className="font-mono text-[9px] uppercase text-muted-foreground">
+              {row.label}
+            </span>
+          </InfoTip>
+          <div
+            className={
+              row.bad
+                ? "mt-1 text-lg font-semibold text-[var(--negative)]"
+                : "mt-1 text-lg font-semibold"
+            }
+          >
+            {row.value}
+          </div>
+          <div className="text-[9px] text-muted-foreground">{row.detail}</div>
+        </div>
+      ))}
+    </DashboardGrid>
   );
 }
 

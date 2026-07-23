@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   Area,
-  AreaChart,
+  ComposedChart,
   Line,
   ReferenceArea,
   ResponsiveContainer,
@@ -9,53 +9,219 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { TrendSeries, ChartFormat, ChartZone } from "@/lib/panels/contract";
-import { ZoneEditor, loadZoneOverride } from "./ZoneEditor";
-import { ZoneLegend } from "./ResearchContext";
 
-function fmt(v: number | null | undefined, f?: ChartFormat) {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
-  switch (f) {
+import type { ChartFormat, ChartPoint, ChartZone, TrendSeries } from "@/lib/panels/contract";
+import { cn } from "@/lib/utils";
+
+import { ZoneLegend } from "./ResearchContext";
+import { ZoneEditor, loadZoneOverride } from "./ZoneEditor";
+
+function fmt(value: number | null | undefined, format?: ChartFormat) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  switch (format) {
     case "percent":
-      return `${v.toFixed(2)}%`;
+      return `${value.toFixed(2)}%`;
     case "bp":
-      return `${v.toFixed(0)}bp`;
+      return `${value.toFixed(0)}bp`;
     case "index":
-      return v.toFixed(1);
+      return value.toFixed(1);
     default:
-      return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 }
 
-const ZONE_FILL: Record<string, string> = {
+const ZONE_FILL: Record<ChartZone["kind"], string> = {
   good: "var(--positive)",
   warn: "var(--warning)",
   bad: "var(--negative)",
 };
-const ZONE_OPACITY = 0.12;
+
+interface ChartRow {
+  x: number;
+  iso: string;
+  actual?: number;
+  stale?: number;
+  projection?: number;
+  comparison?: number;
+  band?: [number, number];
+}
+
+function timestamp(value: string): number | null {
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 /**
- * Compact trend chart with optional coloured "goldilocks / warn / danger"
- * zones and a dotted projection tail. Rendered inline in research panels.
+ * Sorts and de-duplicates a point series by date. When the database contains
+ * more than one vintage for the same date, the last point supplied wins.
+ */
+export function normaliseChartPoints(points: ChartPoint[] | undefined): ChartPoint[] {
+  const byTime = new Map<number, ChartPoint>();
+  for (const point of points ?? []) {
+    const x = timestamp(point.t);
+    if (x === null || !Number.isFinite(point.v)) continue;
+    byTime.set(x, { ...point, t: new Date(x).toISOString() });
+  }
+  return [...byTime.entries()]
+    .sort(([first], [second]) => first - second)
+    .map(([, point]) => point);
+}
+
+function alignSeries(series: TrendSeries): ChartRow[] {
+  const actual = normaliseChartPoints(series.points).filter((point) => !point.stale);
+  const stale = normaliseChartPoints(series.points).filter((point) => point.stale);
+  const projection = normaliseChartPoints(series.projection);
+  const comparison = normaliseChartPoints(series.compare?.points);
+  const upper = normaliseChartPoints(series.projectionBand?.upper);
+  const lower = normaliseChartPoints(series.projectionBand?.lower);
+
+  const rows = new Map<number, ChartRow>();
+  const rowFor = (point: ChartPoint) => {
+    const x = timestamp(point.t)!;
+    const existing = rows.get(x) ?? { x, iso: new Date(x).toISOString() };
+    rows.set(x, existing);
+    return existing;
+  };
+
+  for (const point of actual) rowFor(point).actual = point.v;
+
+  const lastActual = actual.at(-1);
+  if (lastActual && stale.length) rowFor(lastActual).stale = lastActual.v;
+  for (const point of stale) rowFor(point).stale = point.v;
+
+  const projectionAnchor = stale.at(-1) ?? lastActual;
+  if (projectionAnchor && projection.length && projection[0]?.t !== projectionAnchor.t) {
+    rowFor(projectionAnchor).projection = projectionAnchor.v;
+  }
+  for (const point of projection) rowFor(point).projection = point.v;
+  for (const point of comparison) rowFor(point).comparison = point.v;
+
+  const lowerByTime = new Map(
+    lower
+      .map((point) => [timestamp(point.t), point.v] as const)
+      .filter((item): item is readonly [number, number] => item[0] !== null),
+  );
+  for (const point of upper) {
+    const x = timestamp(point.t)!;
+    const low = lowerByTime.get(x);
+    if (low !== undefined) rowFor(point).band = [Math.min(low, point.v), Math.max(low, point.v)];
+  }
+
+  return [...rows.values()].sort((first, second) => first.x - second.x);
+}
+
+function finiteValues(rows: ChartRow[]): number[] {
+  return rows.flatMap((row) => [
+    ...(row.actual === undefined ? [] : [row.actual]),
+    ...(row.stale === undefined ? [] : [row.stale]),
+    ...(row.projection === undefined ? [] : [row.projection]),
+    ...(row.comparison === undefined ? [] : [row.comparison]),
+    ...(row.band ?? []),
+  ]);
+}
+
+function domainFor(values: number[]): [number, number] {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  const pad = span > 0 ? span * 0.12 : Math.max(Math.abs(max) * 0.05, 0.5);
+  return [min - pad, max + pad];
+}
+
+function zoneFor(value: number, zones?: ChartZone[]): ChartZone | undefined {
+  return zones?.find(
+    (zone) =>
+      (zone.from === undefined || value >= zone.from) &&
+      (zone.to === undefined || value <= zone.to),
+  );
+}
+
+function ChartTooltip({
+  active,
+  payload,
+  series,
+  zones,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: ChartRow }>;
+  series: TrendSeries;
+  zones?: ChartZone[];
+}) {
+  const row = payload?.[0]?.payload;
+  if (!active || !row) return null;
+
+  const entries = [
+    row.actual === undefined ? null : { label: series.yLabel ?? "Actual", value: row.actual },
+    row.stale === undefined ? null : { label: "Carried forward, no new release", value: row.stale },
+    row.projection === undefined ? null : { label: "Projection", value: row.projection },
+    row.comparison === undefined
+      ? null
+      : { label: series.compare?.label ?? "Comparison", value: row.comparison },
+  ].filter((entry): entry is { label: string; value: number } => entry !== null);
+
+  return (
+    <div className="min-w-48 rounded-md border border-border bg-popover px-2.5 py-2 text-[11px] shadow-xl">
+      <div className="mb-1.5 font-mono text-[9px] text-muted-foreground">
+        {new Date(row.x).toLocaleDateString(undefined, {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })}
+      </div>
+      <div className="space-y-1">
+        {entries.map((entry) => {
+          const zone = zoneFor(entry.value, zones);
+          return (
+            <div key={entry.label} className="flex items-start justify-between gap-4">
+              <div>
+                <div>{entry.label}</div>
+                {zone?.label && (
+                  <div className="text-[9px] text-muted-foreground">{zone.label}</div>
+                )}
+              </div>
+              <div className="font-mono font-medium tabular-nums">
+                {fmt(entry.value, series.format)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Time-aligned research chart.
+ *
+ * Every visual layer uses the same numeric time axis and the same aligned row
+ * that feeds the tooltip. Linear segments are intentional: smoothed curves can
+ * overshoot real observations and make the plotted path appear inconsistent
+ * with the displayed value.
  */
 export function TrendChart({
   series,
-  height = 120,
+  height = 140,
   compact = false,
+  className,
 }: {
   series: TrendSeries;
   height?: number;
   compact?: boolean;
+  className?: string;
 }) {
   const [zones, setZones] = useState<ChartZone[] | undefined>(series.zones);
+  const gradientId = `trend-fill-${useId().replaceAll(":", "")}`;
+
   useEffect(() => {
     let cancelled = false;
     if (series.overrideKey) {
       loadZoneOverride(series.overrideKey)
-        .then((z) => {
-          if (!cancelled && z && z.length > 0) setZones(z);
+        .then((override) => {
+          if (!cancelled) setZones(override?.length ? override : series.zones);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (!cancelled) setZones(series.zones);
+        });
     } else {
       setZones(series.zones);
     }
@@ -64,45 +230,45 @@ export function TrendChart({
     };
   }, [series.overrideKey, series.zones]);
 
-  const historicalReal = series.points
-    .filter((p) => !p.stale)
-    .map((p) => ({ t: p.t, v: p.v, kind: "hist" as const }));
-  const staleTail = series.points
-    .filter((p) => p.stale)
-    .map((p) => ({ t: p.t, v: p.v, kind: "stale" as const }));
-  // Bridge: repeat the last real point so the dashed stale segment connects visually.
-  const lastReal = historicalReal[historicalReal.length - 1];
-  const staleBridged = lastReal && staleTail.length > 0 ? [lastReal, ...staleTail] : staleTail;
-  const historical = [...historicalReal, ...staleTail];
-  const projection = (series.projection ?? []).map((p) => ({
-    t: p.t,
-    v: p.v,
-    kind: "proj" as const,
-  }));
-  const band = series.projectionBand;
-  const bandData = band
-    ? band.upper.map((u, i) => ({
-        t: u.t,
-        upper: u.v,
-        lower: band.lower[i]?.v ?? u.v,
-        span: [band.lower[i]?.v ?? u.v, u.v] as [number, number],
-      }))
-    : [];
-  const data = [...historical, ...projection];
-  if (data.length === 0) return null;
+  const rows = useMemo(() => alignSeries(series), [series]);
+  const values = finiteValues(rows);
 
-  const values = [...data.map((d) => d.v), ...bandData.flatMap((d) => [d.upper, d.lower])].filter(
-    (v) => Number.isFinite(v),
-  );
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const pad = (max - min) * 0.15 || Math.abs(max) * 0.05 || 1;
-  const yDomain: [number, number] = [min - pad, max + pad];
+  if (rows.length < 2 || values.length < 2) {
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center rounded-md border border-dashed border-border/60 bg-background/20 px-4 text-center text-[11px] text-muted-foreground",
+          className,
+        )}
+        style={{ height }}
+      >
+        No valid time series is available yet. The panel will populate after the next successful
+        source refresh.
+      </div>
+    );
+  }
+
+  const yDomain = domainFor(values);
+  const visibleZones = (zones ?? [])
+    .map((zone) => ({
+      ...zone,
+      visibleFrom: Math.max(zone.from ?? yDomain[0], yDomain[0]),
+      visibleTo: Math.min(zone.to ?? yDomain[1], yDomain[1]),
+    }))
+    .filter((zone) => zone.visibleFrom < zone.visibleTo);
 
   return (
-    <div className="w-full relative" style={{ height }}>
-      <div className="absolute left-1 top-0 z-10 rounded bg-background/70 px-1 py-0.5 backdrop-blur-sm">
-        <ZoneLegend zones={zones} compact={compact} />
+    <div className={cn("relative min-w-0", className)} style={{ height }}>
+      <div className="absolute left-1 top-0 z-10 rounded bg-background/80 px-1.5 py-1 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <ZoneLegend zones={zones} compact={compact} />
+          {series.compare && (
+            <span className="inline-flex items-center gap-1 text-[8px] text-muted-foreground">
+              <span className="w-3 border-t border-dashed border-muted-foreground" />
+              {series.compare.label}
+            </span>
+          )}
+        </div>
       </div>
       {series.overrideKey && !compact && (
         <div className="absolute right-0 top-0 z-10">
@@ -110,37 +276,42 @@ export function TrendChart({
         </div>
       )}
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 4, right: 4, bottom: compact ? 0 : 14, left: 0 }}>
+        <ComposedChart
+          data={rows}
+          margin={{ top: compact ? 22 : 24, right: 8, bottom: compact ? 0 : 14, left: 0 }}
+        >
           <defs>
-            <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.28} />
               <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
             </linearGradient>
           </defs>
 
-          {zones?.map((z, i) => (
+          {visibleZones.map((zone, index) => (
             <ReferenceArea
-              key={`z-${i}`}
-              y1={z.from ?? yDomain[0]}
-              y2={z.to ?? yDomain[1]}
-              fill={ZONE_FILL[z.kind]}
-              fillOpacity={ZONE_OPACITY}
+              key={`${zone.kind}-${zone.visibleFrom}-${zone.visibleTo}-${index}`}
+              y1={zone.visibleFrom}
+              y2={zone.visibleTo}
+              fill={ZONE_FILL[zone.kind]}
+              fillOpacity={0.1}
               stroke="none"
-              ifOverflow="extendDomain"
             />
           ))}
 
           <XAxis
-            dataKey="t"
+            type="number"
+            dataKey="x"
+            domain={["dataMin", "dataMax"]}
+            scale="time"
             hide={compact}
             tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            tickFormatter={(v) => {
-              const d = new Date(v);
-              return isNaN(d.getTime())
-                ? String(v)
-                : d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
-            }}
-            minTickGap={40}
+            tickFormatter={(value) =>
+              new Date(Number(value)).toLocaleDateString(undefined, {
+                month: "short",
+                year: "2-digit",
+              })
+            }
+            minTickGap={44}
             axisLine={false}
             tickLine={false}
           />
@@ -148,134 +319,178 @@ export function TrendChart({
             hide={compact}
             domain={yDomain}
             tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            tickFormatter={(v) => fmt(Number(v), series.format)}
+            tickFormatter={(value) => fmt(Number(value), series.format)}
             axisLine={false}
             tickLine={false}
-            width={44}
+            width={52}
           />
           <Tooltip
             cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }}
-            contentStyle={{
-              background: "var(--popover)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              fontSize: 11,
-              padding: "6px 8px",
-            }}
-            labelFormatter={(l) => {
-              const d = new Date(l as string);
-              return isNaN(d.getTime()) ? String(l) : d.toLocaleDateString();
-            }}
-            formatter={(val: unknown) => {
-              const numeric = Number(val);
-              const zone = zones?.find(
-                (item) =>
-                  (item.from == null || numeric >= item.from) &&
-                  (item.to == null || numeric <= item.to),
-              );
-              const label = zone?.label
-                ? `${series.yLabel ?? "value"} · ${zone.label}`
-                : (series.yLabel ?? "value");
-              return [fmt(numeric, series.format), label];
-            }}
+            content={(props) => (
+              <ChartTooltip
+                active={props.active}
+                payload={props.payload as Array<{ payload?: ChartRow }> | undefined}
+                series={series}
+                zones={zones}
+              />
+            )}
           />
-
-          {bandData.length > 0 && (
-            <Area
-              type="monotone"
-              dataKey="span"
-              data={bandData}
-              stroke="none"
-              fill="var(--primary)"
-              fillOpacity={0.1}
-              isAnimationActive={false}
-            />
-          )}
 
           <Area
-            type="monotone"
-            dataKey="v"
+            type="linear"
+            dataKey="band"
+            stroke="none"
+            fill="var(--primary)"
+            fillOpacity={0.1}
+            isAnimationActive={false}
+            connectNulls={false}
+            tooltipType="none"
+          />
+          <Area
+            type="linear"
+            dataKey="actual"
+            stroke="var(--primary)"
+            strokeWidth={1.8}
+            fill={`url(#${gradientId})`}
+            isAnimationActive={false}
+            connectNulls={false}
+            dot={false}
+            activeDot={{ r: 3, fill: "var(--primary)", stroke: "var(--background)" }}
+          />
+          <Line
+            type="linear"
+            dataKey="stale"
+            stroke="var(--muted-foreground)"
+            strokeWidth={1.35}
+            strokeDasharray="2 3"
+            dot={false}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+          <Line
+            type="linear"
+            dataKey="projection"
             stroke="var(--primary)"
             strokeWidth={1.5}
-            fill="url(#trend-fill)"
+            strokeDasharray="5 3"
+            dot={false}
+            connectNulls={false}
             isAnimationActive={false}
-            data={historicalReal}
           />
-          {staleBridged.length > 1 && (
-            <Line
-              type="monotone"
-              dataKey="v"
-              data={staleBridged}
-              stroke="var(--muted-foreground)"
-              strokeWidth={1.25}
-              strokeDasharray="2 3"
-              dot={false}
-              isAnimationActive={false}
-            />
-          )}
-          {projection.length > 0 && (
-            <Line
-              type="monotone"
-              dataKey="v"
-              data={projection}
-              stroke="var(--primary)"
-              strokeWidth={1.5}
-              strokeDasharray="4 3"
-              dot={false}
-              isAnimationActive={false}
-            />
-          )}
-          {series.compare && (
-            <Line
-              type="monotone"
-              dataKey="v"
-              data={series.compare.points}
-              stroke="var(--muted-foreground)"
-              strokeWidth={1}
-              strokeDasharray="2 2"
-              dot={false}
-              isAnimationActive={false}
-            />
-          )}
-        </AreaChart>
+          <Line
+            type="linear"
+            dataKey="comparison"
+            stroke="var(--muted-foreground)"
+            strokeWidth={1.2}
+            strokeDasharray="4 3"
+            dot={false}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
 /**
- * Linear-regression projection helper — deterministic, no ML. Extends a
- * point series `steps` months forward using an OLS slope fit on the last
- * `window` observations.
+ * Exact-time replacement for the old evenly-spaced SVG sparkline. Statistical
+ * zones are calculated from the displayed observations, while the numeric
+ * time axis and tooltip remain the same as every other research chart.
+ */
+export function StatisticalTrendChart({
+  points,
+  title = "Recent trend",
+  height = 140,
+  format = "number",
+}: {
+  points: Array<{ date: string; value: number }>;
+  title?: string;
+  height?: number;
+  format?: ChartFormat;
+}) {
+  const chartPoints = normaliseChartPoints(
+    points.map((point) => ({ t: point.date, v: point.value })),
+  );
+  const values = chartPoints.map((point) => point.v);
+  if (values.length < 2) {
+    return (
+      <TrendChart series={{ points: chartPoints, yLabel: title, format }} height={height} compact />
+    );
+  }
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+  const deviation = Math.sqrt(variance) || Math.max(Math.abs(mean) * 0.01, 0.01);
+  return (
+    <TrendChart
+      series={{
+        points: chartPoints,
+        yLabel: title,
+        format,
+        zones: [
+          { to: mean - 1.5 * deviation, kind: "bad", label: "Exceptionally low" },
+          {
+            from: mean - 1.5 * deviation,
+            to: mean - 0.6 * deviation,
+            kind: "warn",
+            label: "Unusually low",
+          },
+          {
+            from: mean - 0.6 * deviation,
+            to: mean + 0.6 * deviation,
+            kind: "good",
+            label: "Near its recent norm",
+          },
+          {
+            from: mean + 0.6 * deviation,
+            to: mean + 1.5 * deviation,
+            kind: "warn",
+            label: "Unusually high",
+          },
+          { from: mean + 1.5 * deviation, kind: "bad", label: "Exceptionally high" },
+        ],
+      }}
+      height={height}
+      compact
+    />
+  );
+}
+
+/**
+ * Linear-regression projection helper. Extends a point series `steps` months
+ * forward using an OLS slope fit on the latest `window` observations.
  */
 export function linearProjection(
   points: { t: string; v: number }[],
   steps: number,
   window = 12,
-  stepMs = 30 * 86400_000,
+  stepMs = 30 * 86_400_000,
 ): { t: string; v: number }[] {
   if (points.length < 3 || steps <= 0) return [];
   const tail = points.slice(-window);
   const n = tail.length;
-  const xs = tail.map((_, i) => i);
-  const ys = tail.map((p) => p.v);
-  const meanX = xs.reduce((a, b) => a + b, 0) / n;
-  const meanY = ys.reduce((a, b) => a + b, 0) / n;
-  let num = 0,
-    den = 0;
-  for (let i = 0; i < n; i++) {
-    num += (xs[i] - meanX) * (ys[i] - meanY);
-    den += (xs[i] - meanX) ** 2;
+  const xs = tail.map((_, index) => index);
+  const ys = tail.map((point) => point.v);
+  const meanX = xs.reduce((sum, value) => sum + value, 0) / n;
+  const meanY = ys.reduce((sum, value) => sum + value, 0) / n;
+  let numerator = 0;
+  let denominator = 0;
+  for (let index = 0; index < n; index += 1) {
+    numerator += (xs[index] - meanX) * (ys[index] - meanY);
+    denominator += (xs[index] - meanX) ** 2;
   }
-  const slope = den === 0 ? 0 : num / den;
+  const slope = denominator === 0 ? 0 : numerator / denominator;
   const intercept = meanY - slope * meanX;
-  const lastT = new Date(tail[tail.length - 1].t).getTime();
-  const out: { t: string; v: number }[] = [];
-  // include last historical point as the anchor so line is contiguous
-  out.push({ t: new Date(lastT).toISOString(), v: tail[tail.length - 1].v });
-  for (let s = 1; s <= steps; s++) {
-    const x = n - 1 + s;
-    out.push({ t: new Date(lastT + s * stepMs).toISOString(), v: intercept + slope * x });
+  const lastTime = new Date(tail.at(-1)!.t).getTime();
+  const output: { t: string; v: number }[] = [
+    { t: new Date(lastTime).toISOString(), v: tail.at(-1)!.v },
+  ];
+  for (let step = 1; step <= steps; step += 1) {
+    const x = n - 1 + step;
+    output.push({
+      t: new Date(lastTime + step * stepMs).toISOString(),
+      v: intercept + slope * x,
+    });
   }
-  return out;
+  return output;
 }

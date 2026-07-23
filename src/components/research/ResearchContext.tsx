@@ -147,13 +147,13 @@ export function ResearchNarrative({
           {asOf ? ` · through ${formatDate(asOf)}` : ""}
         </div>
       </div>
-      <p className={cn("mt-1.5 leading-relaxed", compact ? "text-[11px]" : "text-sm")}>
+      <p className={cn("mt-1.5 leading-relaxed", compact ? "line-clamp-3 text-[11px]" : "text-sm")}>
         {content.summary}
       </p>
-      {content.detail && (
+      {!compact && content.detail && (
         <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{content.detail}</p>
       )}
-      {content.watch.length > 0 && (
+      {!compact && content.watch.length > 0 && (
         <ul className="mt-2 grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
           {content.watch.map((item) => (
             <li key={item} className="flex gap-1.5">
@@ -163,11 +163,13 @@ export function ResearchNarrative({
           ))}
         </ul>
       )}
-      <div className="mt-2 text-[9px] leading-relaxed text-muted-foreground/75">
-        This explanation is rebuilt from the live facts on the page. The original evidence-linked
-        summary remains visible while AI is loading or unavailable; neither version changes the
-        underlying score.
-      </div>
+      {!compact && (
+        <div className="mt-2 text-[9px] leading-relaxed text-muted-foreground/75">
+          This explanation is rebuilt from the live facts on the page. The original evidence-linked
+          summary remains visible while AI is loading or unavailable; neither version changes the
+          underlying score.
+        </div>
+      )}
     </section>
   );
 }
@@ -253,75 +255,6 @@ export function BandBar({
         <span className="text-foreground">{format(value)}</span>
         <span>{format(max)}</span>
       </div>
-    </div>
-  );
-}
-
-export function StatisticalSparkline({
-  points,
-  height = 54,
-  title = "Recent trend",
-}: {
-  points: Array<{ date: string; value: number }>;
-  height?: number;
-  title?: string;
-}) {
-  const data = points.slice(-48).filter((point) => Number.isFinite(point.value));
-  if (data.length < 2)
-    return <div className="mt-3 h-14 rounded-sm border border-dashed border-border/50" />;
-  const width = 320;
-  const values = data.map((point) => point.value);
-  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
-  const sd = Math.sqrt(variance) || 1;
-  const min = Math.min(...values, mean - 2 * sd);
-  const max = Math.max(...values, mean + 2 * sd);
-  const range = max - min || 1;
-  const y = (value: number) => height - ((value - min) / range) * (height - 4) - 2;
-  const path = data
-    .map((point, index) => {
-      const x = (index / (data.length - 1)) * width;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y(point.value).toFixed(1)}`;
-    })
-    .join(" ");
-  const band = (high: number, low: number, fill: string, opacity: number) => (
-    <rect
-      x="0"
-      y={Math.min(y(high), y(low))}
-      width={width}
-      height={Math.abs(y(low) - y(high))}
-      fill={fill}
-      fillOpacity={opacity}
-    />
-  );
-  return (
-    <div
-      className="mt-3"
-      title={`${title}. Green is close to the recent norm, yellow is unusual, and red is exceptional. Colours describe unusualness, not automatically good or bad.`}
-    >
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-14 w-full" role="img">
-        <title>{title} with historical normality bands</title>
-        {band(mean + 0.6 * sd, mean - 0.6 * sd, "var(--positive)", 0.12)}
-        {band(mean + 1.5 * sd, mean + 0.6 * sd, "var(--warning)", 0.1)}
-        {band(mean - 0.6 * sd, mean - 1.5 * sd, "var(--warning)", 0.1)}
-        {band(max, mean + 1.5 * sd, "var(--negative)", 0.08)}
-        {band(mean - 1.5 * sd, min, "var(--negative)", 0.08)}
-        <path
-          d={path}
-          fill="none"
-          stroke="var(--primary)"
-          strokeWidth="1.5"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-      <ZoneLegend
-        zones={[
-          { from: mean - 0.6 * sd, to: mean + 0.6 * sd, kind: "good" },
-          { from: mean + 0.6 * sd, to: mean + 1.5 * sd, kind: "warn" },
-          { from: mean + 1.5 * sd, to: max, kind: "bad" },
-        ]}
-        compact
-      />
     </div>
   );
 }

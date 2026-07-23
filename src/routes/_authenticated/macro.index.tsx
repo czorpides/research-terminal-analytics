@@ -14,7 +14,9 @@ import {
 } from "@/lib/panels/macro.functions";
 import { cn } from "@/lib/utils";
 import { ResearchNarrative } from "@/components/research/ResearchContext";
+import { ReleaseCalendarStrip } from "@/components/research/ReleaseCalendarView";
 import type { PanelData } from "@/lib/panels/contract";
+import { getReleaseCalendarDashboard } from "@/lib/panels/release-calendar.functions";
 
 export const Route = createFileRoute("/_authenticated/macro/")({
   head: () => ({
@@ -47,12 +49,20 @@ function MacroOverview() {
   const [tab, setTab] = useState<Tab>("US");
   const fetchRegion = useServerFn(getMacroPanelsForRegion);
   const fetchCompare = useServerFn(getMacroCompare);
+  const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["macro-panels", tab],
     queryFn: () => (tab === "COMPARE" ? fetchCompare() : fetchRegion({ data: { region: tab } })),
     staleTime: 2 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+  const { data: calendarData } = useQuery({
+    queryKey: ["release-calendar", "macro-strip"],
+    queryFn: () => fetchCalendar(),
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
   });
 
@@ -92,6 +102,7 @@ function MacroOverview() {
       )}
       {data && (
         <>
+          {calendarData && <ReleaseCalendarStrip data={calendarData} />}
           <div className="mb-3">
             <ResearchNarrative
               summary={macroSummary(data, active.label)}
