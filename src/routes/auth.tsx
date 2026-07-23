@@ -31,6 +31,12 @@ function AuthPage() {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) navigate({ to: "/" });
     });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
+        navigate({ to: "/", replace: true });
+      }
+    });
+    return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -60,7 +66,11 @@ function AuthPage() {
   async function onGoogle() {
     setError(null);
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+      // Return to /auth (a public route) so the session can hydrate before
+      // we navigate into the protected /_authenticated subtree. Sending
+      // users straight to "/" causes the auth gate to run before
+      // setSession completes and bounce them right back to /auth.
+      redirect_uri: `${window.location.origin}/auth`,
     });
     if (result.error) {
       setError(result.error.message ?? "Google sign-in failed");
