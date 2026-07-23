@@ -83,7 +83,7 @@ function AuthPage() {
       const result = await lovable.auth.signInWithOAuth("google", {
         // Full-page OAuth returns before the helper can set the session, so
         // always land on a public callback route that completes the exchange.
-        redirect_uri: `${window.location.origin}/auth/callback`,
+        redirect_uri: `${window.location.origin}/auth-callback`,
       });
       if (result.error) throw result.error;
       if (result.redirected) return;

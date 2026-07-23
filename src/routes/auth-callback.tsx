@@ -75,7 +75,7 @@ function AuthCallbackPage() {
         if (!user) throw new Error("Sign-in completed, but no active session was created.");
         if (cancelled) return;
 
-        window.history.replaceState(null, "", "/auth/callback");
+        window.history.replaceState(null, "", "/auth-callback");
         await router.invalidate();
         navigate({ to: "/", replace: true });
       } catch (e) {
