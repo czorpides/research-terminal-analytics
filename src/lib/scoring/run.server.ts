@@ -8,6 +8,13 @@ import {
   computeValuationScore,
   computeQualityScore,
 } from "./valuation.server";
+import { FUNDAMENTAL_METRICS } from "@/lib/ingestion/fundamentals/metrics";
+import { loadAnnualFinancialHistory } from "@/lib/opportunity/fundamental-history.server";
+import {
+  computeMagicFormulaRaw,
+  computePiotroski,
+  rankMagicFormula,
+} from "@/lib/opportunity/fundamental-models";
 import type { Bar } from "./series";
 
 export interface ScoreRunResult {
@@ -205,7 +212,33 @@ export async function runFundamentalScoresForAllAssets(
     arr.push(a);
     peersByIndustry.set(a.industry_id, arr);
   }
-  const latest = await loadLatestFundamentals();
+  const assetIds = all.map((asset) => asset.id);
+  const latest = await loadLatestFundamentals(assetIds);
+  const histories = await loadAnnualFinancialHistory(assetIds);
+  const industryIds = [
+    ...new Set(
+      all.map((asset) => asset.industry_id).filter((value): value is string => Boolean(value)),
+    ),
+  ];
+  const { data: industryRows, error: industryError } = industryIds.length
+    ? await supabaseAdmin.from("industries").select("id,code").in("id", industryIds)
+    : { data: [], error: null };
+  if (industryError) throw industryError;
+  const industryCodes = new Map(
+    (industryRows ?? []).map((row) => [String(row.id), String(row.code)]),
+  );
+  const magicRanks = rankMagicFormula(
+    all.map((asset) =>
+      computeMagicFormulaRaw({
+        assetId: asset.id,
+        industryId: asset.industry_id,
+        industryCode: asset.industry_id ? (industryCodes.get(asset.industry_id) ?? null) : null,
+        period: histories.get(asset.id)?.[0] ?? null,
+        marketCap: latest.byMetric.get(FUNDAMENTAL_METRICS.marketCap)?.get(asset.id)?.value ?? null,
+      }),
+    ),
+  );
+  const magicByAsset = new Map(magicRanks.map((result) => [result.assetId, result]));
   const now = new Date().toISOString();
   const fundRows: Array<Record<string, unknown>> = [];
   let fundOk = 0;
@@ -241,6 +274,92 @@ export async function runFundamentalScoresForAllAssets(
         weights: qua.weights,
         positives: qua.positives,
         deductions: qua.deductions,
+      });
+    }
+    const piotroski = computePiotroski(histories.get(a.id) ?? []);
+    if (piotroski.availableTests > 0) {
+      fundRows.push({
+        subject_type: "asset",
+        subject_id: a.id,
+        score_type: "piotroski",
+        value: (piotroski.provisionalScore / 9) * 100,
+        confidence: piotroski.complete ? 85 : Math.min(60, Math.round(piotroski.coverage)),
+        calc_version: piotroski.calcVersion,
+        computed_at: now,
+        inputs: {
+          raw_score: piotroski.score,
+          provisional_score: piotroski.provisionalScore,
+          available_tests: piotroski.availableTests,
+          coverage: piotroski.coverage,
+          complete: piotroski.complete,
+          current_period_end: piotroski.currentPeriodEnd,
+          prior_period_end: piotroski.priorPeriodEnd,
+          known_at: piotroski.knownAt,
+          tests: piotroski.tests,
+        },
+        weights: Object.fromEntries(piotroski.tests.map((test) => [test.key, 1])),
+        positives: piotroski.tests
+          .filter((test) => test.passed === true)
+          .map((test) => ({ id: `piotroski-${test.key}`, label: test.label, detail: test.detail })),
+        deductions: piotroski.tests
+          .filter((test) => test.passed !== true)
+          .map((test) => ({
+            id: `piotroski-${test.key}`,
+            label: test.passed === false ? `${test.label} failed` : `${test.label} unavailable`,
+            detail: test.detail,
+          })),
+      });
+    }
+    const magic = magicByAsset.get(a.id);
+    if (magic && (magic.periodEnd || magic.exclusionReason)) {
+      fundRows.push({
+        subject_type: "asset",
+        subject_id: a.id,
+        score_type: "magic_formula",
+        value: magic.universePercentile ?? 0,
+        confidence: magic.eligible ? 80 : 0,
+        calc_version: magic.calcVersion,
+        computed_at: now,
+        inputs: {
+          eligible: magic.eligible,
+          exclusion_reason: magic.exclusionReason,
+          return_on_capital: magic.returnOnCapital,
+          earnings_yield: magic.earningsYield,
+          enterprise_value: magic.enterpriseValue,
+          capital_employed: magic.capitalEmployed,
+          ebit: magic.ebit,
+          return_on_capital_rank: magic.returnOnCapitalRank,
+          earnings_yield_rank: magic.earningsYieldRank,
+          combined_rank_score: magic.combinedRankScore,
+          universe_rank: magic.universeRank,
+          universe_size: magic.universeSize,
+          universe_percentile: magic.universePercentile,
+          industry_rank: magic.industryRank,
+          industry_size: magic.industrySize,
+          industry_percentile: magic.industryPercentile,
+          period_end: magic.periodEnd,
+          known_at: magic.knownAt,
+        },
+        weights: { return_on_capital_rank: 1, earnings_yield_rank: 1 },
+        positives:
+          magic.eligible && (magic.universePercentile ?? 0) >= 75
+            ? [
+                {
+                  id: "magic-formula-top-quartile",
+                  label: "Magic Formula rank is in the top quartile",
+                  detail: `${magic.universeRank} of ${magic.universeSize}`,
+                },
+              ]
+            : [],
+        deductions: magic.eligible
+          ? []
+          : [
+              {
+                id: "magic-formula-ineligible",
+                label: "Not eligible for the generic Magic Formula universe",
+                detail: magic.exclusionReason ?? "Eligibility inputs are unavailable.",
+              },
+            ],
       });
     }
   }

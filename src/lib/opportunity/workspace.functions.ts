@@ -14,6 +14,7 @@ import {
   type OpportunitySignalKey,
   type SignalStatus,
 } from "./model";
+import type { PiotroskiTest } from "./fundamental-models";
 
 const MAX_SHADOW_UNIVERSE = 500;
 const HORIZONS: InvestmentHorizon[] = ["one_to_three", "three_to_five", "five_to_ten"];
@@ -23,11 +24,48 @@ interface ScoreRow {
   score_type: string;
   value: number;
   confidence: number;
-  inputs: Record<string, number | string | null>;
+  inputs: Record<string, unknown>;
   positives: Array<{ id: string; label: string; detail?: string }>;
   deductions: Array<{ id: string; label: string; detail?: string }>;
   computed_at: string;
   calc_version: string;
+}
+
+export type DiscoveryRoute = "price_dislocation" | "magic_formula" | "improving_value";
+
+export interface CandidateFunnel {
+  routes: DiscoveryRoute[];
+  nominated: boolean;
+  shadowPriority: number;
+  piotroskiValidation: "confirmation" | "neutral" | "warning" | "unavailable";
+  detail: string;
+}
+
+export interface CandidateFundamentalModels {
+  piotroski: {
+    state: "complete" | "partial" | "missing";
+    score: number | null;
+    provisionalScore: number | null;
+    availableTests: number;
+    coverage: number;
+    tests: PiotroskiTest[];
+    knownAt: string | null;
+  };
+  magicFormula: {
+    state: "ranked" | "ineligible" | "missing";
+    eligible: boolean;
+    exclusionReason: string | null;
+    returnOnCapital: number | null;
+    earningsYield: number | null;
+    universeRank: number | null;
+    universeSize: number;
+    universePercentile: number | null;
+    industryRank: number | null;
+    industrySize: number;
+    industryPercentile: number | null;
+    periodEnd: string | null;
+    knownAt: string | null;
+  };
 }
 
 interface AssetRow {
@@ -67,6 +105,8 @@ export interface OpportunityCandidate {
   latestEarningsSurprisePct: number | null;
   evidence: OpportunityEvidence;
   horizons: Record<InvestmentHorizon, OpportunityHorizonScore>;
+  fundamentalModels: CandidateFundamentalModels;
+  funnel: Record<InvestmentHorizon, CandidateFunnel>;
   narrative: {
     summary: string;
     detail: string;
@@ -152,48 +192,72 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
     const countryIds = unique(
       assets.map((asset) => asset.country_id).filter((id): id is string => Boolean(id)),
     );
+    const assetBatches = chunkValues(assetIds, 75);
 
-    const [scoreResult, priceResult, industryResult, countryResult, earningsResult] =
+    const [scorePages, pricePages, industryResult, countryResult, earningsPages] =
       await Promise.all([
-        supabaseAdmin
-          .from("scores")
-          .select(
-            "subject_id,score_type,value,confidence,inputs,positives,deductions,computed_at,calc_version",
-          )
-          .eq("subject_type", "asset")
-          .in("subject_id", assetIds)
-          .in("score_type", ["momentum", "trend", "volatility", "valuation", "quality"])
-          .order("computed_at", { ascending: false })
-          .limit(Math.min(20_000, assets.length * 12)),
-        supabaseAdmin
-          .from("prices_daily")
-          .select("asset_id,trade_date,close")
-          .in("asset_id", assetIds)
-          .order("trade_date", { ascending: false })
-          .limit(Math.min(5_000, assets.length * 6)),
+        Promise.all(
+          assetBatches.map((batch) =>
+            supabaseAdmin
+              .from("latest_asset_scores")
+              .select(
+                "subject_id,score_type,value,confidence,inputs,positives,deductions,computed_at,calc_version",
+              )
+              .in("subject_id", batch)
+              .in("score_type", [
+                "momentum",
+                "trend",
+                "volatility",
+                "valuation",
+                "quality",
+                "piotroski",
+                "magic_formula",
+              ])
+              .limit(batch.length * 7),
+          ),
+        ),
+        Promise.all(
+          assetBatches.map((batch) =>
+            supabaseAdmin
+              .from("prices_daily")
+              .select("asset_id,trade_date,close")
+              .in("asset_id", batch)
+              .order("trade_date", { ascending: false })
+              .limit(batch.length * 6),
+          ),
+        ),
         industryIds.length
           ? supabaseAdmin.from("industries").select("id,code,name").in("id", industryIds)
           : Promise.resolve({ data: [], error: null }),
         countryIds.length
           ? supabaseAdmin.from("countries").select("id,iso2,name").in("id", countryIds)
           : Promise.resolve({ data: [], error: null }),
-        supabaseAdmin
-          .from("earnings_events")
-          .select("asset_id,scheduled_at,period_end,estimate_eps,actual_eps,surprise_pct")
-          .in("asset_id", assetIds)
-          .order("scheduled_at", { ascending: false })
-          .limit(Math.min(3_000, assets.length * 4)),
+        Promise.all(
+          assetBatches.map((batch) =>
+            supabaseAdmin
+              .from("earnings_events")
+              .select("asset_id,scheduled_at,period_end,estimate_eps,actual_eps,surprise_pct")
+              .in("asset_id", batch)
+              .order("scheduled_at", { ascending: false })
+              .limit(batch.length * 4),
+          ),
+        ),
       ]);
 
-    if (scoreResult.error) throw scoreResult.error;
-    if (priceResult.error) throw priceResult.error;
+    const scoreError = scorePages.find((result) => result.error)?.error;
+    const priceError = pricePages.find((result) => result.error)?.error;
+    const earningsError = earningsPages.find((result) => result.error)?.error;
+    if (scoreError) throw scoreError;
+    if (priceError) throw priceError;
     if (industryResult.error) throw industryResult.error;
     if (countryResult.error) throw countryResult.error;
-    if (earningsResult.error) throw earningsResult.error;
+    if (earningsError) throw earningsError;
 
-    const latestScores = latestScoresByAsset((scoreResult.data ?? []) as unknown as ScoreRow[]);
+    const latestScores = latestScoresByAsset(
+      scorePages.flatMap((result) => result.data ?? []) as unknown as ScoreRow[],
+    );
     const latestPrices = new Map<string, { close: number; tradeDate: string }>();
-    for (const row of priceResult.data ?? []) {
+    for (const row of pricePages.flatMap((result) => result.data ?? [])) {
       const assetId = String(row.asset_id);
       if (!latestPrices.has(assetId) && row.close !== null) {
         latestPrices.set(assetId, {
@@ -214,7 +278,9 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
         { code: String(row.iso2), name: String(row.name) },
       ]),
     );
-    const earnings = latestEarningsByAsset((earningsResult.data ?? []) as unknown as EarningsRow[]);
+    const earnings = latestEarningsByAsset(
+      earningsPages.flatMap((result) => result.data ?? []) as unknown as EarningsRow[],
+    );
 
     const returnsByIndustry = new Map<string, Array<{ assetId: string; value: number }>>();
     const allReturns: Array<{ assetId: string; value: number }> = [];
@@ -244,12 +310,19 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
       const latestEarnings = earnings.get(asset.id) ?? [];
       const sectorBlocks = sectorModelBlocks(industry?.code ?? null);
       const evidence = buildEvidence(scoreBag, context, latestEarnings);
+      const fundamentalModels = buildFundamentalModels(scoreBag);
       const horizons = Object.fromEntries(
         HORIZONS.map((horizon) => [
           horizon,
           scoreOpportunityHorizon(horizon, evidence, sectorBlocks),
         ]),
       ) as Record<InvestmentHorizon, OpportunityHorizonScore>;
+      const funnel = Object.fromEntries(
+        HORIZONS.map((horizon) => [
+          horizon,
+          buildCandidateFunnel(horizon, horizons[horizon], fundamentalModels, scoreBag.valuation),
+        ]),
+      ) as Record<InvestmentHorizon, CandidateFunnel>;
       const primary = horizons.one_to_three;
       const narrative = buildNarrative(
         asset,
@@ -258,6 +331,7 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
         primary,
         evidence,
         latestEarnings[0] ?? null,
+        fundamentalModels,
       );
 
       return {
@@ -279,6 +353,8 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
         latestEarningsSurprisePct: latestEarnings[0]?.surprise_pct ?? null,
         evidence,
         horizons,
+        fundamentalModels,
+        funnel,
         narrative,
         macroControl: {
           status: countryCode === "US" ? "context_only" : "unavailable",
@@ -301,7 +377,7 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
 
     return {
       asOf,
-      calcVersion: "opportunity.horizons.v0.1",
+      calcVersion: "opportunity.horizons.v0.2",
       universe: {
         activeEquities: universeCount,
         loaded: assets.length,
@@ -313,13 +389,16 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
       coverage: coverageGates(candidates),
       capabilities: capabilityGates(),
       modelNote:
-        "The model ranks the tracked universe in shadow mode. Missing evidence lowers confidence and blocks production eligibility; it is never filled with invented or silently estimated data.",
+        "The model ranks the tracked universe in shadow mode. Price dislocation, Magic Formula and improving-value routes can nominate research candidates; missing evidence lowers confidence and is never silently estimated.",
     };
   },
 );
 
 type ScoreBag = Partial<
-  Record<"momentum" | "trend" | "volatility" | "valuation" | "quality", ScoreRow>
+  Record<
+    "momentum" | "trend" | "volatility" | "valuation" | "quality" | "piotroski" | "magic_formula",
+    ScoreRow
+  >
 >;
 
 interface PriceContext {
@@ -339,7 +418,17 @@ interface PriceContext {
 function latestScoresByAsset(rows: ScoreRow[]): Map<string, ScoreBag> {
   const result = new Map<string, ScoreBag>();
   for (const row of rows) {
-    if (!["momentum", "trend", "volatility", "valuation", "quality"].includes(row.score_type)) {
+    if (
+      ![
+        "momentum",
+        "trend",
+        "volatility",
+        "valuation",
+        "quality",
+        "piotroski",
+        "magic_formula",
+      ].includes(row.score_type)
+    ) {
       continue;
     }
     const bag = result.get(row.subject_id) ?? {};
@@ -402,6 +491,139 @@ function buildPriceContext(
     confidence: confidenceValues.length ? average(confidenceValues) : 0,
     asOf: scores.momentum?.computed_at ?? scores.trend?.computed_at ?? null,
   };
+}
+
+function buildFundamentalModels(scores: ScoreBag): CandidateFundamentalModels {
+  const piotroski = scores.piotroski;
+  const magic = scores.magic_formula;
+  const rawScore = finite(piotroski?.inputs.raw_score);
+  const provisionalScore = finite(piotroski?.inputs.provisional_score);
+  const availableTests = finite(piotroski?.inputs.available_tests) ?? 0;
+  const coverage = finite(piotroski?.inputs.coverage) ?? 0;
+  const complete = piotroski?.inputs.complete === true;
+  const tests = parsePiotroskiTests(piotroski?.inputs.tests);
+  const magicEligible = magic?.inputs.eligible === true;
+  const exclusionReason =
+    typeof magic?.inputs.exclusion_reason === "string" ? magic.inputs.exclusion_reason : null;
+
+  return {
+    piotroski: {
+      state: !piotroski ? "missing" : complete && rawScore !== null ? "complete" : "partial",
+      score: complete ? rawScore : null,
+      provisionalScore,
+      availableTests,
+      coverage,
+      tests,
+      knownAt: typeof piotroski?.inputs.known_at === "string" ? piotroski.inputs.known_at : null,
+    },
+    magicFormula: {
+      state: !magic ? "missing" : magicEligible ? "ranked" : "ineligible",
+      eligible: magicEligible,
+      exclusionReason,
+      returnOnCapital: finite(magic?.inputs.return_on_capital),
+      earningsYield: finite(magic?.inputs.earnings_yield),
+      universeRank: finite(magic?.inputs.universe_rank),
+      universeSize: finite(magic?.inputs.universe_size) ?? 0,
+      universePercentile: finite(magic?.inputs.universe_percentile),
+      industryRank: finite(magic?.inputs.industry_rank),
+      industrySize: finite(magic?.inputs.industry_size) ?? 0,
+      industryPercentile: finite(magic?.inputs.industry_percentile),
+      periodEnd: typeof magic?.inputs.period_end === "string" ? magic.inputs.period_end : null,
+      knownAt: typeof magic?.inputs.known_at === "string" ? magic.inputs.known_at : null,
+    },
+  };
+}
+
+function buildCandidateFunnel(
+  horizon: InvestmentHorizon,
+  result: OpportunityHorizonScore,
+  models: CandidateFundamentalModels,
+  valuation: ScoreRow | undefined,
+): CandidateFunnel {
+  const routes: DiscoveryRoute[] = [];
+  const priceRoute =
+    horizon === "five_to_ten"
+      ? ["quality_profile", "quality_watch"].includes(result.classification)
+      : ["broken_stock", "sector_washout", "recovery_watch", "durable_candidate"].includes(
+          result.classification,
+        );
+  if (priceRoute) routes.push("price_dislocation");
+  if (
+    models.magicFormula.state === "ranked" &&
+    (models.magicFormula.universePercentile ?? 0) >= 75
+  ) {
+    routes.push("magic_formula");
+  }
+  const valuationScore = finite(valuation?.value);
+  if (
+    models.piotroski.state === "complete" &&
+    (models.piotroski.score ?? 0) >= 7 &&
+    (valuationScore ?? 0) >= 65
+  ) {
+    routes.push("improving_value");
+  }
+
+  const piotroskiValidation =
+    models.piotroski.state !== "complete"
+      ? "unavailable"
+      : (models.piotroski.score ?? 0) >= 7
+        ? "confirmation"
+        : (models.piotroski.score ?? 9) <= 3
+          ? "warning"
+          : "neutral";
+  const routeScores = [
+    result.researchPriority,
+    routes.includes("magic_formula") ? (models.magicFormula.universePercentile ?? 0) * 0.85 : 0,
+    routes.includes("improving_value") ? ((models.piotroski.score ?? 0) / 9) * 85 : 0,
+  ];
+  const piotroskiAdjustment =
+    piotroskiValidation === "confirmation" ? 4 : piotroskiValidation === "warning" ? -12 : 0;
+  const shadowPriority = clamp(Math.max(...routeScores) + piotroskiAdjustment);
+  const routeLabels = routes.map((route) =>
+    route === "price_dislocation"
+      ? "price dislocation"
+      : route === "magic_formula"
+        ? "Magic Formula"
+        : "strong Piotroski plus value",
+  );
+
+  return {
+    routes,
+    nominated: routes.length > 0,
+    shadowPriority: round1(shadowPriority),
+    piotroskiValidation,
+    detail:
+      routes.length === 0
+        ? "No discovery route currently nominates this company."
+        : `Nominated through ${routeLabels.join(", ")}. Piotroski is ${
+            piotroskiValidation === "confirmation"
+              ? "confirming"
+              : piotroskiValidation === "warning"
+                ? "warning"
+                : piotroskiValidation
+          }.`,
+  };
+}
+
+function parsePiotroskiTests(value: unknown): PiotroskiTest[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    if (typeof record.key !== "string" || typeof record.label !== "string") return [];
+    const passed =
+      typeof record.passed === "boolean" || record.passed === null ? record.passed : null;
+    return [
+      {
+        key: record.key as PiotroskiTest["key"],
+        label: record.label,
+        passed,
+        currentValue: finite(record.currentValue),
+        priorValue: finite(record.priorValue),
+        detail: typeof record.detail === "string" ? record.detail : "",
+      },
+    ];
+  });
 }
 
 function buildEvidence(
@@ -730,6 +952,7 @@ function buildNarrative(
   primary: OpportunityHorizonScore,
   evidence: OpportunityEvidence,
   earnings: EarningsRow | null,
+  models: CandidateFundamentalModels,
 ): OpportunityCandidate["narrative"] {
   const priceSentence =
     price.drawdown === null
@@ -747,6 +970,18 @@ function buildNarrative(
     earnings?.surprise_pct === null || earnings?.surprise_pct === undefined
       ? null
       : earnings.surprise_pct;
+  const piotroskiText =
+    models.piotroski.state === "complete"
+      ? `Piotroski is ${models.piotroski.score}/9.`
+      : models.piotroski.state === "partial"
+        ? `Piotroski is incomplete at ${models.piotroski.provisionalScore ?? 0} passes from ${models.piotroski.availableTests} available tests.`
+        : "Piotroski statement history is not available.";
+  const magicText =
+    models.magicFormula.state === "ranked"
+      ? `Magic Formula ranks ${models.magicFormula.universeRank} of ${models.magicFormula.universeSize}.`
+      : models.magicFormula.state === "ineligible"
+        ? `Magic Formula is ineligible: ${models.magicFormula.exclusionReason ?? "required inputs are unavailable"}.`
+        : "Magic Formula evidence is not available.";
   const summary = `${priceSentence}, and ${peerSentence}. The current 1–3 year model classifies this as ${classificationLabel(primary.classification).toLowerCase()}, but it remains ${primary.modelState} rather than a buy signal.`;
   const detail = `Current quality is ${
     quality === null || quality === undefined ? "unavailable" : `${quality.toFixed(0)}/100`
@@ -756,7 +991,11 @@ function buildNarrative(
     latestMiss === null
       ? "No recent EPS surprise is available."
       : `The latest stored EPS surprise was ${latestMiss.toFixed(1)}%.`
-  } ${industry ? `The generic model treats ${industry.name} with its standard operating-company rules.` : ""}`;
+  } ${piotroskiText} ${magicText} ${
+    industry
+      ? `The generic model treats ${industry.name} with its standard operating-company rules.`
+      : ""
+  }`;
   const watch = unique([
     ...primary.blockedReasons.slice(0, 3),
     price.usedBroadPeers
@@ -784,15 +1023,8 @@ function summariseHorizon(
   candidates: OpportunityCandidate[],
 ): HorizonSummary {
   const results = candidates.map((candidate) => candidate.horizons[horizon]);
-  const candidateCount = results.filter((result) =>
-    [
-      "broken_stock",
-      "sector_washout",
-      "recovery_watch",
-      "durable_candidate",
-      "quality_profile",
-      "quality_watch",
-    ].includes(result.classification),
+  const candidateCount = candidates.filter(
+    (candidate) => candidate.funnel[horizon].nominated,
   ).length;
   return {
     horizon,
@@ -880,6 +1112,22 @@ function capabilityGates(): CapabilityGate[] {
         "Quarterly and annual point-in-time history with publication timestamps",
     },
     {
+      capability: "Piotroski financial health",
+      state: "partial",
+      currentUse:
+        "Nine transparent annual tests nominate or warn on candidates without changing the core Radar score",
+      productionRequirement:
+        "Three complete point-in-time annual periods and out-of-sample false-positive testing",
+    },
+    {
+      capability: "Magic Formula discovery",
+      state: "partial",
+      currentUse:
+        "Annual Greenblatt ROC and EBIT/EV ranks provide a separate quality-value nomination route",
+      productionRequirement:
+        "Complete eligible universe, quarterly TTM extension and out-of-sample ranking validation",
+    },
+    {
       capability: "Historical valuation and estimates",
       state: "missing",
       currentUse: "No score contribution; confidence is reduced",
@@ -909,7 +1157,7 @@ function capabilityGates(): CapabilityGate[] {
 function emptyWorkspace(activeEquities: number): OpportunityRadarWorkspace {
   return {
     asOf: new Date().toISOString(),
-    calcVersion: "opportunity.horizons.v0.1",
+    calcVersion: "opportunity.horizons.v0.2",
     universe: {
       activeEquities,
       loaded: 0,
@@ -1025,4 +1273,12 @@ function latestDate(values: Array<string | null | undefined>): string | null {
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
+}
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let start = 0; start < values.length; start += size) {
+    chunks.push(values.slice(start, start + size));
+  }
+  return chunks;
 }

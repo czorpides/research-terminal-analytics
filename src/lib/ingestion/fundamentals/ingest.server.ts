@@ -1,12 +1,18 @@
+import { createHash } from "node:crypto";
+
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json } from "@/integrations/supabase/types";
 import { FUNDAMENTAL_METRICS } from "./metrics";
 import { canUse, recordCall } from "@/lib/ingestion/providers/quota.server";
+import { STATEMENT_METRICS, type StatementMetricCode } from "@/lib/opportunity/fundamental-models";
 
 export interface FundamentalsIngestResult {
   status: "success" | "failed" | "skipped";
   symbol: string;
   runId: string;
   rowsInserted: number;
+  filingsInserted?: number;
+  factsInserted?: number;
   values?: Record<string, number | null>;
   error?: string;
   reason?: string;
@@ -34,10 +40,76 @@ interface FmpProfile {
   beta?: number;
 }
 
-class FmpQuotaError extends Error { constructor(msg: string) { super(msg); this.name = "FmpQuotaError"; } }
+interface FmpStatementBase {
+  date?: string;
+  filingDate?: string;
+  acceptedDate?: string;
+  calendarYear?: string;
+  period?: string;
+  reportedCurrency?: string;
+  cik?: string;
+  link?: string;
+  finalLink?: string;
+}
 
-async function fmp<T>(endpoint: string, symbol: string, apiKey: string): Promise<T[] | null> {
-  const url = `https://financialmodelingprep.com/stable/${endpoint}?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
+interface FmpIncomeStatement extends FmpStatementBase {
+  revenue?: number;
+  grossProfit?: number;
+  netIncome?: number;
+  operatingIncome?: number;
+  ebit?: number;
+  weightedAverageShsOut?: number;
+}
+
+interface FmpBalanceSheet extends FmpStatementBase {
+  totalAssets?: number;
+  longTermDebt?: number;
+  totalNonCurrentDebt?: number;
+  totalCurrentAssets?: number;
+  totalCurrentLiabilities?: number;
+  cashAndCashEquivalents?: number;
+  cashAndShortTermInvestments?: number;
+  totalDebt?: number;
+  propertyPlantEquipmentNet?: number;
+}
+
+interface FmpCashFlowStatement extends FmpStatementBase {
+  operatingCashFlow?: number;
+  netCashProvidedByOperatingActivities?: number;
+}
+
+interface AnnualStatementBundle {
+  income: FmpIncomeStatement[];
+  balance: FmpBalanceSheet[];
+  cashFlow: FmpCashFlowStatement[];
+}
+
+interface StatementStoreResult {
+  filingsInserted: number;
+  factsInserted: number;
+  filingsUnchanged: number;
+}
+
+interface StatementIngestResult extends StatementStoreResult {
+  status: "success" | "skipped" | "failed";
+  reason?: string;
+}
+
+class FmpQuotaError extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = "FmpQuotaError";
+  }
+}
+
+async function fmp<T>(
+  endpoint: string,
+  symbol: string,
+  apiKey: string,
+  params: Record<string, string> = {},
+): Promise<T[] | null> {
+  const query = new URLSearchParams({ symbol, ...params, apikey: apiKey });
+  const url = `https://financialmodelingprep.com/stable/${endpoint}?${query.toString()}`;
   const res = await fetch(url);
   if (res.status === 429 || res.status === 402) {
     await recordCall("fmp", "rate_limit", `${endpoint} HTTP ${res.status}`);
@@ -60,26 +132,41 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) throw new Error("FMP_API_KEY missing");
 
-  const { data: asset } = await supabaseAdmin.from("assets")
-    .select("id").eq("symbol", symbol).eq("active", true).maybeSingle();
+  const { data: asset } = await supabaseAdmin
+    .from("assets")
+    .select("id")
+    .eq("symbol", symbol)
+    .eq("active", true)
+    .maybeSingle();
   if (!asset) throw new Error(`Asset ${symbol} not in universe`);
   const assetId = asset.id as string;
 
-  const { data: source } = await supabaseAdmin.from("data_sources")
-    .select("id").eq("provider_code", "fmp").maybeSingle();
+  const { data: source } = await supabaseAdmin
+    .from("data_sources")
+    .select("id")
+    .eq("provider_code", "fmp")
+    .maybeSingle();
   const sourceId = (source?.id as string | undefined) ?? null;
+  if (!sourceId) throw new Error("FMP data source is not configured");
 
-  // Quota gate — reserve 3 calls (profile + key-metrics + ratios). Skip cleanly without
-  // creating a failed ingestion_runs row so Data Health reflects reality.
+  // Preserve the existing current-fundamentals path first. Statement history
+  // has its own three-call gate below, so a missing table, provider entitlement
+  // or exhausted backfill quota cannot disable the current Radar evidence.
   const gate = await canUse("fmp", 250, 3);
   if (!gate.ok) {
     return { status: "skipped", symbol, runId: "", rowsInserted: 0, reason: gate.reason };
   }
 
-  const { data: run } = await supabaseAdmin.from("ingestion_runs").insert({
-    source_id: sourceId ?? asset.id, data_category: "fundamentals",
-    status: "running", details: { symbol, category: "fundamentals" },
-  }).select("id").single();
+  const { data: run } = await supabaseAdmin
+    .from("ingestion_runs")
+    .insert({
+      source_id: sourceId,
+      data_category: "fundamentals",
+      status: "running",
+      details: { symbol, category: "fundamentals" },
+    })
+    .select("id")
+    .single();
   const runId = run!.id as string;
 
   try {
@@ -95,24 +182,26 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
     if (!marketCap) throw new Error("missing marketCap — provider returned empty payload");
 
     const values: Record<string, number | null> = {
-      [FUNDAMENTAL_METRICS.pe]:           num(r.priceToEarningsRatioTTM),
-      [FUNDAMENTAL_METRICS.pb]:           num(r.priceToBookRatioTTM),
-      [FUNDAMENTAL_METRICS.ps]:           num(r.priceToSalesRatioTTM),
-      [FUNDAMENTAL_METRICS.evEbitda]:     num(k.evToEBITDATTM),
-      [FUNDAMENTAL_METRICS.fcfYield]:     num(k.freeCashFlowYieldTTM),
-      [FUNDAMENTAL_METRICS.roe]:          num(k.returnOnEquityTTM),
-      [FUNDAMENTAL_METRICS.roic]:         num(k.returnOnInvestedCapitalTTM),
-      [FUNDAMENTAL_METRICS.grossMargin]:  num(r.grossProfitMarginTTM),
-      [FUNDAMENTAL_METRICS.netMargin]:    num(r.netProfitMarginTTM),
-      [FUNDAMENTAL_METRICS.debtEquity]:   num(r.debtToEquityRatioTTM),
+      [FUNDAMENTAL_METRICS.pe]: num(r.priceToEarningsRatioTTM),
+      [FUNDAMENTAL_METRICS.pb]: num(r.priceToBookRatioTTM),
+      [FUNDAMENTAL_METRICS.ps]: num(r.priceToSalesRatioTTM),
+      [FUNDAMENTAL_METRICS.evEbitda]: num(k.evToEBITDATTM),
+      [FUNDAMENTAL_METRICS.fcfYield]: num(k.freeCashFlowYieldTTM),
+      [FUNDAMENTAL_METRICS.roe]: num(k.returnOnEquityTTM),
+      [FUNDAMENTAL_METRICS.roic]: num(k.returnOnInvestedCapitalTTM),
+      [FUNDAMENTAL_METRICS.grossMargin]: num(r.grossProfitMarginTTM),
+      [FUNDAMENTAL_METRICS.netMargin]: num(r.netProfitMarginTTM),
+      [FUNDAMENTAL_METRICS.debtEquity]: num(r.debtToEquityRatioTTM),
       [FUNDAMENTAL_METRICS.currentRatio]: num(k.currentRatioTTM ?? r.currentRatioTTM),
-      [FUNDAMENTAL_METRICS.marketCap]:    marketCap,
-      [FUNDAMENTAL_METRICS.beta]:         num(p.beta),
+      [FUNDAMENTAL_METRICS.marketCap]: marketCap,
+      [FUNDAMENTAL_METRICS.beta]: num(p.beta),
     };
 
     // Quality gate — reject negative values where they are impossible.
     const negativeImpossible = new Set<string>([
-      FUNDAMENTAL_METRICS.grossMargin, FUNDAMENTAL_METRICS.currentRatio, FUNDAMENTAL_METRICS.marketCap,
+      FUNDAMENTAL_METRICS.grossMargin,
+      FUNDAMENTAL_METRICS.currentRatio,
+      FUNDAMENTAL_METRICS.marketCap,
     ]);
     for (const [code, v] of Object.entries(values)) {
       if (v !== null && v < 0 && negativeImpossible.has(code)) values[code] = null;
@@ -122,9 +211,14 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
     const rows = Object.entries(values)
       .filter(([, v]) => v !== null)
       .map(([metric_code, value_num]) => ({
-        subject_type: "asset" as const, subject_id: assetId,
-        metric_code, value_num, as_of: asOf, source_id: sourceId,
-        confidence: 90, penalties: [] as unknown as object,
+        subject_type: "asset" as const,
+        subject_id: assetId,
+        metric_code,
+        value_num,
+        as_of: asOf,
+        source_id: sourceId,
+        confidence: 90,
+        penalties: [] as unknown as object,
         raw: null as unknown as object,
       }));
 
@@ -134,30 +228,68 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
     const { error } = await supabaseAdmin.from("data_points").insert(rows as any);
     if (error) throw error;
 
-    await supabaseAdmin.from("ingestion_runs").update({
-      status: "success", finished_at: new Date().toISOString(), rows_ingested: rows.length,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      details: { symbol, provider: "fmp", values } as any,
-    }).eq("id", runId);
+    const statements = await refreshAnnualStatementHistory({
+      assetId,
+      symbol,
+      sourceId,
+      apiKey,
+    });
+    const rowsInserted = rows.length + statements.factsInserted;
 
-    return { status: "success", symbol, runId, rowsInserted: rows.length, values };
+    await supabaseAdmin
+      .from("ingestion_runs")
+      .update({
+        status: "success",
+        finished_at: new Date().toISOString(),
+        rows_ingested: rowsInserted,
+        details: {
+          symbol,
+          provider: "fmp",
+          values,
+          statements,
+          currentCalls: 3,
+          statementCalls: statements.status,
+        } as unknown as Json,
+      })
+      .eq("id", runId);
+
+    return {
+      status: "success",
+      symbol,
+      runId,
+      rowsInserted,
+      filingsInserted: statements.filingsInserted,
+      factsInserted: statements.factsInserted,
+      values,
+    };
   } catch (e) {
     if (e instanceof FmpQuotaError) {
       // Convert to skipped — this isn't a data failure, it's the free tier resetting tomorrow.
-      await supabaseAdmin.from("ingestion_runs").update({
-        status: "skipped" as unknown as "failed", finished_at: new Date().toISOString(),
-        error: (e as Error).message,
-      }).eq("id", runId);
+      await supabaseAdmin
+        .from("ingestion_runs")
+        .update({
+          status: "skipped" as unknown as "failed",
+          finished_at: new Date().toISOString(),
+          error: (e as Error).message,
+        })
+        .eq("id", runId);
       return { status: "skipped", symbol, runId, rowsInserted: 0, reason: (e as Error).message };
     }
-    await supabaseAdmin.from("ingestion_runs").update({
-      status: "failed", finished_at: new Date().toISOString(), error: (e as Error).message,
-    }).eq("id", runId);
+    await supabaseAdmin
+      .from("ingestion_runs")
+      .update({
+        status: "failed",
+        finished_at: new Date().toISOString(),
+        error: (e as Error).message,
+      })
+      .eq("id", runId);
     return { status: "failed", symbol, runId, rowsInserted: 0, error: (e as Error).message };
   }
 }
 
-export async function runAllFundamentalsIngest(opts: { symbols?: string[] } = {}): Promise<FundamentalsIngestResult[]> {
+export async function runAllFundamentalsIngest(
+  opts: { symbols?: string[] } = {},
+): Promise<FundamentalsIngestResult[]> {
   let syms = opts.symbols;
   if (!syms) {
     const { data } = await supabaseAdmin.from("assets").select("symbol").eq("active", true);
@@ -171,10 +303,367 @@ export async function runAllFundamentalsIngest(opts: { symbols?: string[] } = {}
       out.push({ status: "skipped", symbol: s, runId: "", rowsInserted: 0, reason: gate.reason });
       continue;
     }
-    try { out.push(await runFundamentalsIngest(s)); }
-    catch (e) { out.push({ status: "failed", symbol: s, runId: "", rowsInserted: 0, error: (e as Error).message }); }
-    // Free tier throttles hard — pace conservatively (~1/sec, 3 endpoints each).
-    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      out.push(await runFundamentalsIngest(s));
+    } catch (e) {
+      out.push({
+        status: "failed",
+        symbol: s,
+        runId: "",
+        rowsInserted: 0,
+        error: (e as Error).message,
+      });
+    }
+    // Free tier throttles hard. This path is deliberately serial and paced.
+    // Fresh statement histories use only the original three current calls;
+    // incomplete or stale histories use three additional backfill calls.
+    await new Promise((r) => setTimeout(r, 1250));
   }
   return out;
+}
+
+async function refreshAnnualStatementHistory(input: {
+  assetId: string;
+  symbol: string;
+  sourceId: string;
+  apiKey: string;
+}): Promise<StatementIngestResult> {
+  try {
+    const { data: existing, error } = await supabaseAdmin
+      .from("fundamental_filings")
+      .select("period_end,ingested_at")
+      .eq("asset_id", input.assetId)
+      .eq("source_id", input.sourceId)
+      .eq("fiscal_period", "FY")
+      .order("ingested_at", { ascending: false })
+      .limit(20);
+    if (error) {
+      return emptyStatementResult(
+        "failed",
+        `Point-in-time statement storage is unavailable: ${error.message}`,
+      );
+    }
+    const distinctPeriods = new Set((existing ?? []).map((row) => row.period_end));
+    const latestIngestedAt = existing?.[0]?.ingested_at ?? null;
+    const stale =
+      !latestIngestedAt ||
+      Date.now() - new Date(latestIngestedAt).getTime() > 90 * 24 * 60 * 60 * 1000;
+    if (distinctPeriods.size >= 3 && !stale) {
+      return emptyStatementResult(
+        "skipped",
+        "At least three annual periods are stored and the latest statement check is under 90 days old.",
+      );
+    }
+
+    const gate = await canUse("fmp", 250, 3);
+    if (!gate.ok) {
+      return emptyStatementResult("skipped", gate.reason ?? "FMP statement quota unavailable");
+    }
+    try {
+      const income = await fmp<FmpIncomeStatement>("income-statement", input.symbol, input.apiKey, {
+        period: "annual",
+        limit: "4",
+      });
+      const balance = await fmp<FmpBalanceSheet>(
+        "balance-sheet-statement",
+        input.symbol,
+        input.apiKey,
+        {
+          period: "annual",
+          limit: "4",
+        },
+      );
+      const cashFlow = await fmp<FmpCashFlowStatement>(
+        "cash-flow-statement",
+        input.symbol,
+        input.apiKey,
+        {
+          period: "annual",
+          limit: "4",
+        },
+      );
+      const stored = await storeAnnualStatementHistory({
+        assetId: input.assetId,
+        symbol: input.symbol,
+        sourceId: input.sourceId,
+        bundle: {
+          income: income ?? [],
+          balance: balance ?? [],
+          cashFlow: cashFlow ?? [],
+        },
+      });
+      return { status: "success", ...stored };
+    } catch (error) {
+      return emptyStatementResult(
+        error instanceof FmpQuotaError ? "skipped" : "failed",
+        (error as Error).message,
+      );
+    }
+  } catch (error) {
+    return emptyStatementResult("failed", (error as Error).message);
+  }
+}
+
+function emptyStatementResult(
+  status: StatementIngestResult["status"],
+  reason: string,
+): StatementIngestResult {
+  return {
+    status,
+    reason,
+    filingsInserted: 0,
+    factsInserted: 0,
+    filingsUnchanged: 0,
+  };
+}
+
+async function storeAnnualStatementHistory(input: {
+  assetId: string;
+  symbol: string;
+  sourceId: string;
+  bundle: AnnualStatementBundle;
+}): Promise<StatementStoreResult> {
+  const incomeByDate = statementMap(input.bundle.income);
+  const balanceByDate = statementMap(input.bundle.balance);
+  const cashByDate = statementMap(input.bundle.cashFlow);
+  const dates = [
+    ...new Set([...incomeByDate.keys(), ...balanceByDate.keys(), ...cashByDate.keys()]),
+  ]
+    .filter(isIsoDate)
+    .sort()
+    .reverse()
+    .slice(0, 4);
+  let filingsInserted = 0;
+  let factsInserted = 0;
+  let filingsUnchanged = 0;
+
+  for (const periodEnd of dates) {
+    const income = incomeByDate.get(periodEnd);
+    const balance = balanceByDate.get(periodEnd);
+    const cashFlow = cashByDate.get(periodEnd);
+    const facts = statementFacts(income, balance, cashFlow);
+    if (facts.length === 0) continue;
+
+    const contentHash = createHash("sha256").update(JSON.stringify(facts)).digest("hex");
+    const publishedAt = latestTimestamp([
+      income?.acceptedDate,
+      income?.filingDate,
+      balance?.acceptedDate,
+      balance?.filingDate,
+      cashFlow?.acceptedDate,
+      cashFlow?.filingDate,
+    ]);
+    const sourceFilingId =
+      income?.finalLink ??
+      income?.link ??
+      balance?.finalLink ??
+      balance?.link ??
+      cashFlow?.finalLink ??
+      cashFlow?.link ??
+      `${input.symbol}:${periodEnd}:FY`;
+    const { data: previous, error: previousError } = await supabaseAdmin
+      .from("fundamental_filings")
+      .select("id,content_hash,revision_no,known_at,is_restatement")
+      .eq("asset_id", input.assetId)
+      .eq("source_id", input.sourceId)
+      .eq("period_end", periodEnd)
+      .eq("fiscal_period", "FY")
+      .order("revision_no", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (previousError) throw previousError;
+    if (previous?.content_hash === contentHash) {
+      const repairRows = buildFactRows({
+        facts,
+        filingId: previous.id,
+        assetId: input.assetId,
+        sourceId: input.sourceId,
+        periodEnd,
+        knownAt: previous.known_at,
+        revisionNo: previous.revision_no,
+        isRestatement: previous.is_restatement,
+      });
+      const { data: repaired, error: repairError } = await supabaseAdmin
+        .from("fundamental_facts")
+        .upsert(repairRows, { onConflict: "filing_id,metric_code", ignoreDuplicates: true })
+        .select("id");
+      if (repairError) throw repairError;
+      factsInserted += repaired?.length ?? 0;
+      filingsUnchanged++;
+      continue;
+    }
+
+    const revisionNo = previous ? previous.revision_no + 1 : 1;
+    const isRestatement = Boolean(previous);
+    // FMP's normalized historical endpoint may contain later restatements.
+    // Publication time is retained for audit context, but the platform first
+    // "knows" a backfilled value only when this ingestion actually observes it.
+    // This prevents the future backtest from treating today's normalized
+    // history as if it had been available at the original filing date.
+    const knownAt = new Date().toISOString();
+    const raw = {
+      symbol: input.symbol,
+      income: income ?? null,
+      balance: balance ?? null,
+      cashFlow: cashFlow ?? null,
+    };
+    const { data: filing, error: filingError } = await supabaseAdmin
+      .from("fundamental_filings")
+      .insert({
+        asset_id: input.assetId,
+        source_id: input.sourceId,
+        source_filing_id: sourceFilingId,
+        content_hash: contentHash,
+        period_end: periodEnd,
+        fiscal_year: Number(income?.calendarYear ?? balance?.calendarYear ?? periodEnd.slice(0, 4)),
+        fiscal_period: "FY",
+        published_at: publishedAt,
+        known_at: knownAt,
+        reported_currency:
+          income?.reportedCurrency ??
+          balance?.reportedCurrency ??
+          cashFlow?.reportedCurrency ??
+          null,
+        revision_no: revisionNo,
+        is_restatement: isRestatement,
+        supersedes_filing_id: previous?.id ?? null,
+        raw: raw as unknown as Json,
+      })
+      .select("id")
+      .single();
+    if (filingError) throw filingError;
+
+    const factRows = buildFactRows({
+      facts,
+      filingId: filing.id,
+      assetId: input.assetId,
+      sourceId: input.sourceId,
+      periodEnd,
+      knownAt,
+      revisionNo,
+      isRestatement,
+    });
+    const { error: factsError } = await supabaseAdmin.from("fundamental_facts").insert(factRows);
+    if (factsError) throw factsError;
+    filingsInserted++;
+    factsInserted += factRows.length;
+  }
+
+  return { filingsInserted, factsInserted, filingsUnchanged };
+}
+
+function statementMap<T extends FmpStatementBase>(rows: T[]): Map<string, T> {
+  const result = new Map<string, T>();
+  for (const row of rows) {
+    if (row.date && !result.has(row.date)) result.set(row.date, row);
+  }
+  return result;
+}
+
+function statementFacts(
+  income: FmpIncomeStatement | undefined,
+  balance: FmpBalanceSheet | undefined,
+  cashFlow: FmpCashFlowStatement | undefined,
+): Array<{ metricCode: StatementMetricCode; value: number; unit: "currency" | "shares" }> {
+  const candidates: Array<{
+    metricCode: StatementMetricCode;
+    value: unknown;
+    unit: "currency" | "shares";
+  }> = [
+    { metricCode: STATEMENT_METRICS.netIncome, value: income?.netIncome, unit: "currency" },
+    {
+      metricCode: STATEMENT_METRICS.operatingCashFlow,
+      value: cashFlow?.operatingCashFlow ?? cashFlow?.netCashProvidedByOperatingActivities,
+      unit: "currency",
+    },
+    { metricCode: STATEMENT_METRICS.totalAssets, value: balance?.totalAssets, unit: "currency" },
+    {
+      metricCode: STATEMENT_METRICS.longTermDebt,
+      value: balance?.longTermDebt ?? balance?.totalNonCurrentDebt,
+      unit: "currency",
+    },
+    {
+      metricCode: STATEMENT_METRICS.currentAssets,
+      value: balance?.totalCurrentAssets,
+      unit: "currency",
+    },
+    {
+      metricCode: STATEMENT_METRICS.currentLiabilities,
+      value: balance?.totalCurrentLiabilities,
+      unit: "currency",
+    },
+    {
+      metricCode: STATEMENT_METRICS.sharesOutstanding,
+      value: income?.weightedAverageShsOut,
+      unit: "shares",
+    },
+    { metricCode: STATEMENT_METRICS.revenue, value: income?.revenue, unit: "currency" },
+    { metricCode: STATEMENT_METRICS.grossProfit, value: income?.grossProfit, unit: "currency" },
+    {
+      metricCode: STATEMENT_METRICS.ebit,
+      value: income?.ebit ?? income?.operatingIncome,
+      unit: "currency",
+    },
+    {
+      metricCode: STATEMENT_METRICS.cashAndEquivalents,
+      value: balance?.cashAndCashEquivalents ?? balance?.cashAndShortTermInvestments,
+      unit: "currency",
+    },
+    { metricCode: STATEMENT_METRICS.totalDebt, value: balance?.totalDebt, unit: "currency" },
+    {
+      metricCode: STATEMENT_METRICS.netFixedAssets,
+      value: balance?.propertyPlantEquipmentNet,
+      unit: "currency",
+    },
+  ];
+  return candidates.flatMap((candidate) => {
+    const value = num(candidate.value);
+    return value === null ? [] : [{ ...candidate, value }];
+  });
+}
+
+function buildFactRows(input: {
+  facts: Array<{ metricCode: StatementMetricCode; value: number; unit: "currency" | "shares" }>;
+  filingId: string;
+  assetId: string;
+  sourceId: string;
+  periodEnd: string;
+  knownAt: string;
+  revisionNo: number;
+  isRestatement: boolean;
+}) {
+  return input.facts.map((fact) => ({
+    filing_id: input.filingId,
+    asset_id: input.assetId,
+    source_id: input.sourceId,
+    metric_code: fact.metricCode,
+    value_num: fact.value,
+    unit: fact.unit,
+    period_end: input.periodEnd,
+    known_at: input.knownAt,
+    revision_no: input.revisionNo,
+    is_restatement: input.isRestatement,
+    raw: null,
+  }));
+}
+
+function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function latestTimestamp(values: Array<string | undefined>): string | null {
+  const parsed = values
+    .filter((value): value is string => Boolean(value))
+    .map((value) => {
+      const trimmed = value.trim();
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+        ? `${trimmed}T23:59:59.000Z`
+        : /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(trimmed)
+          ? `${trimmed.replace(" ", "T")}Z`
+          : trimmed;
+      return Number.isNaN(Date.parse(iso)) ? null : new Date(iso).toISOString();
+    })
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  return parsed.at(-1) ?? null;
 }
