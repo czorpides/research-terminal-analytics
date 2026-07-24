@@ -43,6 +43,7 @@ import {
   type OpportunityModelState,
 } from "@/lib/opportunity/model";
 import type {
+  DiscoveryRoute,
   OpportunityCandidate,
   OpportunityRadarWorkspace,
 } from "@/lib/opportunity/workspace.functions";
@@ -62,6 +63,7 @@ export function OpportunityRadarView({
   const [horizon, setHorizon] = useState<InvestmentHorizon>("one_to_three");
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<OpportunityModelState | "all">("all");
+  const [routeFilter, setRouteFilter] = useState<DiscoveryRoute | "all">("all");
   const summary =
     workspace.horizonSummaries.find((item) => item.horizon === horizon) ??
     workspace.horizonSummaries[0];
@@ -77,13 +79,21 @@ export function OpportunityRadarView({
         ) {
           return false;
         }
-        return stateFilter === "all" || candidate.horizons[horizon].modelState === stateFilter;
+        if (stateFilter !== "all" && candidate.horizons[horizon].modelState !== stateFilter) {
+          return false;
+        }
+        return routeFilter === "all" || candidate.funnel[horizon].routes.includes(routeFilter);
       })
-      .sort(
-        (left, right) =>
-          right.horizons[horizon].researchPriority - left.horizons[horizon].researchPriority,
-      );
-  }, [horizon, query, stateFilter, workspace.candidates]);
+      .sort((left, right) => {
+        const leftFunnel = left.funnel[horizon];
+        const rightFunnel = right.funnel[horizon];
+        return (
+          Number(rightFunnel.nominated) - Number(leftFunnel.nominated) ||
+          rightFunnel.shadowPriority - leftFunnel.shadowPriority ||
+          right.horizons[horizon].researchPriority - left.horizons[horizon].researchPriority
+        );
+      });
+  }, [horizon, query, routeFilter, stateFilter, workspace.candidates]);
 
   return (
     <div className="space-y-3">
@@ -151,8 +161,9 @@ export function OpportunityRadarView({
             <SmallMetric label="Blocked" value={String(summary?.blocked ?? 0)} />
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-            One evidence engine supplies all horizons. The weights and minimum history change, so
-            the platform does not duplicate raw data or run three independent ingestion systems.
+            One evidence engine supplies all horizons. Price dislocation, Magic Formula and
+            improving-value routes widen discovery, while Piotroski validates financial health.
+            These shadow routes do not change the core horizon score.
           </p>
         </DashboardPanel>
       </DashboardGrid>
@@ -216,6 +227,17 @@ export function OpportunityRadarView({
                     className="h-8 pl-8 text-xs"
                   />
                 </label>
+                <select
+                  value={routeFilter}
+                  onChange={(event) => setRouteFilter(event.target.value as DiscoveryRoute | "all")}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                  aria-label="Filter by discovery route"
+                >
+                  <option value="all">All discovery routes</option>
+                  <option value="price_dislocation">Price dislocation</option>
+                  <option value="magic_formula">Magic Formula</option>
+                  <option value="improving_value">Piotroski plus value</option>
+                </select>
                 <select
                   value={stateFilter}
                   onChange={(event) =>
@@ -504,19 +526,32 @@ function CandidateTable({
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1060px] border-collapse text-left text-[11px]">
+      <table className="w-full min-w-[1360px] border-collapse text-left text-[11px]">
         <thead>
           <tr className="border-b border-border/70 text-[9px] uppercase tracking-wider text-muted-foreground">
             <th className="px-2 py-2 font-medium">Rank</th>
             <th className="px-2 py-2 font-medium">Company</th>
+            <th className="px-2 py-2 font-medium">Discovery route</th>
             <th className="px-2 py-2 font-medium">Classification</th>
             <th className="px-2 py-2 text-right font-medium">
               <InfoTip label={HORIZON_CONFIGS[horizon].scoreLabel} />
             </th>
             <th className="px-2 py-2 text-right font-medium">
               <InfoTip
-                label="Research priority"
-                explanation="Horizon score adjusted down for weak confidence and permanent impairment risk."
+                label="Shadow funnel"
+                explanation="Best discovery-route score, adjusted by Piotroski confirmation or warning. It does not alter the core horizon score."
+              />
+            </th>
+            <th className="px-2 py-2 text-right font-medium">
+              <InfoTip
+                label="F-Score"
+                explanation="Strict Piotroski score. A formal 0–9 result appears only when all nine tests are available."
+              />
+            </th>
+            <th className="px-2 py-2 text-right font-medium">
+              <InfoTip
+                label="Magic rank"
+                explanation="Combined rank from annual Greenblatt return on capital and EBIT-to-enterprise-value earnings yield."
               />
             </th>
             <th className="px-2 py-2 text-right font-medium">
@@ -538,6 +573,9 @@ function CandidateTable({
         <tbody>
           {rows.map((candidate, index) => {
             const result = candidate.horizons[horizon];
+            const funnel = candidate.funnel[horizon];
+            const piotroski = candidate.fundamentalModels.piotroski;
+            const magic = candidate.fundamentalModels.magicFormula;
             return (
               <tr
                 key={candidate.assetId}
@@ -551,6 +589,9 @@ function CandidateTable({
                   </div>
                 </td>
                 <td className="px-2 py-2">
+                  <DiscoveryRouteBadges routes={funnel.routes} />
+                </td>
+                <td className="px-2 py-2">
                   <ClassificationBadge classification={result.classification} />
                 </td>
                 <td
@@ -562,7 +603,30 @@ function CandidateTable({
                   {result.score.toFixed(1)}
                 </td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums">
-                  {result.researchPriority.toFixed(1)}
+                  {funnel.shadowPriority.toFixed(1)}
+                </td>
+                <td
+                  className={cn(
+                    "px-2 py-2 text-right font-mono tabular-nums",
+                    piotroski.state === "complete" && (piotroski.score ?? 0) >= 7
+                      ? "text-[var(--positive)]"
+                      : piotroski.state === "complete" && (piotroski.score ?? 9) <= 3
+                        ? "text-[var(--negative)]"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {piotroski.state === "complete"
+                    ? `${piotroski.score}/9`
+                    : piotroski.state === "partial"
+                      ? `${piotroski.provisionalScore ?? 0}/${piotroski.availableTests}`
+                      : "—"}
+                </td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">
+                  {magic.state === "ranked"
+                    ? `${magic.universeRank}/${magic.universeSize}`
+                    : magic.state === "ineligible"
+                      ? "N/A"
+                      : "—"}
                 </td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums">
                   {candidate.evidence.priceDislocation?.value?.toFixed(1) ?? "—"}
@@ -650,6 +714,20 @@ function CandidateDialog({
           <DetailMetric label="Data confidence" value={result.dataConfidence} />
         </div>
 
+        <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Discovery funnel
+            </span>
+            <DiscoveryRouteBadges routes={candidate.funnel[horizon].routes} />
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            {candidate.funnel[horizon].detail} Shadow funnel priority{" "}
+            {candidate.funnel[horizon].shadowPriority.toFixed(1)}/100. The core{" "}
+            {result.scoreLabel.toLowerCase()} remains {result.score.toFixed(1)}/100.
+          </p>
+        </div>
+
         <ResearchNarrative
           summary={candidate.narrative.summary}
           detail={candidate.narrative.detail}
@@ -657,6 +735,11 @@ function CandidateDialog({
           asOf={candidate.priceAsOf}
           confidence={result.dataConfidence}
         />
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <PiotroskiPanel candidate={candidate} horizon={horizon} />
+          <MagicFormulaPanel candidate={candidate} />
+        </div>
 
         <div className="grid gap-3 lg:grid-cols-2">
           <DashboardPanel
@@ -699,6 +782,163 @@ function CandidateDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DiscoveryRouteBadges({
+  routes,
+}: {
+  routes: OpportunityCandidate["funnel"][InvestmentHorizon]["routes"];
+}) {
+  if (routes.length === 0) {
+    return (
+      <Badge variant="outline" className="whitespace-nowrap text-[8px] text-muted-foreground">
+        NO ROUTE
+      </Badge>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {routes.map((route) => (
+        <Badge
+          key={route}
+          variant="outline"
+          className={cn(
+            "whitespace-nowrap px-1.5 py-0 text-[8px]",
+            route === "magic_formula"
+              ? "border-primary/45 text-primary"
+              : route === "improving_value"
+                ? "border-[var(--positive)]/45 text-[var(--positive)]"
+                : "border-[var(--warning)]/45 text-[var(--warning)]",
+          )}
+        >
+          {route === "magic_formula"
+            ? "MAGIC"
+            : route === "improving_value"
+              ? "F+VALUE"
+              : "DISLOCATION"}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+function PiotroskiPanel({
+  candidate,
+  horizon,
+}: {
+  candidate: OpportunityCandidate;
+  horizon: InvestmentHorizon;
+}) {
+  const piotroski = candidate.fundamentalModels.piotroski;
+  const scoreText =
+    piotroski.state === "complete"
+      ? `${piotroski.score}/9`
+      : piotroski.state === "partial"
+        ? `${piotroski.provisionalScore ?? 0} passes from ${piotroski.availableTests} available`
+        : "Not available";
+  return (
+    <DashboardPanel
+      title="Piotroski financial health"
+      description="Nine annual pass/fail tests. Partial evidence never becomes a formal F-Score."
+      expandable={false}
+    >
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <div className="font-mono text-xl font-semibold">{scoreText}</div>
+          <div className="mt-1 text-[9px] text-muted-foreground">
+            {piotroski.coverage.toFixed(0)}% test coverage · {piotroski.state}
+          </div>
+        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "text-[9px]",
+            piotroski.state === "complete" && (piotroski.score ?? 0) >= 7
+              ? "border-[var(--positive)]/45 text-[var(--positive)]"
+              : piotroski.state === "complete" && (piotroski.score ?? 9) <= 3
+                ? "border-[var(--negative)]/45 text-[var(--negative)]"
+                : "text-muted-foreground",
+          )}
+        >
+          {candidate.funnel[horizon].piotroskiValidation.toUpperCase()}
+        </Badge>
+      </div>
+      {piotroski.tests.length === 0 ? (
+        <div className="rounded border border-dashed border-border p-4 text-center text-[10px] text-muted-foreground">
+          Three annual point-in-time periods are required.
+        </div>
+      ) : (
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {piotroski.tests.map((item) => (
+            <div
+              key={item.key}
+              className="flex items-start gap-2 rounded border border-border/55 bg-muted/20 p-2 text-[10px]"
+            >
+              {item.passed === true ? (
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--positive)]" />
+              ) : item.passed === false ? (
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--negative)]" />
+              ) : (
+                <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <div>
+                <div className="font-medium">{item.label}</div>
+                <div className="mt-0.5 text-[9px] text-muted-foreground">
+                  {item.passed === null ? "Input unavailable" : item.passed ? "Pass" : "Fail"}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </DashboardPanel>
+  );
+}
+
+function MagicFormulaPanel({ candidate }: { candidate: OpportunityCandidate }) {
+  const magic = candidate.fundamentalModels.magicFormula;
+  return (
+    <DashboardPanel
+      title="Magic Formula discovery"
+      description="Ranks Greenblatt return on capital and EBIT-to-enterprise-value yield separately, then combines the ranks."
+      expandable={false}
+    >
+      {magic.state === "ranked" ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <SmallMetric label="ROC" value={formatFinancialRatio(magic.returnOnCapital)} />
+            <SmallMetric label="Earnings yield" value={formatFinancialRatio(magic.earningsYield)} />
+            <SmallMetric
+              label="Universe rank"
+              value={`${magic.universeRank}/${magic.universeSize}`}
+            />
+            <SmallMetric
+              label="Universe pct"
+              value={`${magic.universePercentile?.toFixed(0) ?? "—"}%`}
+            />
+            <SmallMetric
+              label="Industry rank"
+              value={
+                magic.industryRank === null ? "—" : `${magic.industryRank}/${magic.industrySize}`
+              }
+            />
+            <SmallMetric label="Period" value={magic.periodEnd ?? "—"} />
+          </div>
+          <p className="text-[10px] leading-relaxed text-muted-foreground">
+            This is an annual shadow rank. It can nominate a company for research, but it has zero
+            direct weight in the core Opportunity Radar until point-in-time backtesting proves
+            incremental value.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded border border-dashed border-border p-4 text-[10px] leading-relaxed text-muted-foreground">
+          {magic.state === "ineligible"
+            ? (magic.exclusionReason ?? "This company is outside the eligible operating universe.")
+            : "Annual EBIT, enterprise-value and capital-employed inputs are not available."}
+        </div>
+      )}
+    </DashboardPanel>
   );
 }
 
@@ -928,6 +1168,10 @@ function riskTone(value: number): string {
 
 function plainLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatFinancialRatio(value: number | null): string {
+  return value === null ? "—" : `${(value * 100).toFixed(1)}%`;
 }
 
 function formatDate(value: string): string {

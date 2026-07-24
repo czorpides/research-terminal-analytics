@@ -18,6 +18,68 @@ The central safeguards are:
 
 All horizons use the same stored evidence. They do not duplicate raw prices or financial statements.
 
+## Multi-route candidate funnel
+
+The Radar can nominate a company through three separate shadow routes:
+
+1. **Price dislocation** — the original broken-stock, sector-washout or recovery route.
+2. **Magic Formula** — top-quartile Greenblatt return on capital and EBIT/EV ranking.
+3. **Improving value** — complete Piotroski F-Score of at least 7/9 plus peer-relative valuation of at least 65/100.
+
+The route score is displayed as a shadow funnel priority. It does not alter the core horizon score.
+Piotroski adds a small confirmation or warning to the funnel order only. Direct model weight remains
+zero until point-in-time backtesting proves incremental value.
+
+## Piotroski financial-health engine
+
+The engine calculates all nine binary tests from three consecutive annual periods:
+
+- positive net income;
+- positive operating cash flow;
+- higher return on assets;
+- operating cash flow above net income;
+- lower long-term debt to assets;
+- higher current ratio;
+- no increase in split-adjusted weighted average shares;
+- higher gross margin;
+- higher asset turnover.
+
+Three periods are required because prior-year ROA and asset turnover need beginning total assets.
+A formal 0–9 score is shown only when all nine tests are available. Partial evidence remains visible
+with its coverage, but cannot be treated as a complete F-Score.
+
+## Magic Formula discovery engine
+
+The initial annual calculation is:
+
+```text
+Return on capital = EBIT / (net working capital + net fixed assets)
+Earnings yield = EBIT / enterprise value
+```
+
+Each metric is ranked independently. Their ranks are added and then ranked across both the eligible
+universe and the company's industry. Financials, REITs and utilities are excluded from the generic
+calculation. Negative EBIT, non-positive enterprise value and non-positive capital employed are also
+ineligible.
+
+The annual rank can nominate a company for research. A quarterly trailing-twelve-month extension
+remains a later activation gate rather than being silently approximated.
+
+## Point-in-time fundamentals
+
+`fundamental_filings` stores period end, publication time, the time the platform first knew the data,
+provider filing identity, a content hash, revision number and restatement lineage. `fundamental_facts`
+stores the individual values against that filing version.
+
+Original and changed filing values therefore remain available for future backtests. A changed value
+for an old period receives a new revision and `known_at` equal to the later ingestion time, preventing
+the backtest from seeing the restatement early.
+
+The initial normalized-history backfill also uses ingestion time as `known_at`, not the historical
+filing timestamp. The provider's current historical response may already include restatements, so the
+platform refuses to pretend those normalized values were observable years earlier. Historical
+backtests before the live collection date still require an as-reported filing archive.
+
 | Horizon    | Output            | Main use                                      | Intended refresh                  |
 | ---------- | ----------------- | --------------------------------------------- | --------------------------------- |
 | 1–3 years  | Opportunity score | Price overreaction and plausible recovery     | Daily and after material releases |
@@ -103,16 +165,18 @@ Confidence and impairment are expressed as decimals in that formula.
 
 ## Data available in this release
 
-| Capability                          | Current state | Treatment                                        |
-| ----------------------------------- | ------------- | ------------------------------------------------ |
-| Three-year adjusted price behaviour | Live          | Used for drawdown, trend, volatility and returns |
-| Current fundamentals                | Partial       | Used as visible valuation and quality proxies    |
-| Reported EPS events                 | Partial       | Used as a limited temporary-problem proxy        |
-| Historical forward valuations       | Missing       | No contribution, confidence reduced              |
-| Consensus revision history          | Missing       | No contribution, confidence reduced              |
-| Insider and short-interest history  | Missing       | No contribution, confidence reduced              |
-| Full systematic factor model        | Missing       | Industry-only proxy, production blocked          |
-| Long-run capital allocation         | Missing       | 5–10 year output stays experimental              |
+| Capability                          | Current state | Treatment                                                        |
+| ----------------------------------- | ------------- | ---------------------------------------------------------------- |
+| Three-year adjusted price behaviour | Live          | Used for drawdown, trend, volatility and returns                 |
+| Current fundamentals                | Partial       | Current peer proxies plus annual point-in-time statement history |
+| Piotroski F-Score                   | Shadow        | Nine tests shown separately; confirmation/warning only           |
+| Magic Formula                       | Shadow        | Separate eligible-universe and industry discovery ranks          |
+| Reported EPS events                 | Partial       | Used as a limited temporary-problem proxy                        |
+| Historical forward valuations       | Missing       | No contribution, confidence reduced                              |
+| Consensus revision history          | Missing       | No contribution, confidence reduced                              |
+| Insider and short-interest history  | Missing       | No contribution, confidence reduced                              |
+| Full systematic factor model        | Missing       | Industry-only proxy, production blocked                          |
+| Long-run capital allocation         | Missing       | 5–10 year output stays experimental                              |
 
 ## Refresh behaviour
 
@@ -138,12 +202,18 @@ Expansion should occur only after measuring:
 - point-in-time backtest integrity;
 - delisted-company coverage.
 
+Current TTM fundamentals retain their existing three-call company refresh. Annual statement history
+uses a separate three-call quota gate, runs serially, and stops refreshing for 90 days once at least
+three periods are stored. A history-provider or storage failure is reported separately and cannot
+turn the existing current-fundamentals refresh into a failure.
+
 ## Next model work
 
-1. Store quarterly and annual facts with both period end and publication timestamp.
+1. Extend the annual Magic Formula calculation to quarterly trailing-twelve-month inputs.
 2. Add historical forward multiples and consensus revisions.
 3. Add the market, country, industry, style and macro residual-return model.
 4. Add verified insider, short-interest and ownership adapters with reporting-lag metadata.
-5. Build separate financial-company and REIT impairment models.
-6. Run the 1–3 and 3–5 year models in shadow mode across historical constituents.
-7. Keep the 5–10 year profile experimental until it adds out-of-sample value.
+5. Build separate financial-company, REIT and utility models.
+6. Backtest Radar alone, Radar plus Piotroski, Radar plus Magic Formula and Radar plus both.
+7. Run the 1–3 and 3–5 year models in shadow mode across historical constituents.
+8. Keep the 5–10 year profile experimental until it adds out-of-sample value.

@@ -880,6 +880,155 @@ export type Database = {
         };
         Relationships: [];
       };
+      fundamental_facts: {
+        Row: {
+          asset_id: string;
+          filing_id: string;
+          id: string;
+          ingested_at: string;
+          is_restatement: boolean;
+          known_at: string;
+          metric_code: string;
+          period_end: string;
+          raw: Json | null;
+          revision_no: number;
+          source_id: string;
+          unit: string | null;
+          value_num: number;
+        };
+        Insert: {
+          asset_id: string;
+          filing_id: string;
+          id?: string;
+          ingested_at?: string;
+          is_restatement?: boolean;
+          known_at: string;
+          metric_code: string;
+          period_end: string;
+          raw?: Json | null;
+          revision_no: number;
+          source_id: string;
+          unit?: string | null;
+          value_num: number;
+        };
+        Update: {
+          asset_id?: string;
+          filing_id?: string;
+          id?: string;
+          ingested_at?: string;
+          is_restatement?: boolean;
+          known_at?: string;
+          metric_code?: string;
+          period_end?: string;
+          raw?: Json | null;
+          revision_no?: number;
+          source_id?: string;
+          unit?: string | null;
+          value_num?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fundamental_facts_asset_id_fkey";
+            columns: ["asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fundamental_facts_filing_id_fkey";
+            columns: ["filing_id"];
+            isOneToOne: false;
+            referencedRelation: "fundamental_filings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fundamental_facts_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "data_sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      fundamental_filings: {
+        Row: {
+          asset_id: string;
+          content_hash: string;
+          fiscal_period: string;
+          fiscal_year: number | null;
+          id: string;
+          ingested_at: string;
+          is_restatement: boolean;
+          known_at: string;
+          period_end: string;
+          published_at: string | null;
+          raw: Json | null;
+          reported_currency: string | null;
+          revision_no: number;
+          source_filing_id: string;
+          source_id: string;
+          supersedes_filing_id: string | null;
+        };
+        Insert: {
+          asset_id: string;
+          content_hash: string;
+          fiscal_period: string;
+          fiscal_year?: number | null;
+          id?: string;
+          ingested_at?: string;
+          is_restatement?: boolean;
+          known_at: string;
+          period_end: string;
+          published_at?: string | null;
+          raw?: Json | null;
+          reported_currency?: string | null;
+          revision_no?: number;
+          source_filing_id: string;
+          source_id: string;
+          supersedes_filing_id?: string | null;
+        };
+        Update: {
+          asset_id?: string;
+          content_hash?: string;
+          fiscal_period?: string;
+          fiscal_year?: number | null;
+          id?: string;
+          ingested_at?: string;
+          is_restatement?: boolean;
+          known_at?: string;
+          period_end?: string;
+          published_at?: string | null;
+          raw?: Json | null;
+          reported_currency?: string | null;
+          revision_no?: number;
+          source_filing_id?: string;
+          source_id?: string;
+          supersedes_filing_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fundamental_filings_asset_id_fkey";
+            columns: ["asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fundamental_filings_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "data_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fundamental_filings_supersedes_filing_id_fkey";
+            columns: ["supersedes_filing_id"];
+            isOneToOne: false;
+            referencedRelation: "fundamental_filings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       fundamentals_annual: {
         Row: {
           asset_id: string;
@@ -2566,6 +2715,39 @@ export type Database = {
       data_health_alerts: {
         Row: {
           payload: Json | null;
+        };
+        Relationships: [];
+      };
+      latest_asset_fundamentals: {
+        Row: {
+          as_of: string | null;
+          confidence: number | null;
+          metric_code: string | null;
+          source_id: string | null;
+          subject_id: string | null;
+          value_num: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "data_points_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "data_sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      latest_asset_scores: {
+        Row: {
+          calc_version: string | null;
+          computed_at: string | null;
+          confidence: number | null;
+          deductions: Json | null;
+          inputs: Json | null;
+          positives: Json | null;
+          score_type: string | null;
+          subject_id: string | null;
+          value: number | null;
         };
         Relationships: [];
       };
