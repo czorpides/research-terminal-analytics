@@ -236,9 +236,9 @@ async function syncEarningsEvents(): Promise<{
   if (assetsResult.error) throw assetsResult.error;
   if (sourceResult.error) throw sourceResult.error;
   const assets = new Map(
-    (assetsResult.data ?? []).map((asset) => [
+    ((assetsResult.data ?? []) as any[]).map((asset: any) => [
       String(asset.symbol).toUpperCase(),
-      { id: String(asset.id), name: String(asset.name) },
+      { id: String(asset.id), name: String(asset.name) } as { id: string; name: string },
     ]),
   );
 
