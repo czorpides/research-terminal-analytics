@@ -208,7 +208,7 @@ async function syncFredEvents(mappings: ReleaseMapping[]): Promise<number> {
     await cancelRemovedFutureEvents({
       providerCode: "fred",
       eventType: "macro_release",
-      activeKeys: events.map((event) => event.event_key),
+      activeKeys: events.map((event: any) => event.event_key),
       end: `${end}T23:59:59.999Z`,
     });
   }
@@ -272,7 +272,7 @@ async function syncEarningsEvents(): Promise<{
   await cancelRemovedFutureEvents({
     providerCode: "alphavantage",
     eventType: "earnings",
-    activeKeys: tracked.map((event) => event.event_key),
+    activeKeys: tracked.map((event: any) => event.event_key),
     end: new Date(Date.now() + 100 * 86_400_000).toISOString(),
   });
   if (tracked.length) {
@@ -439,8 +439,8 @@ async function cancelRemovedFutureEvents({
   if (error) throw error;
   const active = new Set(activeKeys);
   const cancelledIds = (data ?? [])
-    .filter((event) => !active.has(String(event.event_key)))
-    .map((event) => String(event.id));
+    .filter((event: any) => !active.has(String(event.event_key)))
+    .map((event: any) => String(event.id));
   if (!cancelledIds.length) return;
   const { error: updateError } = await supabaseAdmin
     .from("scheduled_data_events")
