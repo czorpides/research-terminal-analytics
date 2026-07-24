@@ -1,10 +1,10 @@
 import { supabaseAdmin as supabaseAdminTyped } from "@/integrations/supabase/client.server";
 // Some tables referenced here aren't yet in the generated Supabase types;
-// intersect the typed client with a loose overload for unknown table names.
-const supabaseAdmin = supabaseAdminTyped as typeof supabaseAdminTyped & {
-  from(table: string): any;
-};
-import type { Database } from "@/integrations/supabase/types";
+// swap `.from` for a loose signature so unknown table names still compile.
+const supabaseAdmin = supabaseAdminTyped as unknown as Omit<
+  typeof supabaseAdminTyped,
+  "from"
+> & { from(table: string): any };
 import { fetchReleaseDates, fetchSeriesRelease } from "@/lib/ingestion/fred/client.server";
 import { FRED_SERIES } from "@/lib/ingestion/fred/series";
 
@@ -312,7 +312,7 @@ async function syncEarningsEvents(): Promise<{
 
 async function syncSafetyEvents(): Promise<number> {
   const now = new Date();
-  const events: Array<Database["public"]["Tables"]["scheduled_data_events"]["Insert"]> = [];
+  const events: Array<any> = [];
   const dailyOverviewSeries = FRED_SERIES.filter((series) => series.cadence === "daily").map(
     (series) => series.seriesCode,
   );
@@ -395,7 +395,7 @@ function safetyEvent({
   engines: string[];
   seriesCodes?: string[];
   scope: string;
-}): Database["public"]["Tables"]["scheduled_data_events"]["Insert"] {
+}): any {
   return {
     event_key: key,
     event_type: "safety_refresh",

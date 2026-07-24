@@ -40,9 +40,10 @@ export const getReleaseCalendarDashboard = createServerFn({ method: "GET" }).han
       "@/integrations/supabase/client.server"
     );
     // Table not yet reflected in generated Supabase types.
-    const supabaseAdmin = supabaseAdminTyped as typeof supabaseAdminTyped & {
-      from(table: string): any;
-    };
+    const supabaseAdmin = supabaseAdminTyped as unknown as Omit<
+      typeof supabaseAdminTyped,
+      "from"
+    > & { from(table: string): any };
     const now = new Date();
     const start = new Date(now.getTime() - 14 * 86_400_000).toISOString();
     const end = new Date(now.getTime() + 120 * 86_400_000).toISOString();
