@@ -37,6 +37,9 @@ jobs:
       - name: Run TypeScript check
         run: npx tsc --noEmit
 
+      - name: Run Opportunity Radar model tests
+        run: npm run test:opportunity
+
       - name: Build production application
         run: npm run build
 

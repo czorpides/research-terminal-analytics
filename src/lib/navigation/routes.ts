@@ -140,8 +140,8 @@ export const ROUTES: RouteEntry[] = [
     status: "active",
     enabled: true,
     requiredDataSources: ["prices", "fundamentals"],
-    requiredModels: ["composite"],
-    purpose: "Ranks the tracked universe by composite score.",
+    requiredModels: ["opportunity.horizons", "impairment", "idiosyncrasy"],
+    purpose: "Finds share-price damage that appears greater than business impairment.",
   },
   {
     id: "uv",
