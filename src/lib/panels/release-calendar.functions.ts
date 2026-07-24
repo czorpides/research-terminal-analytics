@@ -87,7 +87,7 @@ export const getReleaseCalendarDashboard = createServerFn({ method: "GET" }).han
     const sevenDays = nowMs + 7 * 86_400_000;
     const upcoming = events
       .filter(
-        (event) =>
+        (event: any) =>
           event.status !== "cancelled" &&
           new Date(event.scheduledAt).getTime() >= nowMs - 60 * 60 * 1000,
       )
@@ -105,7 +105,7 @@ export const getReleaseCalendarDashboard = createServerFn({ method: "GET" }).han
       recent: recent.map(stripInternalDates),
       counts: {
         nextSevenDays: upcoming.filter(
-          (event) => new Date(event.scheduledAt).getTime() <= sevenDays,
+          (event: any) => new Date(event.scheduledAt).getTime() <= sevenDays,
         ).length,
         macro: upcoming.filter((event: any) => event.type === "macro_release").length,
         earnings: upcoming.filter((event: any) => event.type === "earnings").length,
