@@ -14,6 +14,26 @@ const METRIC_HELP: Array<[RegExp, string]> = [
     "How much of the required data is present, current and reliable. Higher is better.",
   ],
   [
+    /research priority/i,
+    "The horizon score adjusted down for weak evidence confidence and permanent impairment risk. It ranks what deserves research time, not what to buy.",
+  ],
+  [
+    /impairment risk/i,
+    "The estimated chance that the business damage is lasting rather than temporary. Lower is better.",
+  ],
+  [
+    /idiosyncrasy|company-specific/i,
+    "How much of the share-price move appears specific to this company after removing the effects the active model can currently explain.",
+  ],
+  [
+    /price damage|price dislocation/i,
+    "How unusually far the shares have fallen, using the drawdown and the return gap versus comparable companies.",
+  ],
+  [
+    /valuation compression|entry valuation/i,
+    "Whether the current valuation is cheap relative to the available peer or historical reference. A high score means more compressed.",
+  ],
+  [
     /z[- ]?score|normal gap|distance from (normal|usual)/i,
     "How far the latest reading sits from its own historical norm. Around zero is normal; larger positive or negative values are more unusual.",
   ],

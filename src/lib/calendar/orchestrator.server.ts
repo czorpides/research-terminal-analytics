@@ -313,13 +313,42 @@ async function executeEarningsEvent(event: ScheduledDataEvent): Promise<Executio
               ? fundamentalsResult.reason.message
               : "fundamentals refresh failed",
         };
-  const failed = (price.status === "failed" ? 1 : 0) + (fundamentals.status === "failed" ? 1 : 0);
+  let fundamentalScoring:
+    | { status: "success"; rowsInserted: number; assetsEvaluated: number }
+    | { status: "skipped"; reason: string }
+    | { status: "failed"; error: string };
+  if (fundamentals.status === "success") {
+    try {
+      const { runFundamentalScoresForAllAssets } = await import("@/lib/scoring/run.server");
+      const scoreResult = await runFundamentalScoresForAllAssets();
+      fundamentalScoring = {
+        status: "success",
+        rowsInserted: scoreResult.rowsInserted,
+        assetsEvaluated: scoreResult.assetsEvaluated,
+      };
+    } catch (error) {
+      fundamentalScoring = { status: "failed", error: (error as Error).message };
+    }
+  } else {
+    fundamentalScoring = {
+      status: "skipped",
+      reason:
+        fundamentals.status === "skipped"
+          ? (fundamentals.reason ?? "quota gate")
+          : "fundamentals refresh failed",
+    };
+  }
+  const failed =
+    (price.status === "failed" ? 1 : 0) +
+    (fundamentals.status === "failed" ? 1 : 0) +
+    (price.status === "success" && price.scoreRefresh?.ok === false ? 1 : 0) +
+    (fundamentalScoring.status === "failed" ? 1 : 0);
   return {
     changed: changed + price.rowsInserted + fundamentals.rowsInserted,
     revisions: 0,
     failed,
     verified: true,
-    detail: `Reported EPS is stored; price refresh ${price.status}; fundamentals refresh ${fundamentals.status}.`,
+    detail: `Reported EPS is stored; price refresh ${price.status}; fundamentals refresh ${fundamentals.status}; peer scoring ${fundamentalScoring.status}.`,
     metadata: {
       reportedEarningsAvailable: true,
       fiscalDateEnding: reported.fiscalDateEnding,
@@ -328,6 +357,7 @@ async function executeEarningsEvent(event: ScheduledDataEvent): Promise<Executio
       surprisePercent: reported.surprisePercent,
       priceRefresh: price.status,
       fundamentalsRefresh: fundamentals.status,
+      fundamentalScoring,
     },
   };
 }
