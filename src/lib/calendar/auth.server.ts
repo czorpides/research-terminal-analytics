@@ -1,6 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { supabaseAdmin as supabaseAdminTyped } from "@/integrations/supabase/client.server";
+// Tables referenced here aren't yet in the generated Supabase types.
+const supabaseAdmin = supabaseAdminTyped as unknown as {
+  from: (table: string) => any;
+};
 
 const CREDENTIAL_NAME = "release-calendar";
 const HEADER_NAME = "x-scheduler-secret";
