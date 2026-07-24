@@ -36,7 +36,14 @@ export interface ReleaseCalendarDashboard {
 
 export const getReleaseCalendarDashboard = createServerFn({ method: "GET" }).handler(
   async (): Promise<ReleaseCalendarDashboard> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin: supabaseAdminTyped } = await import(
+      "@/integrations/supabase/client.server"
+    );
+    // Table not yet reflected in generated Supabase types.
+    const supabaseAdmin = supabaseAdminTyped as unknown as Omit<
+      typeof supabaseAdminTyped,
+      "from"
+    > & { from(table: string): any };
     const now = new Date();
     const start = new Date(now.getTime() - 14 * 86_400_000).toISOString();
     const end = new Date(now.getTime() + 120 * 86_400_000).toISOString();
@@ -51,7 +58,7 @@ export const getReleaseCalendarDashboard = createServerFn({ method: "GET" }).han
       .limit(600);
     if (error) throw error;
 
-    const events = (data ?? []).map((row) => {
+    const events = (data ?? []).map((row: any) => {
       const metadata = (row.metadata ?? {}) as Record<string, unknown>;
       return {
         id: String(row.id),
@@ -80,31 +87,31 @@ export const getReleaseCalendarDashboard = createServerFn({ method: "GET" }).han
     const sevenDays = nowMs + 7 * 86_400_000;
     const upcoming = events
       .filter(
-        (event) =>
+        (event: any) =>
           event.status !== "cancelled" &&
           new Date(event.scheduledAt).getTime() >= nowMs - 60 * 60 * 1000,
       )
       .slice(0, 100);
     const recent = events
-      .filter((event) => new Date(event.scheduledAt).getTime() < nowMs)
+      .filter((event: any) => new Date(event.scheduledAt).getTime() < nowMs)
       .reverse()
       .slice(0, 30);
 
     return {
       generatedAt: now.toISOString(),
-      calendarUpdatedAt: maxDate(events.map((event) => event.updatedAt)),
-      lastWorkerAttemptAt: maxDate(events.map((event) => event.lastAttemptAt)),
+      calendarUpdatedAt: maxDate(events.map((event: any) => event.updatedAt)),
+      lastWorkerAttemptAt: maxDate(events.map((event: any) => event.lastAttemptAt)),
       upcoming: upcoming.map(stripInternalDates),
       recent: recent.map(stripInternalDates),
       counts: {
         nextSevenDays: upcoming.filter(
-          (event) => new Date(event.scheduledAt).getTime() <= sevenDays,
+          (event: any) => new Date(event.scheduledAt).getTime() <= sevenDays,
         ).length,
-        macro: upcoming.filter((event) => event.type === "macro_release").length,
-        earnings: upcoming.filter((event) => event.type === "earnings").length,
-        waiting: events.filter((event) => event.status === "waiting").length,
-        delayed: events.filter((event) => event.status === "delayed").length,
-        failed: events.filter((event) => event.status === "failed").length,
+        macro: upcoming.filter((event: any) => event.type === "macro_release").length,
+        earnings: upcoming.filter((event: any) => event.type === "earnings").length,
+        waiting: events.filter((event: any) => event.status === "waiting").length,
+        delayed: events.filter((event: any) => event.status === "delayed").length,
+        failed: events.filter((event: any) => event.status === "failed").length,
       },
     };
   },

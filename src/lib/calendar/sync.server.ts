@@ -1,5 +1,10 @@
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import type { Database } from "@/integrations/supabase/types";
+import { supabaseAdmin as supabaseAdminTyped } from "@/integrations/supabase/client.server";
+// Some tables referenced here aren't yet in the generated Supabase types;
+// swap `.from` for a loose signature so unknown table names still compile.
+const supabaseAdmin = supabaseAdminTyped as unknown as Omit<
+  typeof supabaseAdminTyped,
+  "from"
+> & { from(table: string): any };
 import { fetchReleaseDates, fetchSeriesRelease } from "@/lib/ingestion/fred/client.server";
 import { FRED_SERIES } from "@/lib/ingestion/fred/series";
 
@@ -203,7 +208,7 @@ async function syncFredEvents(mappings: ReleaseMapping[]): Promise<number> {
     await cancelRemovedFutureEvents({
       providerCode: "fred",
       eventType: "macro_release",
-      activeKeys: events.map((event) => event.event_key),
+      activeKeys: events.map((event: any) => event.event_key),
       end: `${end}T23:59:59.999Z`,
     });
   }
@@ -231,9 +236,9 @@ async function syncEarningsEvents(): Promise<{
   if (assetsResult.error) throw assetsResult.error;
   if (sourceResult.error) throw sourceResult.error;
   const assets = new Map(
-    (assetsResult.data ?? []).map((asset) => [
+    ((assetsResult.data ?? []) as any[]).map((asset: any) => [
       String(asset.symbol).toUpperCase(),
-      { id: String(asset.id), name: String(asset.name) },
+      { id: String(asset.id), name: String(asset.name) } as { id: string; name: string },
     ]),
   );
 
@@ -267,7 +272,7 @@ async function syncEarningsEvents(): Promise<{
   await cancelRemovedFutureEvents({
     providerCode: "alphavantage",
     eventType: "earnings",
-    activeKeys: tracked.map((event) => event.event_key),
+    activeKeys: tracked.map((event: any) => event.event_key),
     end: new Date(Date.now() + 100 * 86_400_000).toISOString(),
   });
   if (tracked.length) {
@@ -307,7 +312,7 @@ async function syncEarningsEvents(): Promise<{
 
 async function syncSafetyEvents(): Promise<number> {
   const now = new Date();
-  const events: Array<Database["public"]["Tables"]["scheduled_data_events"]["Insert"]> = [];
+  const events: Array<any> = [];
   const dailyOverviewSeries = FRED_SERIES.filter((series) => series.cadence === "daily").map(
     (series) => series.seriesCode,
   );
@@ -390,7 +395,7 @@ function safetyEvent({
   engines: string[];
   seriesCodes?: string[];
   scope: string;
-}): Database["public"]["Tables"]["scheduled_data_events"]["Insert"] {
+}): any {
   return {
     event_key: key,
     event_type: "safety_refresh",
@@ -434,8 +439,8 @@ async function cancelRemovedFutureEvents({
   if (error) throw error;
   const active = new Set(activeKeys);
   const cancelledIds = (data ?? [])
-    .filter((event) => !active.has(String(event.event_key)))
-    .map((event) => String(event.id));
+    .filter((event: any) => !active.has(String(event.event_key)))
+    .map((event: any) => String(event.id));
   if (!cancelledIds.length) return;
   const { error: updateError } = await supabaseAdmin
     .from("scheduled_data_events")
