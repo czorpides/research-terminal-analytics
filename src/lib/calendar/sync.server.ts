@@ -1,4 +1,8 @@
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { supabaseAdmin as supabaseAdminTyped } from "@/integrations/supabase/client.server";
+// Some tables referenced here aren't yet in the generated Supabase types.
+const supabaseAdmin = supabaseAdminTyped as unknown as {
+  from: (table: string) => any;
+};
 import type { Database } from "@/integrations/supabase/types";
 import { fetchReleaseDates, fetchSeriesRelease } from "@/lib/ingestion/fred/client.server";
 import { FRED_SERIES } from "@/lib/ingestion/fred/series";

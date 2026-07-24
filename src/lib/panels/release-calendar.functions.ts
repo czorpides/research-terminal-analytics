@@ -36,7 +36,13 @@ export interface ReleaseCalendarDashboard {
 
 export const getReleaseCalendarDashboard = createServerFn({ method: "GET" }).handler(
   async (): Promise<ReleaseCalendarDashboard> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin: supabaseAdminTyped } = await import(
+      "@/integrations/supabase/client.server"
+    );
+    // Table not yet reflected in generated Supabase types.
+    const supabaseAdmin = supabaseAdminTyped as unknown as {
+      from: (table: string) => any;
+    };
     const now = new Date();
     const start = new Date(now.getTime() - 14 * 86_400_000).toISOString();
     const end = new Date(now.getTime() + 120 * 86_400_000).toISOString();
