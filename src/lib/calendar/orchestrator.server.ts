@@ -1,7 +1,8 @@
 import { supabaseAdmin as supabaseAdminTyped } from "@/integrations/supabase/client.server";
-// Some tables referenced here aren't yet in the generated Supabase types.
-const supabaseAdmin = supabaseAdminTyped as unknown as {
-  from: (table: string) => any;
+// Some tables referenced here aren't yet in the generated Supabase types;
+// intersect the typed client with a loose overload for unknown table names.
+const supabaseAdmin = supabaseAdminTyped as typeof supabaseAdminTyped & {
+  from(table: string): any;
 };
 import { runUsGrowthPipeline } from "@/lib/analytics/growth-pipeline.server";
 import { runUsInflationKalmanPipeline } from "@/lib/analytics/inflation-pipeline.server";
