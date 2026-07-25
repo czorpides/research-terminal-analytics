@@ -20,6 +20,7 @@ export interface EquityUniverseSyncResult {
   discovered: number;
   eligible: number;
   upserted: number;
+  deactivated: number;
   excluded: number;
   exchanges: string[];
   filters: {
@@ -57,6 +58,12 @@ interface NormalizedEquity {
   sectorCode: string | null;
 }
 
+interface ExistingAsset {
+  id: string;
+  symbol: string;
+  exchange: string | null;
+}
+
 export async function syncUsEquityUniverse(
   options: EquityUniverseSyncOptions = {},
 ): Promise<EquityUniverseSyncResult> {
@@ -72,6 +79,7 @@ export async function syncUsEquityUniverse(
       .map((value) => value.trim().toUpperCase())
       .filter((value) => exchangeMic(value) !== null),
   );
+  if (exchanges.length === 0) throw new Error("No supported US exchanges were selected");
 
   const raw: FmpScreenerRow[] = [];
   for (const exchange of exchanges) {
@@ -105,7 +113,7 @@ export async function syncUsEquityUniverse(
   for (const row of raw) {
     const equity = normalizeEquity(row, { minMarketCap, minPrice, minVolume });
     if (!equity) continue;
-    const key = `${equity.symbol}:${equity.exchange}`;
+    const key = assetKey(equity.symbol, equity.exchange);
     const existing = normalized.get(key);
     if (!existing || equity.marketCap > existing.marketCap) normalized.set(key, equity);
   }
@@ -113,6 +121,9 @@ export async function syncUsEquityUniverse(
   const selected = [...normalized.values()]
     .sort((left, right) => right.marketCap - left.marketCap || left.symbol.localeCompare(right.symbol))
     .slice(0, limit);
+  if (selected.length === 0) {
+    throw new Error("Universe sync produced no eligible US common stocks; existing assets were not changed");
+  }
 
   const [{ data: usCountry, error: countryError }, { data: industries, error: industryError }] =
     await Promise.all([
@@ -123,6 +134,7 @@ export async function syncUsEquityUniverse(
   if (industryError) throw industryError;
   if (!usCountry?.id) throw new Error("US country row is missing");
 
+  const countryId = String(usCountry.id);
   const industryIds = new Map(
     (industries ?? []).map((row) => [String(row.code), String(row.id)]),
   );
@@ -130,7 +142,7 @@ export async function syncUsEquityUniverse(
     symbol: equity.symbol,
     name: equity.name,
     asset_class: "equity" as const,
-    country_id: String(usCountry.id),
+    country_id: countryId,
     currency: "USD",
     industry_id: equity.sectorCode ? industryIds.get(equity.sectorCode) ?? null : null,
     exchange: equity.exchange,
@@ -147,11 +159,37 @@ export async function syncUsEquityUniverse(
     upserted += batch.length;
   }
 
+  // Treat the provider-built list as the managed US Radar universe. Stale US
+  // equities are retained in the database with their historical data, but are
+  // marked inactive so they cannot occupy the workspace's 500-name cap. Other
+  // countries and non-equity assets are deliberately untouched.
+  const { data: existingAssets, error: existingError } = await supabaseAdmin
+    .from("assets")
+    .select("id,symbol,exchange")
+    .eq("country_id", countryId)
+    .eq("asset_class", "equity")
+    .eq("active", true);
+  if (existingError) throw existingError;
+
+  const selectedKeys = new Set(selected.map((equity) => assetKey(equity.symbol, equity.exchange)));
+  const deactivateIds = ((existingAssets ?? []) as ExistingAsset[])
+    .filter((asset) => !selectedKeys.has(assetKey(asset.symbol, asset.exchange)))
+    .map((asset) => asset.id);
+
+  let deactivated = 0;
+  for (let start = 0; start < deactivateIds.length; start += 250) {
+    const batch = deactivateIds.slice(start, start + 250);
+    const { error } = await supabaseAdmin.from("assets").update({ active: false }).in("id", batch);
+    if (error) throw error;
+    deactivated += batch.length;
+  }
+
   return {
     provider: "fmp",
     discovered: raw.length,
     eligible: normalized.size,
     upserted,
+    deactivated,
     excluded: Math.max(0, raw.length - normalized.size),
     exchanges,
     filters: { limit, minMarketCap, minPrice, minVolume },
@@ -225,6 +263,10 @@ function nonCommonSecurityName(name: string): boolean {
   return /\b(etf|fund|warrant|rights?|units?|preferred|preference|depositary|debentures?|notes?|bonds?)\b/i.test(
     name,
   );
+}
+
+function assetKey(symbol: string, exchange: string | null): string {
+  return `${String(symbol).trim().toUpperCase()}:${String(exchange ?? "").trim().toUpperCase()}`;
 }
 
 function finite(value: unknown): number | null {
