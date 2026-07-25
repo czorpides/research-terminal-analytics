@@ -16,7 +16,7 @@ import {
 } from "./model";
 import type { PiotroskiTest } from "./fundamental-models";
 
-const MAX_SHADOW_UNIVERSE = 500;
+const MAX_SHADOW_UNIVERSE = 3_000;
 const HORIZONS: InvestmentHorizon[] = ["one_to_three", "three_to_five", "five_to_ten"];
 
 interface ScoreRow {
