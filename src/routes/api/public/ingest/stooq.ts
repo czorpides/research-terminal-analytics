@@ -16,12 +16,18 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
 
         const url = new URL(request.url);
         const ticker = url.searchParams.get("ticker");
-        const { runEquityIngest, runAllEquityIngest } = await import("@/lib/ingestion/equities/ingest.server");
+        const { runEquityIngest, runEquityIngestBatch } = await import(
+          "@/lib/ingestion/equities/ingest.server"
+        );
 
         try {
           if (ticker) return Response.json(await runEquityIngest(ticker.toUpperCase()));
-          const results = await runAllEquityIngest();
-          return Response.json({ results, count: results.length });
+          return Response.json(
+            await runEquityIngestBatch({
+              limit: integerParam(url, "limit"),
+              offset: integerParam(url, "offset"),
+            }),
+          );
         } catch (e) {
           return new Response(`Ingestion error: ${(e as Error).message}`, { status: 500 });
         }
@@ -29,3 +35,10 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
     },
   },
 });
+
+function integerParam(url: URL, key: string): number | undefined {
+  const raw = url.searchParams.get(key);
+  if (raw === null || raw.trim() === "") return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.floor(value) : undefined;
+}
