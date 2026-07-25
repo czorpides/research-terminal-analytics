@@ -88,7 +88,7 @@ interface HorizonConfig {
   critical: OpportunitySignalKey[];
 }
 
-export const OPPORTUNITY_CALC_VERSION = "opportunity.horizons.v0.1";
+export const OPPORTUNITY_CALC_VERSION = "opportunity.horizons.v0.2";
 
 export interface PriceDislocationInput {
   return12m: number | null;
@@ -146,8 +146,8 @@ export const HORIZON_CONFIGS: Record<InvestmentHorizon, HorizonConfig> = {
     experimental: false,
     weights: {
       priceDislocation: 20,
-      fundamentalResilience: 25,
-      valuationCompression: 20,
+      fundamentalResilience: 30,
+      valuationCompression: 15,
       temporaryEvidence: 15,
       recoveryConfirmation: 10,
       ownershipEvidence: 10,
@@ -299,6 +299,12 @@ export function scoreOpportunityHorizon(
 
   const impairmentRisk = clamp(evidence.impairmentRisk?.value ?? 50);
   const idiosyncrasyScore = clamp(evidence.idiosyncrasy?.value ?? 50);
+  const qualityScore = clamp(
+    evidence.fundamentalResilience?.value ??
+      evidence.businessQuality?.value ??
+      evidence.sustainableEarnings?.value ??
+      50,
+  );
   const classification = classify(horizon, {
     score,
     impairmentRisk,
@@ -306,11 +312,7 @@ export function scoreOpportunityHorizon(
     priceDislocation: evidence.priceDislocation?.value ?? 50,
     absolutePriceDamage:
       evidence.absolutePriceDamage?.value ?? evidence.priceDislocation?.value ?? 50,
-    quality:
-      evidence.fundamentalResilience?.value ??
-      evidence.businessQuality?.value ??
-      evidence.sustainableEarnings?.value ??
-      50,
+    quality: qualityScore,
   });
 
   const blockedReasons = unique([
@@ -329,6 +331,7 @@ export function scoreOpportunityHorizon(
     unresolvedCritical.length === 0 &&
     dataConfidence >= 70 &&
     impairmentRisk < 30 &&
+    qualityScore >= 60 &&
     (horizon !== "one_to_three" || idiosyncrasyScore >= 60) &&
     score >= 70;
 
@@ -407,22 +410,35 @@ function classify(
 ): OpportunityClassification {
   if (horizon === "five_to_ten") {
     if (input.impairmentRisk >= 55 || input.quality <= 40) return "quality_risk";
-    if (input.score >= 70 && input.impairmentRisk < 35) return "quality_profile";
+    if (input.score >= 70 && input.impairmentRisk < 35 && input.quality >= 60) {
+      return "quality_profile";
+    }
     return "quality_watch";
   }
-  if (input.impairmentRisk >= 50 && input.score >= 50) return "possible_value_trap";
+  if (input.impairmentRisk >= 45 || input.quality <= 45) return "possible_value_trap";
   if (input.absolutePriceDamage >= 60 && input.quality >= 60 && input.idiosyncrasyScore < 40) {
     return "sector_washout";
   }
   if (horizon === "one_to_three") {
-    if (input.score >= 70 && input.impairmentRisk < 35 && input.idiosyncrasyScore >= 60) {
+    if (
+      input.score >= 70 &&
+      input.impairmentRisk < 30 &&
+      input.idiosyncrasyScore >= 60 &&
+      input.quality >= 60
+    ) {
       return "broken_stock";
     }
-    if (input.score >= 58 && input.impairmentRisk < 45) return "recovery_watch";
+    if (input.score >= 62 && input.impairmentRisk < 40 && input.quality >= 55) {
+      return "recovery_watch";
+    }
     return "no_signal";
   }
-  if (input.score >= 70 && input.impairmentRisk < 35) return "durable_candidate";
-  if (input.score >= 58 && input.impairmentRisk < 45) return "recovery_watch";
+  if (input.score >= 70 && input.impairmentRisk < 30 && input.quality >= 60) {
+    return "durable_candidate";
+  }
+  if (input.score >= 62 && input.impairmentRisk < 40 && input.quality >= 55) {
+    return "recovery_watch";
+  }
   return "no_signal";
 }
 

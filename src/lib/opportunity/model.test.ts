@@ -98,6 +98,23 @@ test("does not let cheapness hide permanent impairment", () => {
   assert.ok(result.researchPriority < result.score);
 });
 
+test("does not nominate a low-quality company as a normal recovery watch", () => {
+  const evidence: OpportunityEvidence = {
+    priceDislocation: signal("priceDislocation", 86),
+    fundamentalResilience: signal("fundamentalResilience", 44),
+    valuationCompression: signal("valuationCompression", 88),
+    temporaryEvidence: signal("temporaryEvidence", 64),
+    recoveryConfirmation: signal("recoveryConfirmation", 62),
+    ownershipEvidence: signal("ownershipEvidence", 55),
+    idiosyncrasy: signal("idiosyncrasy", 72),
+    impairmentRisk: signal("impairmentRisk", 38),
+  };
+  const result = scoreOpportunityHorizon("one_to_three", evidence);
+
+  assert.equal(result.classification, "possible_value_trap");
+  assert.equal(result.productionEligible, false);
+});
+
 test("separates a sector washout from company-specific damage", () => {
   const evidence: OpportunityEvidence = {
     priceDislocation: signal("priceDislocation", 72),

@@ -3,7 +3,6 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import { fetchWithFailover, crossVerifyLatest } from "@/lib/ingestion/providers/registry.server";
 import type { ProviderCode } from "@/lib/ingestion/providers/types";
 import { validateStooqBars, type QualityReport } from "@/lib/ingestion/stooq/quality";
-import { STOOQ_UNIVERSE } from "@/lib/ingestion/stooq/universe";
 
 export interface EquityIngestResult {
   status: "success" | "failed";
@@ -16,6 +15,21 @@ export interface EquityIngestResult {
   quality?: QualityReport;
   scoreRefresh?: { ok: boolean; error?: string };
   error?: string;
+}
+
+export interface EquityBatchOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface EquityBatchResult {
+  results: EquityIngestResult[];
+  totalActiveEquities: number;
+  offset: number;
+  requested: number;
+  processed: number;
+  nextOffset: number;
+  completeUniversePass: boolean;
 }
 
 async function sourceIdFor(providerCode: string): Promise<string | null> {
@@ -215,22 +229,100 @@ export async function runEquityIngest(symbol: string): Promise<EquityIngestResul
   }
 }
 
-export async function runAllEquityIngest(): Promise<EquityIngestResult[]> {
+/**
+ * Processes a rotating slice of every active equity in the database. This keeps
+ * the provider load bounded after the universe is expanded and avoids the old
+ * hard-coded mega-cap list. Supply an explicit offset to run deterministic
+ * backfills; otherwise the daily batch rotates across the full universe.
+ */
+export async function runEquityIngestBatch(
+  options: EquityBatchOptions = {},
+): Promise<EquityBatchResult> {
+  const requested = clampInteger(options.limit ?? 200, 1, 500);
+  const { count, error: countError } = await supabaseAdmin
+    .from("assets")
+    .select("id", { count: "exact", head: true })
+    .eq("active", true)
+    .eq("asset_class", "equity");
+  if (countError) throw countError;
+
+  const totalActiveEquities = count ?? 0;
+  if (totalActiveEquities === 0) {
+    return {
+      results: [],
+      totalActiveEquities: 0,
+      offset: 0,
+      requested,
+      processed: 0,
+      nextOffset: 0,
+      completeUniversePass: true,
+    };
+  }
+
+  const offset = normalizeOffset(
+    options.offset ?? rotatingOffset(totalActiveEquities, requested),
+    totalActiveEquities,
+  );
+  const end = Math.min(totalActiveEquities - 1, offset + requested - 1);
+  const { data: assets, error } = await supabaseAdmin
+    .from("assets")
+    .select("symbol")
+    .eq("active", true)
+    .eq("asset_class", "equity")
+    .order("symbol", { ascending: true })
+    .range(offset, end);
+  if (error) throw error;
+
   const out: EquityIngestResult[] = [];
-  for (const s of STOOQ_UNIVERSE) {
+  for (const asset of assets ?? []) {
+    const symbol = String(asset.symbol);
     try {
-      out.push(await runEquityIngest(s.symbol));
+      out.push(await runEquityIngest(symbol));
     } catch (e) {
       out.push({
         status: "failed",
         rowsInserted: 0,
         runId: "",
-        symbol: s.symbol,
+        symbol,
         error: (e as Error).message,
       });
     }
-    // pacing to respect Twelve Data's 8s spacing when it becomes primary
-    await new Promise((r) => setTimeout(r, 300));
+    // The provider registry applies provider-specific pacing; this small pause
+    // prevents a tight loop when the preferred source serves immediately.
+    await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  return out;
+
+  const processed = out.length;
+  const nextOffset = processed === 0 ? offset : (offset + processed) % totalActiveEquities;
+  return {
+    results: out,
+    totalActiveEquities,
+    offset,
+    requested,
+    processed,
+    nextOffset,
+    completeUniversePass: processed >= totalActiveEquities,
+  };
+}
+
+/** Backwards-compatible wrapper for callers that only need the result array. */
+export async function runAllEquityIngest(): Promise<EquityIngestResult[]> {
+  return (await runEquityIngestBatch()).results;
+}
+
+function rotatingOffset(total: number, batchSize: number): number {
+  const batches = Math.max(1, Math.ceil(total / batchSize));
+  const utcDay = Math.floor(Date.now() / 86_400_000);
+  return (utcDay % batches) * batchSize;
+}
+
+function normalizeOffset(value: number, total: number): number {
+  if (total <= 0) return 0;
+  const integer = Math.floor(Number.isFinite(value) ? value : 0);
+  return ((integer % total) + total) % total;
+}
+
+function clampInteger(value: number, minimum: number, maximum: number): number {
+  const integer = Math.floor(Number.isFinite(value) ? value : minimum);
+  return Math.max(minimum, Math.min(maximum, integer));
 }

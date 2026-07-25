@@ -5,8 +5,8 @@ import {
   QUALITY_METRICS,
 } from "@/lib/ingestion/fundamentals/metrics";
 
-export const VALUATION_CALC_VERSION = "score.valuation.v0.1";
-export const QUALITY_CALC_VERSION = "score.quality.v0.1";
+export const VALUATION_CALC_VERSION = "score.valuation.v0.2";
+export const QUALITY_CALC_VERSION = "score.quality.v0.2";
 
 /** For each fundamentals metric_code, latest value per asset. */
 export interface LatestByMetric {
@@ -74,6 +74,37 @@ export interface CompositeScoreResult {
   ageSec: number | null;
 }
 
+export function isUsableFundamentalValue(
+  kind: "valuation" | "quality",
+  metricCode: string,
+  value: number,
+): boolean {
+  if (!Number.isFinite(value)) return false;
+
+  if (kind === "valuation") {
+    if (
+      [
+        FUNDAMENTAL_METRICS.pe,
+        FUNDAMENTAL_METRICS.pb,
+        FUNDAMENTAL_METRICS.ps,
+        FUNDAMENTAL_METRICS.evEbitda,
+      ].includes(metricCode as never)
+    ) {
+      return value > 0;
+    }
+    if (metricCode === FUNDAMENTAL_METRICS.fcfYield) return value > 0;
+  }
+
+  if (kind === "quality") {
+    // Negative debt/equity normally indicates negative book equity, not a
+    // conservatively financed company. Ranking it as "low debt" creates traps.
+    if (metricCode === FUNDAMENTAL_METRICS.debtEquity) return value >= 0;
+    if (metricCode === FUNDAMENTAL_METRICS.currentRatio) return value > 0;
+  }
+
+  return true;
+}
+
 function composite(
   kind: "valuation" | "quality",
   asset: AssetMeta,
@@ -95,6 +126,7 @@ function composite(
   const peerPool = usingIndustryPeers ? industryPeers : allAssets.filter((a) => a.id !== asset.id);
 
   let contributing = 0;
+  let invalid = 0;
   for (const metric of definition) {
     const bag = latest.byMetric.get(metric.code);
     const own = bag?.get(asset.id);
@@ -102,19 +134,32 @@ function composite(
       inputs[metric.code] = null;
       continue;
     }
+    inputs[metric.code] = own.value;
+    if (!isUsableFundamentalValue(kind, metric.code, own.value)) {
+      invalid++;
+      deductions.push({
+        id: `${kind}-${metric.code}-invalid`,
+        label: `${metric.label} is not economically usable`,
+        detail: `${own.value.toFixed(2)} excluded from the peer rank`,
+      });
+      continue;
+    }
+
     const peerValues: number[] = [];
     for (const p of peerPool) {
       const pv = bag?.get(p.id)?.value;
-      if (typeof pv === "number" && Number.isFinite(pv)) peerValues.push(pv);
+      if (
+        typeof pv === "number" &&
+        isUsableFundamentalValue(kind, metric.code, pv)
+      ) {
+        peerValues.push(pv);
+      }
     }
-    if (peerValues.length < 3) {
-      inputs[metric.code] = own.value;
-      continue;
-    }
+    if (peerValues.length < 3) continue;
+
     const pct = percentileRank(own.value, peerValues, metric.direction);
     scores.push(pct);
     weights[metric.code] = 1;
-    inputs[metric.code] = own.value;
     contributing++;
     if (pct >= 70)
       positives.push({
@@ -130,19 +175,45 @@ function composite(
       });
   }
 
-  if (contributing === 0) return null;
-  const value = scores.reduce((s, x) => s + x, 0) / scores.length;
+  const minimumContributors = kind === "valuation" ? 3 : 4;
+  if (contributing < minimumContributors) return null;
 
-  // Confidence — start at 90 and dock for missing metrics / thin peer group / stale data.
+  let value = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  const fcfYield = latest.byMetric
+    .get(FUNDAMENTAL_METRICS.fcfYield)
+    ?.get(asset.id)?.value;
+  const positiveFcfYield =
+    typeof fcfYield === "number" &&
+    isUsableFundamentalValue("valuation", FUNDAMENTAL_METRICS.fcfYield, fcfYield);
+
+  if (kind === "valuation" && !positiveFcfYield) {
+    value = Math.min(value, 55);
+    deductions.push({
+      id: "valuation-no-positive-fcf",
+      label: "No positive free-cash-flow yield confirmation",
+      detail: "Cheap accounting multiples cannot score above 55 without positive trailing free cash flow.",
+    });
+  }
+  if (kind === "valuation" && contributing === minimumContributors) {
+    value = Math.min(value, 65);
+    deductions.push({
+      id: "valuation-minimum-coverage-cap",
+      label: "Valuation score capped for minimum evidence coverage",
+      detail: `${contributing} of ${definition.length} valuation measures contributed.`,
+    });
+  }
+
+  // Confidence — start at 90 and dock for missing/invalid metrics, thin peers and stale data.
   let confidence = 90;
   const missing = definition.length - contributing;
   if (missing > 0) {
-    confidence -= Math.min(missing * 8, 30);
+    confidence -= Math.min(missing * 8, 35);
     deductions.push({
       id: `${kind}-missing`,
-      label: `${missing} of ${definition.length} metrics unavailable`,
+      label: `${missing} of ${definition.length} metrics unavailable or unusable`,
     });
   }
+  if (invalid > 0) confidence -= Math.min(invalid * 5, 15);
   if (!usingIndustryPeers) {
     confidence -= 15;
     deductions.push({
@@ -163,6 +234,9 @@ function composite(
   inputs["_peers"] = peerPool.length;
   inputs["_industry_peers"] = industryPeers.length;
   inputs["_as_of"] = asOf;
+  inputs["_contributing_metrics"] = contributing;
+  inputs["_invalid_metrics"] = invalid;
+  inputs["_positive_fcf_yield"] = kind === "valuation" ? (positiveFcfYield ? 1 : 0) : null;
 
   return {
     value,
@@ -184,6 +258,7 @@ export function computeValuationScore(
 ) {
   return composite("valuation", asset, latest, peersByIndustry, all);
 }
+
 export function computeQualityScore(
   asset: AssetMeta,
   latest: LatestByMetric,
