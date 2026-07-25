@@ -1,34 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
-import { PanelGrid } from "@/components/research/PanelGrid";
-import { getUndervaluationPanels } from "@/lib/panels/undervaluation.functions";
-
-const uvQueryOptions = queryOptions({
-  queryKey: ["panels", "undervaluation"],
-  queryFn: () => getUndervaluationPanels(),
-});
+import { EquityExplorerView } from "@/components/research/EquityExplorerView";
 
 export const Route = createFileRoute("/_authenticated/undervaluation")({
-  head: () => ({ meta: [
-    { title: "Undervaluation Radar — Research Terminal" },
-    { name: "description", content: "Weekly stable watchlist of value candidates paired with macro, commodity and alt-data catalysts." },
-  ]}),
-  loader: ({ context }) => context.queryClient.ensureQueryData(uvQueryOptions),
+  head: () => ({
+    meta: [
+      { title: "Undervaluation Research Queue — Research Terminal" },
+      {
+        name: "description",
+        content:
+          "Paginated US, UK and EU value research queue with quality, trend, confidence and evidence-coverage gates.",
+      },
+    ],
+  }),
   component: Undervaluation,
 });
 
 function Undervaluation() {
-  const { data: panels } = useSuspenseQuery(uvQueryOptions);
   return (
     <AppShell>
       <SectionHeader
-        code="UV · Undervaluation Radar"
-        title="Which cheap names are actually worth the work — with a live catalyst?"
-        purpose="Weekly cadence. Names only join the list when they clearly qualify (score ≥ 70) and only leave after two consecutive weak weeks. Each panel is paired with the macro, commodity or alt-data catalysts pressuring or supporting it."
+        code="UV · Undervaluation"
+        title="Where does valuation look attractive without ignoring business quality?"
+        purpose="Filter and rank the entire active US, UK and EU equity population. The default queue requires peer-relative valuation strength and a minimum quality floor; missing fundamentals remain visible through the coverage controls rather than being treated as cheap."
       />
-      <PanelGrid panels={panels} />
+      <EquityExplorerView mode="undervalued" />
     </AppShell>
   );
 }

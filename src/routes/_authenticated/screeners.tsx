@@ -1,34 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
-import { PanelGrid } from "@/components/research/PanelGrid";
-import { getScreenerPanels } from "@/lib/panels/screeners.functions";
-
-const screenersQueryOptions = queryOptions({
-  queryKey: ["panels", "screeners"],
-  queryFn: () => getScreenerPanels(),
-});
+import { EquityExplorerView } from "@/components/research/EquityExplorerView";
 
 export const Route = createFileRoute("/_authenticated/screeners")({
-  head: () => ({ meta: [
-    { title: "Screeners — Research Terminal" },
-    { name: "description", content: "Filter stocks, industries, commodities and assets against the validated analytics layer." },
-  ]}),
-  loader: ({ context }) => context.queryClient.ensureQueryData(screenersQueryOptions),
+  head: () => ({
+    meta: [
+      { title: "Global Equity Screeners — Research Terminal" },
+      {
+        name: "description",
+        content:
+          "Server-side filters across the active US, UK and EU equity universe with paginated results and explicit data coverage.",
+      },
+    ],
+  }),
   component: Screeners,
 });
 
 function Screeners() {
-  const { data: panels } = useSuspenseQuery(screenersQueryOptions);
   return (
     <AppShell>
       <SectionHeader
         code="SC · Screeners"
-        title="Which subjects match a specific research thesis?"
-        purpose="Composable filters across factors, fundamentals, sensitivity and alt data — with every filter's confidence penalty visible."
+        title="Which companies match a precise, testable research thesis?"
+        purpose="Search and combine market, country, sector, momentum, trend, valuation, quality, composite and evidence-coverage filters. All filters run against the complete active universe before the result is paginated."
       />
-      <PanelGrid panels={panels} />
+      <EquityExplorerView mode="screener" />
     </AppShell>
   );
 }

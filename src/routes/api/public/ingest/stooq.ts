@@ -1,15 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const MINIMUM_MANAGED_EQUITIES = 400;
+const MINIMUM_MANAGED_EQUITIES = 2_400;
 
 /**
- * Equity ingestion endpoint. Kept under the historical `/ingest/stooq` path so
- * the existing pg_cron schedule keeps firing. It can refresh the tracked US
- * universe, ingest one ticker, or process a rotating database-backed batch.
- *
- * A normal scheduled batch also performs a best-effort universe bootstrap when
- * fewer than 400 active equities are present. Failure to reach FMP must not stop
- * the existing price universe from continuing to refresh.
+ * Equity ingestion endpoint. The historical `/ingest/stooq` route now manages
+ * a diversified US, UK and EU population, one ticker, or a rotating price batch.
+ * A normal scheduled price call bootstraps the universe when coverage falls
+ * materially below the 3,000-name target.
  */
 export const Route = createFileRoute("/api/public/ingest/stooq")({
   server: {
@@ -25,20 +22,17 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
 
         try {
           if (syncUniverse) {
-            const { syncUsEquityUniverse } = await import(
+            const { syncManagedEquityUniverse } = await import(
               "@/lib/ingestion/equities/universe.server"
             );
             return Response.json(
-              await syncUsEquityUniverse({
+              await syncManagedEquityUniverse({
                 limit: integerParam(url, "limit"),
                 minMarketCap: numberParam(url, "minMarketCap"),
                 minPrice: numberParam(url, "minPrice"),
                 minVolume: numberParam(url, "minVolume"),
-                exchanges: url.searchParams
-                  .get("exchanges")
-                  ?.split(",")
-                  .map((value) => value.trim())
-                  .filter(Boolean),
+                exchanges: csvParam(url, "exchanges"),
+                markets: csvParam(url, "markets"),
               }),
             );
           }
@@ -64,7 +58,13 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
 
 async function ensureManagedUniverse(): Promise<
   | { status: "not_needed"; activeEquities: number }
-  | { status: "success"; activeEquitiesBefore: number; upserted: number; deactivated: number }
+  | {
+      status: "success";
+      activeEquitiesBefore: number;
+      upserted: number;
+      deactivated: number;
+      selectedByMarket: Record<string, number>;
+    }
   | { status: "failed"; activeEquities: number; error: string }
 > {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -81,13 +81,16 @@ async function ensureManagedUniverse(): Promise<
   }
 
   try {
-    const { syncUsEquityUniverse } = await import("@/lib/ingestion/equities/universe.server");
-    const result = await syncUsEquityUniverse();
+    const { syncManagedEquityUniverse } = await import(
+      "@/lib/ingestion/equities/universe.server"
+    );
+    const result = await syncManagedEquityUniverse({ limit: 3_000 });
     return {
       status: "success",
       activeEquitiesBefore: activeEquities,
       upserted: result.upserted,
       deactivated: result.deactivated,
+      selectedByMarket: result.selectedByMarket,
     };
   } catch (error) {
     return {
@@ -96,6 +99,15 @@ async function ensureManagedUniverse(): Promise<
       error: (error as Error).message,
     };
   }
+}
+
+function csvParam(url: URL, key: string): string[] | undefined {
+  const values = url.searchParams
+    .get(key)
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return values?.length ? values : undefined;
 }
 
 function numberParam(url: URL, key: string): number | undefined {
