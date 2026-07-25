@@ -2,7 +2,10 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const FMP_SCREENER_URL = "https://financialmodelingprep.com/stable/company-screener";
 const DEFAULT_EXCHANGES = ["NASDAQ", "NYSE", "AMEX"] as const;
-const MAX_UNIVERSE_SIZE = 2_500;
+// The current workspace intentionally loads at most 500 shadow names. Keep the
+// synced active population inside that boundary until the workspace is moved to
+// a paginated/precomputed result set.
+const MAX_UNIVERSE_SIZE = 500;
 
 export interface EquityUniverseSyncOptions {
   limit?: number;
@@ -60,7 +63,7 @@ export async function syncUsEquityUniverse(
   const key = process.env.FMP_API_KEY;
   if (!key) throw new Error("FMP_API_KEY missing");
 
-  const limit = clampInteger(options.limit ?? 1_500, 1, MAX_UNIVERSE_SIZE);
+  const limit = clampInteger(options.limit ?? MAX_UNIVERSE_SIZE, 1, MAX_UNIVERSE_SIZE);
   const minMarketCap = clampNumber(options.minMarketCap ?? 300_000_000, 0);
   const minPrice = clampNumber(options.minPrice ?? 2, 0);
   const minVolume = clampNumber(options.minVolume ?? 100_000, 0);
