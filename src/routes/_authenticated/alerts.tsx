@@ -1,14 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
-import { PanelGrid } from "@/components/research/PanelGrid";
-import { getPanelsForSection } from "@/lib/panels/mocks";
+import { AlertsWorkspace } from "@/components/research/AlertsWorkspace";
 
 export const Route = createFileRoute("/_authenticated/alerts")({
-  head: () => ({ meta: [
-    { title: "Alerts — Research Terminal" },
-    { name: "description", content: "Deterministic alert rules and firing history with the exact evaluation that fired them." },
-  ]}),
+  head: () => ({
+    meta: [
+      { title: "Alerts — Research Terminal" },
+      {
+        name: "description",
+        content:
+          "Live deterministic alert rules, threshold firings, confidence and retained evaluation history.",
+      },
+    ],
+  }),
   component: Alerts,
 });
 
@@ -17,10 +23,10 @@ function Alerts() {
     <AppShell>
       <SectionHeader
         code="AL · Alerts"
-        title="What has crossed a threshold you care about?"
-        purpose="Owner-defined conditions on any tracked metric. Every fired alert stores the inputs, formula and confidence at firing time."
+        title="What crossed a stored threshold, and why did it fire?"
+        purpose="Review active and paused rules alongside the retained firing history. Every alert exposes its rule relationship, stored confidence, state and evaluation detail rather than acting as an unexplained notification."
       />
-      <PanelGrid panels={getPanelsForSection("alerts")} />
+      <AlertsWorkspace />
     </AppShell>
   );
 }
