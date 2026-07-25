@@ -415,9 +415,7 @@ function classify(
     }
     return "quality_watch";
   }
-  if ((input.impairmentRisk >= 45 || input.quality <= 45) && input.score >= 50) {
-    return "possible_value_trap";
-  }
+  if (input.impairmentRisk >= 45 || input.quality <= 45) return "possible_value_trap";
   if (input.absolutePriceDamage >= 60 && input.quality >= 60 && input.idiosyncrasyScore < 40) {
     return "sector_washout";
   }
