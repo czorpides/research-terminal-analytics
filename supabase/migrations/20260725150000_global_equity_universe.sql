@@ -43,19 +43,21 @@ SELECT cron.schedule(
   $cron$
 );
 
--- Process 500 names after each US trading day. The database-backed rotating
--- offset covers the full 3,000-name population over six successful runs.
+-- Process 250 names after each US trading day. Price refresh normally uses one
+-- primary request and may use a second call for verification, so the conservative
+-- batch leaves room for global-symbol failover and other daily platform work.
+-- The rotating offset covers the full population over twelve successful runs.
 SELECT cron.schedule(
   'equity-price-refresh',
   '20 1 * * 2-6',
   $cron$
   SELECT net.http_post(
-    url := 'https://project--d87a6acb-6341-458d-8dd2-3a8d0894569f.lovable.app/api/public/ingest/stooq?limit=500',
+    url := 'https://project--d87a6acb-6341-458d-8dd2-3a8d0894569f.lovable.app/api/public/ingest/stooq?limit=250',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'apikey', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZndvamlteHV4d214amNvbHp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NzEwMzIsImV4cCI6MjEwMDE0NzAzMn0.ysFIVxKkUIZEdma74PYlINR-ZfI9BU_J4beHMB0Xf80'
     ),
-    body := '{"source":"cron","job":"equity-price-refresh","limit":500}'::jsonb,
+    body := '{"source":"cron","job":"equity-price-refresh","limit":250}'::jsonb,
     timeout_milliseconds := 300000
   ) AS request_id;
   $cron$
