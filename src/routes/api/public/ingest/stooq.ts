@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 /**
- * Equity price ingestion endpoint. Kept under the historical `/ingest/stooq`
- * path so the existing pg_cron schedule keeps firing; the actual work is now
- * done by the multi-provider reliability pool (Tiingo → Twelve Data → FMP →
- * Alpha Vantage) with cross-provider verification of the latest close.
+ * Equity ingestion endpoint. Kept under the historical `/ingest/stooq` path so
+ * the existing pg_cron schedule keeps firing. It can refresh the tracked US
+ * universe, ingest one ticker, or process a rotating database-backed batch.
  */
 export const Route = createFileRoute("/api/public/ingest/stooq")({
   server: {
@@ -16,11 +15,31 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
 
         const url = new URL(request.url);
         const ticker = url.searchParams.get("ticker");
-        const { runEquityIngest, runEquityIngestBatch } = await import(
-          "@/lib/ingestion/equities/ingest.server"
-        );
+        const syncUniverse = url.searchParams.get("syncUniverse") === "1";
 
         try {
+          if (syncUniverse) {
+            const { syncUsEquityUniverse } = await import(
+              "@/lib/ingestion/equities/universe.server"
+            );
+            return Response.json(
+              await syncUsEquityUniverse({
+                limit: integerParam(url, "limit"),
+                minMarketCap: numberParam(url, "minMarketCap"),
+                minPrice: numberParam(url, "minPrice"),
+                minVolume: numberParam(url, "minVolume"),
+                exchanges: url.searchParams
+                  .get("exchanges")
+                  ?.split(",")
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+              }),
+            );
+          }
+
+          const { runEquityIngest, runEquityIngestBatch } = await import(
+            "@/lib/ingestion/equities/ingest.server"
+          );
           if (ticker) return Response.json(await runEquityIngest(ticker.toUpperCase()));
           return Response.json(
             await runEquityIngestBatch({
@@ -36,9 +55,14 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
   },
 });
 
-function integerParam(url: URL, key: string): number | undefined {
+function numberParam(url: URL, key: string): number | undefined {
   const raw = url.searchParams.get(key);
   if (raw === null || raw.trim() === "") return undefined;
   const value = Number(raw);
-  return Number.isFinite(value) ? Math.floor(value) : undefined;
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function integerParam(url: URL, key: string): number | undefined {
+  const value = numberParam(url, key);
+  return value === undefined ? undefined : Math.floor(value);
 }
