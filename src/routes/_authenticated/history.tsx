@@ -17,6 +17,15 @@ import { SectionHeader } from "@/components/layout/SectionHeader";
 import { BandBar } from "@/components/research/ResearchContext";
 import { historyWorkspaceQueryOptions } from "@/components/research/HistoryWorkspace";
 
+type HistoryHubPath =
+  | "/history/library"
+  | "/history/analogues"
+  | "/history/playbooks"
+  | "/history/sector-impacts"
+  | "/history/study"
+  | "/history/verification"
+  | "/history/model-health";
+
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
     meta: [
@@ -65,29 +74,14 @@ function HistoryOverview() {
             <div>
               <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Current environment</div>
               <h2 className="mt-0.5 text-sm font-semibold">Closest historical comparisons</h2>
-              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-                Similarity is reduced when today's live-data fingerprint is incomplete.
-              </p>
+              <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Similarity is reduced when today's live-data fingerprint is incomplete.</p>
             </div>
-            <Link to="/history/analogues" className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground">
-              Full comparison <ChevronRight className="h-3 w-3" />
-            </Link>
+            <Link to="/history/analogues" className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground">Full comparison <ChevronRight className="h-3 w-3" /></Link>
           </div>
           <div className="mt-3 space-y-2">
             {topAnalogs.length ? topAnalogs.map((analog, index) => (
-              <Link
-                key={analog.code}
-                to="/history/$eventId"
-                params={{ eventId: analog.code }}
-                className="block rounded border border-border/55 bg-background/25 p-2.5 transition-colors hover:border-[var(--primary)]/45"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-mono text-[9px] text-muted-foreground">#{index + 1} · {new Date(analog.startDate).getFullYear()} · {humanise(analog.category)}</div>
-                    <div className="truncate text-xs font-semibold">{analog.name}</div>
-                  </div>
-                  <div className="font-mono text-sm font-semibold">{analog.adjustedSimilarity.toFixed(0)}%</div>
-                </div>
+              <Link key={analog.code} to="/history/$eventId" params={{ eventId: analog.code }} className="block rounded border border-border/55 bg-background/25 p-2.5 transition-colors hover:border-[var(--primary)]/45">
+                <div className="flex items-center justify-between gap-3"><div className="min-w-0"><div className="font-mono text-[9px] text-muted-foreground">#{index + 1} · {new Date(analog.startDate).getFullYear()} · {humanise(analog.category)}</div><div className="truncate text-xs font-semibold">{analog.name}</div></div><div className="font-mono text-sm font-semibold">{analog.adjustedSimilarity.toFixed(0)}%</div></div>
                 <div className="mt-2"><BandBar value={analog.adjustedSimilarity} /></div>
               </Link>
             )) : <Empty text="No historical comparison currently clears the evidence threshold." />}
@@ -95,24 +89,10 @@ function HistoryOverview() {
         </section>
 
         <section className="rounded-md border border-border/70 bg-card/40 p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Library pulse</div>
-              <h2 className="mt-0.5 text-sm font-semibold">Most recent recorded episodes</h2>
-            </div>
-            <Link to="/history/library" className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground">
-              Event library <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
+          <div className="flex items-start justify-between gap-3"><div><div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Library pulse</div><h2 className="mt-0.5 text-sm font-semibold">Most recent recorded episodes</h2></div><Link to="/history/library" className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground">Event library <ChevronRight className="h-3 w-3" /></Link></div>
           <div className="mt-3 divide-y divide-border/50">
             {latestEvents.map((event) => (
-              <Link key={event.code} to="/history/$eventId" params={{ eventId: event.code }} className="flex items-center justify-between gap-3 py-2 hover:text-[var(--primary)]">
-                <div className="min-w-0">
-                  <div className="truncate text-xs font-medium">{event.name}</div>
-                  <div className="font-mono text-[9px] text-muted-foreground">{event.startDate.slice(0, 4)} · {humanise(event.category)} · {event.impactCount} impacts</div>
-                </div>
-                <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-              </Link>
+              <Link key={event.code} to="/history/$eventId" params={{ eventId: event.code }} className="flex items-center justify-between gap-3 py-2 hover:text-[var(--primary)]"><div className="min-w-0"><div className="truncate text-xs font-medium">{event.name}</div><div className="font-mono text-[9px] text-muted-foreground">{event.startDate.slice(0, 4)} · {humanise(event.category)} · {event.impactCount} impacts</div></div><ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" /></Link>
             ))}
           </div>
         </section>
@@ -126,37 +106,15 @@ function HistoryOverview() {
         <HubCard to="/history/study" icon={BarChart3} title="Study Explorer" detail="Filter individual event-impact observations and return windows." />
         <HubCard to="/history/verification" icon={ShieldCheck} title="Verification Log" detail="Review narrative status, source coverage and coherence checks." />
         <HubCard to="/history/model-health" icon={FlaskConical} title="Model Health" detail="Audit coverage, sample depth, verification and comparison density." />
-        <div className="rounded-md border border-border/70 bg-card/30 p-3">
-          <History className="h-4 w-4 text-[var(--primary)]" />
-          <div className="mt-2 text-xs font-semibold">How to use history</div>
-          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Use analogues to form questions, not conclusions. Confirm trigger, transmission path and policy response before applying a past playbook.</p>
-        </div>
+        <div className="rounded-md border border-border/70 bg-card/30 p-3"><History className="h-4 w-4 text-[var(--primary)]" /><div className="mt-2 text-xs font-semibold">How to use history</div><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Use analogues to form questions, not conclusions. Confirm trigger, transmission path and policy response before applying a past playbook.</p></div>
       </div>
     </AppShell>
   );
 }
 
-function HubCard({ to, icon: Icon, title, detail }: { to: string; icon: typeof History; title: string; detail: string }) {
-  return (
-    <Link to={to} className="group rounded-md border border-border/70 bg-card/35 p-3 transition-colors hover:border-[var(--primary)]/45">
-      <div className="flex items-start justify-between gap-2">
-        <Icon className="h-4 w-4 text-[var(--primary)]" />
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-      </div>
-      <div className="mt-2 text-xs font-semibold">{title}</div>
-      <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{detail}</p>
-    </Link>
-  );
+function HubCard({ to, icon: Icon, title, detail }: { to: HistoryHubPath; icon: typeof History; title: string; detail: string }) {
+  return <Link to={to} className="group rounded-md border border-border/70 bg-card/35 p-3 transition-colors hover:border-[var(--primary)]/45"><div className="flex items-start justify-between gap-2"><Icon className="h-4 w-4 text-[var(--primary)]" /><ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" /></div><div className="mt-2 text-xs font-semibold">{title}</div><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{detail}</p></Link>;
 }
-
-function Kpi({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <div className="rounded-md border border-border/70 bg-card/35 p-3"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div><div className="mt-1 font-mono text-2xl font-semibold">{value}</div><div className="mt-1 text-[10px] text-muted-foreground">{detail}</div></div>;
-}
-
-function Empty({ text }: { text: string }) {
-  return <div className="rounded border border-dashed border-border p-6 text-center text-xs text-muted-foreground">{text}</div>;
-}
-
-function humanise(value: string): string {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
+function Kpi({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="rounded-md border border-border/70 bg-card/35 p-3"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div><div className="mt-1 font-mono text-2xl font-semibold">{value}</div><div className="mt-1 text-[10px] text-muted-foreground">{detail}</div></div>; }
+function Empty({ text }: { text: string }) { return <div className="rounded border border-dashed border-border p-6 text-center text-xs text-muted-foreground">{text}</div>; }
+function humanise(value: string): string { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
