@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { assessResearchConviction } from "./conviction";
 
+// These tests protect the practical analyst-priority layer separately from the
+// stricter production eligibility gate.
 const base = {
   coreScore: 64,
   researchPriority: 56,
