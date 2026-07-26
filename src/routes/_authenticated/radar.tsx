@@ -2,12 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
-import { OpportunityRadarView } from "@/components/research/OpportunityRadarView";
+import { OpportunityRadarConvictionView } from "@/components/research/OpportunityRadarConvictionView";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
 
 const radarQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "horizons-v1"],
+  queryKey: ["opportunity-radar", "horizons-v2-conviction"],
   queryFn: () => getOpportunityRadarWorkspace(),
   staleTime: 15 * 60 * 1000,
   refetchInterval: 15 * 60 * 1000,
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/radar")({
       {
         name: "description",
         content:
-          "Find price damage that appears greater than the damage to the underlying business.",
+          "Rank companies by rules-based research conviction, model agreement and value-trap exclusions.",
       },
     ],
   }),
@@ -48,10 +48,10 @@ function Radar() {
     <AppShell>
       <SectionHeader
         code="OR · Opportunity Radar"
-        title="Where has the share price broken more than the business?"
-        purpose="One evidence engine, three investment horizons. Price damage, permanent impairment, company-specific pressure and data confidence remain separate so cheapness cannot disguise a value trap."
+        title="Which companies have enough evidence to justify research?"
+        purpose="A rules-based conviction shortlist now combines valuation, quality, Piotroski, Magic Formula, price dislocation, recovery, impairment and model agreement. Hard value-trap gates can exclude cheap-looking companies, while the original horizon model remains visible as the audit trail."
       />
-      <OpportunityRadarView workspace={workspace} regime={regime} />
+      <OpportunityRadarConvictionView workspace={workspace} regime={regime} />
     </AppShell>
   );
 }
