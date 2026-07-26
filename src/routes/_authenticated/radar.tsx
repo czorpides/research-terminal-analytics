@@ -2,16 +2,25 @@ import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
-import { OpportunityRadarConvictionViewV2 } from "@/components/research/OpportunityRadarConvictionViewV2";
+import { OpportunityRadarInstitutionalView } from "@/components/research/OpportunityRadarInstitutionalView";
+import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
 
 const radarQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "horizons-v3-conviction"],
+  queryKey: ["opportunity-radar", "horizons-v4-institutional"],
   queryFn: () => getOpportunityRadarWorkspace(),
   staleTime: 15 * 60 * 1000,
   refetchInterval: 15 * 60 * 1000,
   refetchOnWindowFocus: true,
+});
+
+const institutionalQueryOptions = queryOptions({
+  queryKey: ["opportunity-radar", "institutional-v1"],
+  queryFn: () => getInstitutionalOpportunityWorkspace(),
+  staleTime: 60 * 60 * 1000,
+  refetchInterval: 60 * 60 * 1000,
+  refetchOnWindowFocus: false,
 });
 
 const regimeQueryOptions = queryOptions({
@@ -29,13 +38,14 @@ export const Route = createFileRoute("/_authenticated/radar")({
       {
         name: "description",
         content:
-          "Prioritise companies for research using valuation, quality, Piotroski, Magic Formula, dislocation, recovery and impairment evidence.",
+          "Prioritise research candidates using market expectations, cash generation, economic returns, balance-sheet risk, operating trajectory, capital allocation, accounting quality and the existing conviction evidence.",
       },
     ],
   }),
   loader: ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(radarQueryOptions),
+      context.queryClient.ensureQueryData(institutionalQueryOptions),
       context.queryClient.ensureQueryData(regimeQueryOptions),
     ]),
   component: Radar,
@@ -43,15 +53,20 @@ export const Route = createFileRoute("/_authenticated/radar")({
 
 function Radar() {
   const { data: workspace } = useSuspenseQuery(radarQueryOptions);
+  const { data: institutionalWorkspace } = useSuspenseQuery(institutionalQueryOptions);
   const { data: regime } = useSuspenseQuery(regimeQueryOptions);
   return (
     <AppShell>
       <SectionHeader
         code="OR · Opportunity Radar"
         title="Which companies deserve research time now?"
-        purpose="The primary queue separates Priority Research, Qualified Research and Watchlist names. It rewards agreement across valuation, quality, Piotroski, Magic Formula, price dislocation, recovery and balance-sheet evidence, while showing exactly what still needs proving. The stricter horizon model remains available as the audit trail rather than suppressing every incomplete case."
+        purpose="The primary queue now separates merely cheap companies from cash-backed, economically productive and financially resilient candidates. Seven institutional statement lenses work alongside valuation, Piotroski, Magic Formula, price dislocation and recovery evidence. Hard value-trap risks override attractive multiples, while missing evidence is shown rather than guessed."
       />
-      <OpportunityRadarConvictionViewV2 workspace={workspace} regime={regime} />
+      <OpportunityRadarInstitutionalView
+        workspace={workspace}
+        institutionalWorkspace={institutionalWorkspace}
+        regime={regime}
+      />
     </AppShell>
   );
 }
