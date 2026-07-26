@@ -1,0 +1,759 @@
+name: Apply Opportunity Radar conviction framework
+
+on:
+  push:
+    branches:
+      - agent/global-universe-and-research-surfaces
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[conviction-wired]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/global-universe-and-research-surfaces
+          fetch-depth: 0
+      - name: Patch workspace and UI
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def require_replace(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise SystemExit(f"Missing expected block: {label}")
+              return text.replace(old, new, 1)
+
+          workspace_path = Path('src/lib/opportunity/workspace.functions.ts')
+          text = workspace_path.read_text()
+
+          text = require_replace(
+              text,
+              'import type { PiotroskiTest } from "./fundamental-models";\n',
+              'import type { PiotroskiTest } from "./fundamental-models";\nimport { assessResearchConviction, type ResearchTier } from "./conviction";\n',
+              'conviction import',
+          )
+          text = require_replace(
+              text,
+              'export type DiscoveryRoute = "price_dislocation" | "magic_formula" | "improving_value";',
+              'export type DiscoveryRoute =\n  | "price_dislocation"\n  | "magic_formula"\n  | "improving_value"\n  | "quality_value";',
+              'discovery route type',
+          )
+          text = require_replace(
+              text,
+              '''export interface CandidateFunnel {
+  routes: DiscoveryRoute[];
+  nominated: boolean;
+  shadowPriority: number;
+  piotroskiValidation: "confirmation" | "neutral" | "warning" | "unavailable";
+  detail: string;
+}''',
+              '''export interface CandidateFunnel {
+  routes: DiscoveryRoute[];
+  nominated: boolean;
+  shadowPriority: number;
+  convictionScore: number;
+  researchTier: ResearchTier;
+  independentSignals: number;
+  strengths: string[];
+  concerns: string[];
+  nextProof: string[];
+  piotroskiValidation: "confirmation" | "neutral" | "warning" | "unavailable";
+  detail: string;
+}''',
+              'candidate funnel interface',
+          )
+          text = require_replace(
+              text,
+              '''  candidates: number;
+  eligible: number;
+  shadow: number;
+  blocked: number;
+  medianConfidence: number;''',
+              '''  candidates: number;
+  highConviction: number;
+  qualified: number;
+  watch: number;
+  eligible: number;
+  shadow: number;
+  blocked: number;
+  medianConfidence: number;''',
+              'horizon summary interface',
+          )
+          text = require_replace(
+              text,
+              'buildCandidateFunnel(horizon, horizons[horizon], fundamentalModels, scoreBag.valuation)',
+              'buildCandidateFunnel(horizon, horizons[horizon], fundamentalModels, scoreBag, evidence)',
+              'funnel invocation',
+          )
+
+          start = text.index('function buildCandidateFunnel(')
+          end = text.index('\nfunction parsePiotroskiTests', start)
+          replacement = '''function buildCandidateFunnel(
+  horizon: InvestmentHorizon,
+  result: OpportunityHorizonScore,
+  models: CandidateFundamentalModels,
+  scores: ScoreBag,
+  evidence: OpportunityEvidence,
+): CandidateFunnel {
+  const routes: DiscoveryRoute[] = [];
+  const valuationScore = finite(scores.valuation?.value);
+  const qualityScore = finite(scores.quality?.value);
+  const trendScore = finite(scores.trend?.value);
+  const momentumScore = finite(scores.momentum?.value);
+  const priceDislocation = evidence.priceDislocation?.value ?? null;
+  const recoveryConfirmation = evidence.recoveryConfirmation?.value ?? null;
+
+  const conviction = assessResearchConviction({
+    coreScore: result.score,
+    researchPriority: result.researchPriority,
+    dataConfidence: result.dataConfidence,
+    evidenceCoverage: result.evidenceCoverage,
+    impairmentRisk: result.impairmentRisk,
+    classification: result.classification,
+    priceDislocation,
+    quality: qualityScore,
+    valuation: valuationScore,
+    trend: trendScore,
+    momentum: momentumScore,
+    recoveryConfirmation,
+    piotroski: models.piotroski,
+    magicFormula: models.magicFormula,
+  });
+
+  const classifiedPriceRoute =
+    horizon === "five_to_ten"
+      ? ["quality_profile", "quality_watch"].includes(result.classification)
+      : ["broken_stock", "sector_washout", "recovery_watch", "durable_candidate"].includes(
+          result.classification,
+        );
+  const numericalPriceRoute =
+    horizon !== "five_to_ten" &&
+    (priceDislocation ?? 0) >= 45 &&
+    result.impairmentRisk < 50 &&
+    (qualityScore ?? 0) >= 45;
+  if (classifiedPriceRoute || numericalPriceRoute) routes.push("price_dislocation");
+
+  if (
+    models.magicFormula.state === "ranked" &&
+    (models.magicFormula.universePercentile ?? 0) >= 65
+  ) {
+    routes.push("magic_formula");
+  }
+
+  const partialPiotroskiRatio =
+    models.piotroski.state === "partial" && models.piotroski.availableTests >= 5
+      ? (models.piotroski.provisionalScore ?? 0) / Math.max(1, models.piotroski.availableTests)
+      : 0;
+  const piotroskiStrong =
+    (models.piotroski.state === "complete" && (models.piotroski.score ?? 0) >= 6) ||
+    partialPiotroskiRatio >= 0.67;
+  if (piotroskiStrong && (valuationScore ?? 0) >= 55) {
+    routes.push("improving_value");
+  }
+
+  if (
+    (qualityScore ?? 0) >= 60 &&
+    (valuationScore ?? 0) >= 55 &&
+    result.impairmentRisk < 50
+  ) {
+    routes.push("quality_value");
+  }
+
+  const uniqueRoutes = [...new Set(routes)];
+  const piotroskiValidation =
+    models.piotroski.state === "missing"
+      ? "unavailable"
+      : piotroskiStrong
+        ? "confirmation"
+        : models.piotroski.state === "complete" && (models.piotroski.score ?? 9) <= 3
+          ? "warning"
+          : "neutral";
+  const routeLabels = uniqueRoutes.map((route) =>
+    route === "price_dislocation"
+      ? "price dislocation"
+      : route === "magic_formula"
+        ? "Magic Formula"
+        : route === "quality_value"
+          ? "quality plus value"
+          : "Piotroski plus value",
+  );
+  const nominated =
+    uniqueRoutes.length > 0 &&
+    ["high_conviction", "qualified", "watch"].includes(conviction.tier);
+
+  return {
+    routes: uniqueRoutes,
+    nominated,
+    shadowPriority: conviction.score,
+    convictionScore: conviction.score,
+    researchTier: conviction.tier,
+    independentSignals: conviction.independentSignals,
+    strengths: conviction.strengths,
+    concerns: conviction.concerns,
+    nextProof: conviction.nextProof,
+    piotroskiValidation,
+    detail:
+      uniqueRoutes.length === 0
+        ? `No independent discovery route currently nominates this company. Research conviction is ${conviction.score.toFixed(1)}/100.`
+        : `Nominated through ${routeLabels.join(", ")}. ${conviction.independentSignals} independent signals produce research conviction of ${conviction.score.toFixed(1)}/100.` ,
+  };
+}
+'''
+          text = text[:start] + replacement + text[end:]
+
+          text = require_replace(
+              text,
+              '''    candidates: candidateCount,
+    eligible: results.filter((result) => result.modelState === "eligible").length,''',
+              '''    candidates: candidateCount,
+    highConviction: candidates.filter(
+      (candidate) => candidate.funnel[horizon].researchTier === "high_conviction",
+    ).length,
+    qualified: candidates.filter(
+      (candidate) => candidate.funnel[horizon].researchTier === "qualified",
+    ).length,
+    watch: candidates.filter(
+      (candidate) => candidate.funnel[horizon].researchTier === "watch",
+    ).length,
+    eligible: results.filter((result) => result.modelState === "eligible").length,''',
+              'horizon summary counts',
+          )
+          text = require_replace(
+              text,
+              '''      candidates: 0,
+      eligible: 0,''',
+              '''      candidates: 0,
+      highConviction: 0,
+      qualified: 0,
+      watch: 0,
+      eligible: 0,''',
+              'empty summary counts',
+          )
+          text = require_replace(
+              text,
+              '"The model ranks the tracked universe in shadow mode. Price dislocation, Magic Formula and improving-value routes can nominate research candidates; missing evidence lowers confidence and is never silently estimated.",',
+              '"The strict production model remains gated, while the practical research-conviction layer ranks the tracked universe using agreement between price dislocation, valuation, quality, recovery evidence, Piotroski, Magic Formula and data confidence. Missing evidence creates an explicit next-proof list rather than hiding every company.",',
+              'model note',
+          )
+          text = text.replace(
+              '"Nine transparent annual tests nominate or warn on candidates without changing the core Radar score",',
+              '"Nine transparent annual tests now contribute directly to the research-conviction tier while remaining separate from the production score",',
+              1,
+          )
+          text = text.replace(
+              '"Annual Greenblatt ROC and EBIT/EV ranks provide a separate quality-value nomination route",',
+              '"Annual Greenblatt ROC and EBIT/EV ranks contribute directly to research conviction and the quality-value shortlist",',
+              1,
+          )
+
+          gate_start = text.index('function coverageGates(')
+          gate_end = text.index('\nfunction capabilityGates', gate_start)
+          gate_replacement = '''function coverageGates(candidates: OpportunityCandidate[]): CoverageGate[] {
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) {
+    counts.set(candidate.countryCode, (counts.get(candidate.countryCode) ?? 0) + 1);
+  }
+  const euCodes = new Set([
+    "AT", "BE", "BG", "HR", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR",
+    "HU", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK",
+  ]);
+  const euCount = [...counts.entries()].reduce(
+    (sum, [code, count]) => sum + (euCodes.has(code) ? count : 0),
+    0,
+  );
+  return [
+    {
+      market: "United States",
+      code: "US",
+      state: "shadow",
+      trackedAssets: counts.get("US") ?? 0,
+      available: "Prices, current fundamentals, Piotroski, Magic Formula and reported EPS",
+      missing: "Point-in-time estimates, ownership and full factor controls",
+      activationRule:
+        "Research tiers are live; production eligibility still requires a clean point-in-time backtest.",
+    },
+    {
+      market: "United Kingdom",
+      code: "UK",
+      state: "shadow",
+      trackedAssets: counts.get("GB") ?? counts.get("UK") ?? 0,
+      available: "Global prices and current fundamental scoring where provider identifiers resolve",
+      missing: "Validated UK macro exposures, filing coverage and corporate-action audit",
+      activationRule: "Use research-conviction tiers in shadow mode and monitor provider failures.",
+    },
+    {
+      market: "Developed Europe",
+      code: "EU",
+      state: "shadow",
+      trackedAssets: euCount,
+      available: "Global prices and current fundamental scoring where provider identifiers resolve",
+      missing: "Country-specific macro exposures, filing coverage and corporate-action audit",
+      activationRule: "Use research-conviction tiers in shadow mode and activate production country by country.",
+    },
+    {
+      market: "Other developed markets",
+      code: "DEV",
+      state: "disabled",
+      trackedAssets: 0,
+      available: "Model specification only",
+      missing: "All production equity evidence",
+      activationRule:
+        "Start only after US, UK and Europe operate within provider and storage budgets.",
+    },
+    {
+      market: "Emerging markets",
+      code: "EM",
+      state: "disabled",
+      trackedAssets: 0,
+      available: "Model specification only",
+      missing: "Reliable identifiers, filings, estimates, FX and delisted-company history",
+      activationRule: "Remain disabled until local-market point-in-time quality is proven.",
+    },
+  ];
+}
+'''
+          text = text[:gate_start] + gate_replacement + text[gate_end:]
+          workspace_path.write_text(text)
+
+          ui_path = Path('src/components/research/OpportunityRadarView.tsx')
+          ui = ui_path.read_text()
+          ui = require_replace(
+              ui,
+              '  ShieldCheck,\n} from "lucide-react";',
+              '  ShieldCheck,\n  Target,\n} from "lucide-react";',
+              'target icon import',
+          )
+          ui = require_replace(
+              ui,
+              'import type { RegimeMonitorPayload } from "@/lib/panels/regime.functions";\n',
+              'import type { RegimeMonitorPayload } from "@/lib/panels/regime.functions";\nimport { researchTierLabel, researchTierRank, type ResearchTier } from "@/lib/opportunity/conviction";\n',
+              'research tier import',
+          )
+          ui = require_replace(
+              ui,
+              '  const [routeFilter, setRouteFilter] = useState<DiscoveryRoute | "all">("all");\n',
+              '  const [routeFilter, setRouteFilter] = useState<DiscoveryRoute | "all">("all");\n  const [tierFilter, setTierFilter] = useState<ResearchTier | "researchable" | "all">("researchable");\n',
+              'tier filter state',
+          )
+          ui = require_replace(
+              ui,
+              '''        if (stateFilter !== "all" && candidate.horizons[horizon].modelState !== stateFilter) {
+          return false;
+        }
+        return routeFilter === "all" || candidate.funnel[horizon].routes.includes(routeFilter);''',
+              '''        if (stateFilter !== "all" && candidate.horizons[horizon].modelState !== stateFilter) {
+          return false;
+        }
+        const tier = candidate.funnel[horizon].researchTier;
+        if (
+          tierFilter === "researchable" &&
+          !["high_conviction", "qualified", "watch"].includes(tier)
+        ) {
+          return false;
+        }
+        if (tierFilter !== "all" && tierFilter !== "researchable" && tier !== tierFilter) {
+          return false;
+        }
+        return routeFilter === "all" || candidate.funnel[horizon].routes.includes(routeFilter);''',
+              'tier filtering',
+          )
+          ui = require_replace(
+              ui,
+              '''        return (
+          Number(rightFunnel.nominated) - Number(leftFunnel.nominated) ||
+          rightFunnel.shadowPriority - leftFunnel.shadowPriority ||
+          right.horizons[horizon].researchPriority - left.horizons[horizon].researchPriority
+        );''',
+              '''        return (
+          researchTierRank(rightFunnel.researchTier) - researchTierRank(leftFunnel.researchTier) ||
+          rightFunnel.convictionScore - leftFunnel.convictionScore ||
+          right.horizons[horizon].researchPriority - left.horizons[horizon].researchPriority
+        );''',
+              'conviction sorting',
+          )
+          ui = require_replace(
+              ui,
+              '  }, [horizon, query, routeFilter, stateFilter, workspace.candidates]);',
+              '  }, [horizon, query, routeFilter, stateFilter, tierFilter, workspace.candidates]);',
+              'candidate memo deps',
+          )
+          ui = require_replace(
+              ui,
+              '''        <SummaryTile
+          label="Research candidates"
+          value={summary?.candidates ?? 0}
+          detail={summary?.label ?? "1–3 years"}
+          explanation="Names whose preliminary classification merits research. This count can include shadow results."
+        />
+        <SummaryTile
+          label="Production eligible"
+          value={summary?.eligible ?? 0}
+          detail="All critical gates must pass"
+          explanation="Requires a score of at least 70, confidence of at least 70, low impairment risk and every critical input observed rather than proxied."
+        />
+        <SummaryTile
+          label="Median confidence"
+          value={`${summary?.medianConfidence.toFixed(0) ?? "0"}%`}
+          detail={`Through ${formatDate(workspace.asOf)}`}
+          explanation="Falls when inputs are missing, stale, proxy-only or unsupported by a sector-specific model."
+        />''',
+              '''        <SummaryTile
+          label="High-conviction research"
+          value={summary?.highConviction ?? 0}
+          detail="Three or more independent signals"
+          explanation="The strongest research queue: valuation, quality and at least one additional confirmation agree, with controlled impairment risk."
+        />
+        <SummaryTile
+          label="Qualified research"
+          value={summary?.qualified ?? 0}
+          detail="Enough basis to begin work"
+          explanation="At least two independent signals and sufficient fundamental coverage justify a first-pass thesis and valuation review."
+        />
+        <SummaryTile
+          label="Watchlist"
+          value={summary?.watch ?? 0}
+          detail={`${summary?.medianConfidence.toFixed(0) ?? "0"}% median confidence`}
+          explanation="Promising evidence exists, but one additional confirmation is still required before committing to full research."
+        />''',
+              'summary tiles',
+          )
+          ui = require_replace(
+              ui,
+              '''            One evidence engine supplies all horizons. Price dislocation, Magic Formula and
+            improving-value routes widen discovery, while Piotroski validates financial health.
+            These shadow routes do not change the core horizon score.''',
+              '''            The production score remains strict and unchanged. The practical conviction layer
+            now combines price dislocation, valuation, quality, recovery evidence, Piotroski,
+            Magic Formula and data confidence to decide which companies deserve analyst time.''',
+              'operating cadence copy',
+          )
+          ui = require_replace(
+              ui,
+              '''          <TabsContent key={item} value={item} className="space-y-3">
+            <DashboardPanel''',
+              '''          <TabsContent key={item} value={item} className="space-y-3">
+            <ResearchShortlist candidates={workspace.candidates} horizon={item} />
+            <DashboardPanel''',
+              'research shortlist insertion',
+          )
+          ui = require_replace(
+              ui,
+              '''              <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+                <label className="relative min-w-0 flex-1">''',
+              '''              <div className="mb-3 flex flex-col gap-2 lg:flex-row">
+                <label className="relative min-w-0 flex-1">''',
+              'filter layout',
+          )
+          ui = require_replace(
+              ui,
+              '''                <select
+                  value={routeFilter}''',
+              '''                <select
+                  value={tierFilter}
+                  onChange={(event) =>
+                    setTierFilter(event.target.value as ResearchTier | "researchable" | "all")
+                  }
+                  className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                  aria-label="Filter by research conviction tier"
+                >
+                  <option value="researchable">Researchable tiers</option>
+                  <option value="high_conviction">High conviction</option>
+                  <option value="qualified">Qualified research</option>
+                  <option value="watch">Watchlist</option>
+                  <option value="avoid">Avoid / value trap</option>
+                  <option value="insufficient">Insufficient evidence</option>
+                  <option value="all">All tiers</option>
+                </select>
+                <select
+                  value={routeFilter}''',
+              'tier select',
+          )
+          ui = require_replace(
+              ui,
+              '                  <option value="improving_value">Piotroski plus value</option>\n',
+              '                  <option value="improving_value">Piotroski plus value</option>\n                  <option value="quality_value">Quality plus value</option>\n',
+              'quality value option',
+          )
+          ui = ui.replace(
+              'label="Shadow funnel"\n                 explanation="Best discovery-route score, adjusted by Piotroski confirmation or warning. It does not alter the core horizon score."',
+              'label="Research conviction"\n                 explanation="Practical 0–100 research priority combining the core score with valuation, quality, recovery, Piotroski, Magic Formula, impairment risk and data confidence."',
+              1,
+          )
+          ui = ui.replace('{funnel.shadowPriority.toFixed(1)}', '{funnel.convictionScore.toFixed(1)}', 1)
+          ui = require_replace(
+              ui,
+              '''                  <div className="font-semibold">{candidate.symbol}</div>
+                  <div className="max-w-48 truncate text-[9px] text-muted-foreground">
+                    {candidate.name} · {candidate.industryName ?? "Unmapped industry"}
+                  </div>''',
+              '''                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold">{candidate.symbol}</span>
+                    <ResearchTierBadge tier={funnel.researchTier} />
+                  </div>
+                  <div className="max-w-56 truncate text-[9px] text-muted-foreground">
+                    {candidate.name} · {candidate.industryName ?? "Unmapped industry"} · {funnel.independentSignals} signals
+                  </div>''',
+              'company tier badge',
+          )
+          ui = require_replace(
+              ui,
+              '''            <ClassificationBadge classification={result.classification} />
+            <StateBadge state={result.modelState} />''',
+              '''            <ResearchTierBadge tier={candidate.funnel[horizon].researchTier} />
+            <ClassificationBadge classification={result.classification} />
+            <StateBadge state={result.modelState} />''',
+              'dialog tier badge',
+          )
+          ui = require_replace(
+              ui,
+              '''        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <DetailMetric label={result.scoreLabel} value={result.score} />
+          <DetailMetric label="Research priority" value={result.researchPriority} />''',
+              '''        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <DetailMetric label="Research conviction" value={candidate.funnel[horizon].convictionScore} />
+          <DetailMetric label={result.scoreLabel} value={result.score} />
+          <DetailMetric label="Independent signals" value={candidate.funnel[horizon].independentSignals} />''',
+              'dialog metrics',
+          )
+          ui = require_replace(
+              ui,
+              '''             {candidate.funnel[horizon].detail} Shadow funnel priority{" "}
+             {candidate.funnel[horizon].shadowPriority.toFixed(1)}/100. The core{" "}
+             {result.scoreLabel.toLowerCase()} remains {result.score.toFixed(1)}/100.''',
+              '''             {candidate.funnel[horizon].detail} The strict production
+             {` ${result.scoreLabel.toLowerCase()}`} remains {result.score.toFixed(1)}/100 and is
+             shown separately.''',
+              'dialog funnel copy',
+          )
+          ui = require_replace(
+              ui,
+              '''        <ResearchNarrative
+          summary={candidate.narrative.summary}''',
+              '''        <ResearchConvictionPanel candidate={candidate} horizon={horizon} />
+
+        <ResearchNarrative
+          summary={candidate.narrative.summary}''',
+              'conviction panel insertion',
+          )
+          ui = ui.replace(
+              'description="Nine annual pass/fail tests. Partial evidence never becomes a formal F-Score."',
+              'description="Nine annual pass/fail tests. Strong complete or sufficiently broad partial evidence now contributes directly to research conviction; only nine complete tests become a formal F-Score."',
+              1,
+          )
+          ui = ui.replace(
+              '''            This is an annual shadow rank. It can nominate a company for research, but it has zero
+            direct weight in the core Opportunity Radar until point-in-time backtesting proves
+            incremental value.''',
+              '''            This annual rank now contributes to the practical research-conviction score and
+            shortlist. It remains separate from production eligibility until point-in-time
+            backtesting proves incremental return information.''',
+              1,
+          )
+          ui = require_replace(
+              ui,
+              '''             route === "magic_formula"
+               ? "border-primary/45 text-primary"
+               : route === "improving_value"
+                 ? "border-[var(--positive)]/45 text-[var(--positive)]"
+                 : "border-[var(--warning)]/45 text-[var(--warning)]",''',
+              '''             route === "magic_formula"
+               ? "border-primary/45 text-primary"
+               : route === "improving_value"
+                 ? "border-[var(--positive)]/45 text-[var(--positive)]"
+                 : route === "quality_value"
+                   ? "border-[var(--info)]/45 text-[var(--info)]"
+                   : "border-[var(--warning)]/45 text-[var(--warning)]",''',
+              'quality value badge colour',
+          )
+          ui = require_replace(
+              ui,
+              '''           {route === "magic_formula"
+             ? "MAGIC"
+             : route === "improving_value"
+               ? "F+VALUE"
+               : "DISLOCATION"}''',
+              '''           {route === "magic_formula"
+             ? "MAGIC"
+             : route === "improving_value"
+               ? "F+VALUE"
+               : route === "quality_value"
+                 ? "Q+VALUE"
+                 : "DISLOCATION"}''',
+              'quality value badge label',
+          )
+
+          insert_at = ui.index('\nfunction CandidateTable(')
+          components = r'''
+function ResearchShortlist({
+  candidates,
+  horizon,
+}: {
+  candidates: OpportunityCandidate[];
+  horizon: InvestmentHorizon;
+}) {
+  const ranked = [...candidates]
+    .filter((candidate) =>
+      ["high_conviction", "qualified", "watch"].includes(
+        candidate.funnel[horizon].researchTier,
+      ),
+    )
+    .sort((left, right) => {
+      const leftFunnel = left.funnel[horizon];
+      const rightFunnel = right.funnel[horizon];
+      return (
+        researchTierRank(rightFunnel.researchTier) -
+          researchTierRank(leftFunnel.researchTier) ||
+        rightFunnel.convictionScore - leftFunnel.convictionScore
+      );
+    })
+    .slice(0, 8);
+
+  return (
+    <DashboardPanel
+      eyebrow="Analyst queue"
+      title="Companies with enough basis to investigate"
+      description="Ranked by independent evidence agreement. High conviction means start with the filing and valuation; qualified means a first-pass thesis is justified; watch means wait for one more proof point."
+      equalHeight={false}
+      actions={
+        <Badge variant="outline" className="font-mono text-[9px]">
+          {ranked.length} prioritised
+        </Badge>
+      }
+    >
+      {ranked.length === 0 ? (
+        <div className="rounded border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+          No company currently has enough independent evidence for the practical research queue.
+          Check fundamental coverage and the explicit next-proof items rather than treating this as
+          evidence that no opportunity exists.
+        </div>
+      ) : (
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {ranked.map((candidate, index) => {
+            const funnel = candidate.funnel[horizon];
+            return (
+              <article
+                key={candidate.assetId}
+                className="rounded-md border border-border/65 bg-background/25 p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-mono text-[9px] text-muted-foreground">#{index + 1}</div>
+                    <div className="text-sm font-semibold">{candidate.symbol}</div>
+                    <div className="line-clamp-1 text-[9px] text-muted-foreground">
+                      {candidate.name}
+                    </div>
+                  </div>
+                  <ResearchTierBadge tier={funnel.researchTier} />
+                </div>
+                <div className="mt-3 flex items-end justify-between gap-2">
+                  <div>
+                    <div className="font-mono text-2xl font-semibold tabular-nums">
+                      {funnel.convictionScore.toFixed(0)}
+                    </div>
+                    <div className="text-[9px] text-muted-foreground">research conviction</div>
+                  </div>
+                  <div className="text-right text-[9px] text-muted-foreground">
+                    {funnel.independentSignals} independent signals
+                  </div>
+                </div>
+                <div className="mt-2 min-h-10 text-[10px] leading-relaxed text-muted-foreground">
+                  {funnel.strengths[0] ?? funnel.detail}
+                </div>
+                <div className="mt-2 border-t border-border/45 pt-2 text-[9px] leading-relaxed text-muted-foreground">
+                  <span className="font-semibold text-foreground">Next proof: </span>
+                  {funnel.nextProof[0] ?? "Review the latest filing and guidance."}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <DiscoveryRouteBadges routes={funnel.routes} />
+                  <CandidateDialog candidate={candidate} horizon={horizon} />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </DashboardPanel>
+  );
+}
+
+function ResearchTierBadge({ tier }: { tier: ResearchTier }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "whitespace-nowrap px-1.5 py-0 text-[8px]",
+        tier === "high_conviction"
+          ? "border-[var(--positive)]/55 bg-[var(--positive)]/10 text-[var(--positive)]"
+          : tier === "qualified"
+            ? "border-[var(--info)]/55 bg-[var(--info)]/10 text-[var(--info)]"
+            : tier === "watch"
+              ? "border-[var(--warning)]/55 text-[var(--warning)]"
+              : tier === "avoid"
+                ? "border-[var(--negative)]/55 text-[var(--negative)]"
+                : "border-border text-muted-foreground",
+      )}
+    >
+      {researchTierLabel(tier).toUpperCase()}
+    </Badge>
+  );
+}
+
+function ResearchConvictionPanel({
+  candidate,
+  horizon,
+}: {
+  candidate: OpportunityCandidate;
+  horizon: InvestmentHorizon;
+}) {
+  const funnel = candidate.funnel[horizon];
+  const columns = [
+    { title: "Why it qualifies", items: funnel.strengths, positive: true },
+    { title: "What could break it", items: funnel.concerns, positive: false },
+    { title: "Evidence required next", items: funnel.nextProof, positive: false },
+  ];
+  return (
+    <DashboardPanel
+      title={`${researchTierLabel(funnel.researchTier)} · ${funnel.convictionScore.toFixed(1)}/100`}
+      description={`${funnel.independentSignals} independent signals. This score determines analyst priority; it does not claim the investment is already proven.`}
+      expandable={false}
+    >
+      <div className="grid gap-3 lg:grid-cols-3">
+        {columns.map((column) => (
+          <div key={column.title} className="rounded border border-border/55 bg-muted/15 p-2.5">
+            <div className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <Target className="h-3.5 w-3.5" /> {column.title}
+            </div>
+            {column.items.length ? (
+              <ul className="space-y-1.5 text-[10px] leading-relaxed">
+                {column.items.map((item) => (
+                  <li key={item} className="flex gap-1.5">
+                    <span className={column.positive ? "text-[var(--positive)]" : "text-[var(--warning)]"}>›</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-[10px] text-muted-foreground">No item recorded.</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </DashboardPanel>
+  );
+}
+'''
+          ui = ui[:insert_at] + components + ui[insert_at:]
+          ui_path.write_text(ui)
+          PY
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/apply-opportunity-conviction.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/opportunity/workspace.functions.ts src/components/research/OpportunityRadarView.tsx
+          git commit -m "Make research conviction drive Opportunity Radar [conviction-wired]"
+          git push origin HEAD:agent/global-universe-and-research-surfaces
