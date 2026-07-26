@@ -2,12 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
-import { OpportunityRadarConvictionView } from "@/components/research/OpportunityRadarConvictionView";
+import { OpportunityRadarConvictionViewV2 } from "@/components/research/OpportunityRadarConvictionViewV2";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
 
 const radarQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "horizons-v2-conviction"],
+  queryKey: ["opportunity-radar", "horizons-v3-conviction"],
   queryFn: () => getOpportunityRadarWorkspace(),
   staleTime: 15 * 60 * 1000,
   refetchInterval: 15 * 60 * 1000,
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/radar")({
       {
         name: "description",
         content:
-          "Rank companies by rules-based research conviction, model agreement and value-trap exclusions.",
+          "Prioritise companies for research using valuation, quality, Piotroski, Magic Formula, dislocation, recovery and impairment evidence.",
       },
     ],
   }),
@@ -48,10 +48,10 @@ function Radar() {
     <AppShell>
       <SectionHeader
         code="OR · Opportunity Radar"
-        title="Which companies have enough evidence to justify research?"
-        purpose="A rules-based conviction shortlist now combines valuation, quality, Piotroski, Magic Formula, price dislocation, recovery, impairment and model agreement. Hard value-trap gates can exclude cheap-looking companies, while the original horizon model remains visible as the audit trail."
+        title="Which companies deserve research time now?"
+        purpose="The primary queue separates Priority Research, Qualified Research and Watchlist names. It rewards agreement across valuation, quality, Piotroski, Magic Formula, price dislocation, recovery and balance-sheet evidence, while showing exactly what still needs proving. The stricter horizon model remains available as the audit trail rather than suppressing every incomplete case."
       />
-      <OpportunityRadarConvictionView workspace={workspace} regime={regime} />
+      <OpportunityRadarConvictionViewV2 workspace={workspace} regime={regime} />
     </AppShell>
   );
 }
