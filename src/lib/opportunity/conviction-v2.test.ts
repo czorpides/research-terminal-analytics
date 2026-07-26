@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { computeResearchConvictionV2 } from "./conviction-v2";
+import { computeResearchConvictionV2 } from "./conviction-v2.ts";
 
 const base = {
   valuation: 68,
