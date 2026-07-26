@@ -24,32 +24,32 @@ jobs:
 
           model = Path('src/lib/opportunity/institutional-model.ts')
           text = model.read_text()
-          old = '''  const score =
-            -4.84 +
-            0.92 * dsri +
-            0.528 * gmi +
-            0.404 * aqi +
-            0.892 * sgi +
-            0.115 * depi -
-            0.172 * sgai +
-            4.679 * tata -
-            0.327 * lvgi;'''
-          new = '''  const [safeDsri, safeGmi, safeAqi, safeSgi, safeDepi, safeSgai, safeLvgi, safeTata] =
-            values as number[];
-          const score =
-            -4.84 +
-            0.92 * safeDsri +
-            0.528 * safeGmi +
-            0.404 * safeAqi +
-            0.892 * safeSgi +
-            0.115 * safeDepi -
-            0.172 * safeSgai +
-            4.679 * safeTata -
-            0.327 * safeLvgi;'''
-          if old in text:
-              model.write_text(text.replace(old, new))
-          elif '0.92 * safeDsri' not in text:
-              raise SystemExit('Expected Beneish score block not found')
+          if 'safeDsri' not in text:
+              anchor = '  const score =\n    -4.84 +'
+              insert = (
+                  '  const [safeDsri, safeGmi, safeAqi, safeSgi, safeDepi, safeSgai, safeLvgi, safeTata] =\n'
+                  '    values as number[];\n'
+                  '  const score =\n'
+                  '    -4.84 +'
+              )
+              if anchor not in text:
+                  raise SystemExit('Expected Beneish score anchor not found')
+              text = text.replace(anchor, insert, 1)
+              replacements = {
+                  '0.92 * dsri': '0.92 * safeDsri',
+                  '0.528 * gmi': '0.528 * safeGmi',
+                  '0.404 * aqi': '0.404 * safeAqi',
+                  '0.892 * sgi': '0.892 * safeSgi',
+                  '0.115 * depi': '0.115 * safeDepi',
+                  '0.172 * sgai': '0.172 * safeSgai',
+                  '4.679 * tata': '4.679 * safeTata',
+                  '0.327 * lvgi': '0.327 * safeLvgi',
+              }
+              for old, new in replacements.items():
+                  if old not in text:
+                      raise SystemExit(f'Expected Beneish token not found: {old}')
+                  text = text.replace(old, new, 1)
+              model.write_text(text)
 
           ui = Path('src/components/research/OpportunityRadarInstitutionalView.tsx')
           ui_text = ui.read_text().replace('  TrendingUp,\n', '')
@@ -67,7 +67,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/opportunity/institutional-model.ts src/components/research/OpportunityRadarInstitutionalView.tsx .github/workflows/apply-institutional-type-fix.yml
+          git add -A src/lib/opportunity/institutional-model.ts src/components/research/OpportunityRadarInstitutionalView.tsx .github/workflows/apply-institutional-type-fix.yml
           git commit -m "Fix institutional TypeScript narrowing"
           git push origin HEAD:${{ github.head_ref }}
       - name: Set up Node.js
