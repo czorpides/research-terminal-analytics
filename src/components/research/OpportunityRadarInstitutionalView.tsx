@@ -11,7 +11,6 @@ import {
   ShieldAlert,
   Target,
   Telescope,
-  TrendingUp,
   WalletCards,
 } from "lucide-react";
 

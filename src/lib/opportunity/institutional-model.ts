@@ -1370,16 +1370,18 @@ function computeBeneish(
       detail: "Beneish M-Score is withheld because one or more receivables, margins, asset-quality, depreciation, SG&A, leverage or accrual inputs are missing.",
     };
   }
+  const [safeDsri, safeGmi, safeAqi, safeSgi, safeDepi, safeSgai, safeLvgi, safeTata] =
+    values as number[];
   const score =
     -4.84 +
-    0.92 * dsri +
-    0.528 * gmi +
-    0.404 * aqi +
-    0.892 * sgi +
-    0.115 * depi -
-    0.172 * sgai +
-    4.679 * tata -
-    0.327 * lvgi;
+    0.92 * safeDsri +
+    0.528 * safeGmi +
+    0.404 * safeAqi +
+    0.892 * safeSgi +
+    0.115 * safeDepi -
+    0.172 * safeSgai +
+    4.679 * safeTata -
+    0.327 * safeLvgi;
   return {
     score,
     detail: "Eight-variable Beneish M-Score. Values above -1.78 are treated as an elevated forensic signal, not proof of manipulation.",
