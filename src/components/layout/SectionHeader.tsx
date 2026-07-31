@@ -12,15 +12,17 @@ export function SectionHeader({
   right?: ReactNode;
 }) {
   return (
-    <header className="mb-4 flex items-end justify-between gap-4 border-b border-border/70 pb-3">
+    <header className="mb-6 flex flex-col gap-4 border-b border-border/70 pb-5 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
-        <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--primary)]">
+        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-[var(--primary)]">
           {code}
         </div>
-        <h1 className="mt-0.5 text-lg font-semibold tracking-tight">{title}</h1>
-        <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">{purpose}</p>
+        <h1 className="mt-1.5 max-w-5xl text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
+          {title}
+        </h1>
+        <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">{purpose}</p>
       </div>
-      {right}
+      {right && <div className="shrink-0">{right}</div>}
     </header>
   );
 }
