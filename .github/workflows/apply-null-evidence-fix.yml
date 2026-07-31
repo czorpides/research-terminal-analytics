@@ -1,0 +1,57 @@
+name: Apply null evidence fix
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.head_ref == 'agent/radar-discovery-readability'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Fix null evidence handling and remove diagnostics
+        shell: python
+        run: |
+          from pathlib import Path
+
+          old = '''function finite(value: unknown): number | null {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : null;
+          }'''
+          new = '''function finite(value: unknown): number | null {
+            if (value === null || value === undefined || value === "") return null;
+            const number = Number(value);
+            return Number.isFinite(number) ? number : null;
+          }'''
+
+          for filename in [
+              'src/lib/opportunity/discovery-routes.ts',
+              'src/components/research/OpportunityRadarDiscoveryView.tsx',
+          ]:
+              path = Path(filename)
+              text = path.read_text()
+              if old not in text:
+                  raise SystemExit(f'Expected finite helper not found in {filename}')
+              path.write_text(text.replace(old, new, 1))
+
+          for path in [
+              Path('.github/workflows/opportunity-test-diagnostics.yml'),
+              Path('.github/workflows/apply-null-evidence-fix.yml'),
+          ]:
+              if path.exists():
+                  path.unlink()
+      - name: Commit null evidence fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A src/lib/opportunity/discovery-routes.ts src/components/research/OpportunityRadarDiscoveryView.tsx .github/workflows
+          git commit -m "Treat missing discovery evidence as unavailable"
+          git push origin HEAD:${{ github.head_ref }}
