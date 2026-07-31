@@ -1,0 +1,40 @@
+name: Opportunity test diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Capture Opportunity Radar test output
+        id: tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:opportunity 2>&1 | tee opportunity-test-errors.txt
+      - name: Upload Opportunity Radar test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opportunity-test-diagnostics
+          path: opportunity-test-errors.txt
+          if-no-files-found: error
+      - name: Fail when tests failed
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
