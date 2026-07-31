@@ -184,9 +184,10 @@ export function assessDiscoveryRoutes(input: {
   const bestRoute = visible[0] ?? null;
   const routeScore = bestRoute?.score ?? 0;
   const coverage = institutional?.coverage ?? conviction.coverage;
-  const readiness: DiscoveryReadiness = bestRoute?.qualifies && coverage >= 34
+  const hasInstitutionalValidation = Boolean(institutional && institutional.coverage >= 30);
+  const readiness: DiscoveryReadiness = bestRoute?.qualifies && hasInstitutionalValidation
     ? "ready"
-    : bestRoute?.emerging
+    : bestRoute?.qualifies || bestRoute?.emerging
       ? "emerging"
       : coverage < 30
         ? "coverage_gap"
