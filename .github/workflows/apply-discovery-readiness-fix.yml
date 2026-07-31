@@ -23,26 +23,20 @@ jobs:
 
           model = Path('src/lib/opportunity/discovery-routes.ts')
           text = model.read_text()
-          old = '''  const coverage = institutional?.coverage ?? conviction.coverage;
-          const readiness: DiscoveryReadiness = bestRoute?.qualifies && coverage >= 34
-            ? "ready"
-            : bestRoute?.emerging
-              ? "emerging"
-              : coverage < 30
-                ? "coverage_gap"
-                : "not_nominated";'''
-          new = '''  const coverage = institutional?.coverage ?? conviction.coverage;
-          const hasInstitutionalValidation = Boolean(institutional && institutional.coverage >= 30);
-          const readiness: DiscoveryReadiness = bestRoute?.qualifies && hasInstitutionalValidation
-            ? "ready"
-            : bestRoute?.qualifies || bestRoute?.emerging
-              ? "emerging"
-              : coverage < 30
-                ? "coverage_gap"
-                : "not_nominated";'''
-          if old not in text:
-              raise SystemExit('Expected discovery readiness block not found')
-          model.write_text(text.replace(old, new, 1))
+          anchor = '  const readiness: DiscoveryReadiness = bestRoute?.qualifies && coverage >= 34'
+          replacement = (
+              '  const hasInstitutionalValidation = Boolean(institutional && institutional.coverage >= 30);\n'
+              '  const readiness: DiscoveryReadiness = bestRoute?.qualifies && hasInstitutionalValidation'
+          )
+          if anchor not in text:
+              raise SystemExit('Expected discovery readiness anchor not found')
+          text = text.replace(anchor, replacement, 1)
+          old_branch = '    : bestRoute?.emerging\n'
+          new_branch = '    : bestRoute?.qualifies || bestRoute?.emerging\n'
+          if old_branch not in text:
+              raise SystemExit('Expected emerging branch not found')
+          text = text.replace(old_branch, new_branch, 1)
+          model.write_text(text)
 
           for path in [
               Path('.github/workflows/opportunity-test-diagnostics.yml'),
