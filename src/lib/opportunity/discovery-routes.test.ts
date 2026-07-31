@@ -42,15 +42,12 @@ function candidate(overrides: Partial<OpportunityCandidate> = {}): OpportunityCa
     sectorBreadthPct: 20,
     latestEarningsSurprisePct: 2,
     evidence: {
-      absolutePriceDamage: null,
       priceDislocation: { key: "priceDislocation", label: "Price dislocation", value: 58, confidence: 80, status: "observed", detail: "", asOf: null, source: "" },
       fundamentalResilience: { key: "fundamentalResilience", label: "Quality", value: 72, confidence: 80, status: "proxy", detail: "", asOf: null, source: "" },
       valuationCompression: { key: "valuationCompression", label: "Valuation", value: 52, confidence: 80, status: "proxy", detail: "", asOf: null, source: "" },
-      temporaryEvidence: null,
       recoveryConfirmation: { key: "recoveryConfirmation", label: "Recovery", value: 45, confidence: 70, status: "observed", detail: "", asOf: null, source: "" },
       balanceSheetDurability: { key: "balanceSheetDurability", label: "Balance", value: 66, confidence: 70, status: "proxy", detail: "", asOf: null, source: "" },
       impairmentRisk: { key: "impairmentRisk", label: "Impairment", value: 32, confidence: 65, status: "proxy", detail: "", asOf: null, source: "" },
-      recoveryDurability: null,
     },
     horizons: {} as OpportunityCandidate["horizons"],
     fundamentalModels: {
