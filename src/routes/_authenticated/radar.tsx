@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
-import { OpportunityRadarInstitutionalView } from "@/components/research/OpportunityRadarInstitutionalView";
+import { OpportunityRadarDiscoveryView } from "@/components/research/OpportunityRadarDiscoveryView";
 import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
 
 const radarQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "horizons-v4-institutional"],
+  queryKey: ["opportunity-radar", "horizons-v5-discovery"],
   queryFn: () => getOpportunityRadarWorkspace(),
   staleTime: 15 * 60 * 1000,
   refetchInterval: 15 * 60 * 1000,
@@ -38,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/radar")({
       {
         name: "description",
         content:
-          "Prioritise research candidates using market expectations, cash generation, economic returns, balance-sheet risk, operating trajectory, capital allocation, accounting quality and the existing conviction evidence.",
+          "Discover research candidates through deep value, durable price damage, recovery, quality growth, compounder resets, capital allocation and sector-specific routes, then validate them with institutional statement evidence.",
       },
     ],
   }),
@@ -59,10 +59,10 @@ function Radar() {
     <AppShell>
       <SectionHeader
         code="OR · Opportunity Radar"
-        title="Which companies deserve research time now?"
-        purpose="The primary queue now separates merely cheap companies from cash-backed, economically productive and financially resilient candidates. Seven institutional statement lenses work alongside valuation, Piotroski, Magic Formula, price dislocation and recovery evidence. Hard value-trap risks override attractive multiples, while missing evidence is shown rather than guessed."
+        title="Find the strongest research thesis — then test it"
+        purpose="Seven parallel discovery routes surface deep value, durable sell-offs, recoveries, quality growth, compounder resets, capital-allocation opportunities and sector-specific financial businesses. The institutional engine validates each thesis, while incomplete companies remain visible with clear coverage diagnostics instead of disappearing from the queue."
       />
-      <OpportunityRadarInstitutionalView
+      <OpportunityRadarDiscoveryView
         workspace={workspace}
         institutionalWorkspace={institutionalWorkspace}
         regime={regime}
