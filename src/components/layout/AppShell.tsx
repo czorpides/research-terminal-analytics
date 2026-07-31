@@ -39,11 +39,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen w-full bg-background text-foreground">
         <aside
           className={cn(
-            "hidden md:flex shrink-0 flex-col border-r border-border/70 bg-sidebar sticky top-0 h-screen transition-[width] duration-200",
-            collapsed ? "w-12" : "w-60",
+            "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border/70 bg-sidebar transition-[width] duration-200 md:flex",
+            collapsed ? "w-12" : "w-64",
           )}
         >
-          <div className="flex h-12 items-center gap-2 border-b border-border/70 px-3">
+          <div className="flex h-14 items-center gap-2 border-b border-border/70 px-3.5">
             <div className="h-2 w-2 rounded-full bg-[var(--primary)] shadow-[0_0_8px_var(--primary)]" />
             {!collapsed && (
               <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -51,7 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             )}
           </div>
-          <nav className="flex-1 overflow-y-auto p-1.5">
+          <nav className="flex-1 overflow-y-auto p-2">
             {collapsed ? (
               <CollapsedNav pathname={pathname} />
             ) : (
@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </nav>
           {!collapsed && (
-            <div className="border-t border-border/70 p-2 font-mono text-[10px] text-muted-foreground">
+            <div className="border-t border-border/70 p-3 font-mono text-[10px] leading-5 text-muted-foreground">
               <div>Stage 1 · Quant upgrade</div>
               <div className="text-[var(--positive)]">Session active</div>
             </div>
@@ -69,12 +69,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border/70 bg-background/95 backdrop-blur px-4">
+          <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border/70 bg-background/95 px-4 backdrop-blur sm:px-5">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setCollapsed((c) => !c)}
-                className="hidden md:inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
+                className="hidden h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground md:inline-flex"
                 aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               >
@@ -84,10 +84,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <PanelLeftClose className="h-4 w-4" />
                 )}
               </button>
-              <div className="md:hidden font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground md:hidden">
                 Research Terminal
               </div>
-              <div className="hidden md:flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="hidden items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground md:flex">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--positive)]" />
                 <span>system online</span>
                 <span>·</span>
@@ -100,7 +100,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </header>
           <MobileNav pathname={pathname} />
-          <main className="min-w-0 flex-1 p-4">{children}</main>
+          <main className="min-w-0 flex-1 p-3 sm:p-5 lg:p-6 xl:p-8">
+            <div className="mx-auto w-full max-w-[1920px]">{children}</div>
+          </main>
         </div>
       </div>
     </TooltipProvider>
@@ -112,9 +114,6 @@ function isRouteActive(pathname: string, routePath: string): boolean {
   if (pathname === routePath) return true;
   if (!pathname.startsWith(`${routePath}/`)) return false;
 
-  // Keep a section landing page from appearing active alongside a more
-  // specific registered child route. Dynamic deep dives, such as /security/X,
-  // still leave their section item active.
   return !ROUTES.some(
     (candidate) =>
       candidate.path !== routePath &&
@@ -126,7 +125,7 @@ function isRouteActive(pathname: string, routePath: string): boolean {
 function MobileNav({ pathname }: { pathname: string }) {
   const activeOnly = ROUTES.filter((r) => r.status === "active");
   return (
-    <nav className="flex md:hidden overflow-x-auto border-b border-border/70 bg-sidebar">
+    <nav className="flex overflow-x-auto border-b border-border/70 bg-sidebar md:hidden">
       {activeOnly.map((item) => {
         const active = isRouteActive(pathname, item.path);
         return (
@@ -134,7 +133,7 @@ function MobileNav({ pathname }: { pathname: string }) {
             key={item.path}
             to={item.path}
             className={cn(
-              "shrink-0 px-3 py-2 font-mono text-[10px] uppercase tracking-wider",
+              "shrink-0 px-3 py-2.5 font-mono text-[10px] uppercase tracking-wider",
               active ? "border-b border-[var(--primary)] text-foreground" : "text-muted-foreground",
             )}
           >
@@ -147,8 +146,6 @@ function MobileNav({ pathname }: { pathname: string }) {
 }
 
 function CollapsedNav({ pathname }: { pathname: string }) {
-  // Icon-only rail. Only real (active) routes are clickable; others show
-  // as dimmed icons with a tooltip explaining status.
   return (
     <div className="flex flex-col items-center gap-0.5">
       {ROUTES.map((r) => {
@@ -204,8 +201,8 @@ function NavGroupSection({
   }, [containsActive]);
   const GroupIcon = group.icon;
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="mb-1">
-      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-muted-foreground hover:bg-sidebar-accent/40 hover:text-foreground">
+    <Collapsible open={open} onOpenChange={setOpen} className="mb-1.5">
+      <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-muted-foreground hover:bg-sidebar-accent/40 hover:text-foreground">
         <ChevronRight className={cn("h-3 w-3 transition-transform", open && "rotate-90")} />
         <GroupIcon className="h-3.5 w-3.5" />
         <span className="flex-1 text-left font-mono text-[10px] uppercase tracking-[0.15em]">
@@ -247,7 +244,7 @@ function NavItem({ r, pathname }: { r: RouteEntry; pathname: string }) {
   const inner = (
     <div
       className={cn(
-        "group flex items-center gap-2 rounded-sm px-2 py-1 text-[12px] transition-colors",
+        "group flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] leading-5 transition-colors",
         active
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : dim
@@ -280,7 +277,6 @@ function NavItem({ r, pathname }: { r: RouteEntry; pathname: string }) {
 }
 
 function ClientClock() {
-  // Render server-safe placeholder; real clock hydrates client-side.
   if (typeof window === "undefined") return <span>—</span>;
   const t = new Date();
   return (
@@ -316,7 +312,7 @@ function AccountMenu() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-sidebar font-mono text-[10px] text-foreground hover:border-[var(--primary)]"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-sidebar font-mono text-[10px] text-foreground hover:border-[var(--primary)]"
           aria-label="Account menu"
         >
           {initial}
