@@ -15,12 +15,16 @@ export interface PriorityEvidenceRefreshResult {
   fundamentals: {
     status: string;
     rowsInserted: number;
-    statementStatus?: string;
-    statementReason?: string;
+    filingsInserted?: number;
+    factsInserted?: number;
+    reason?: string;
     error?: string;
   };
   scores: {
     ok: boolean;
+    assetsEvaluated?: number;
+    fundamentalsScored?: number;
+    rowsInserted?: number;
     error?: string;
   };
 }
@@ -42,11 +46,11 @@ export const refreshPriorityOpportunityEvidence = createServerFn({ method: "POST
     const priceResult = await runEquityIngest(symbol);
     const fundamentalResult = await runFundamentalsIngest(symbol);
 
-    let scores: PriorityEvidenceRefreshResult["scores"] = { ok: true };
+    let scores: PriorityEvidenceRefreshResult["scores"];
     try {
       const { runFundamentalScoresForAllAssets } = await import("@/lib/scoring/run.server");
       const result = await runFundamentalScoresForAllAssets();
-      scores = result.ok ? { ok: true } : { ok: false, error: result.error };
+      scores = { ok: true, ...result };
     } catch (error) {
       scores = { ok: false, error: (error as Error).message };
     }
@@ -61,8 +65,9 @@ export const refreshPriorityOpportunityEvidence = createServerFn({ method: "POST
       fundamentals: {
         status: fundamentalResult.status,
         rowsInserted: fundamentalResult.rowsInserted,
-        statementStatus: fundamentalResult.statements?.status,
-        statementReason: fundamentalResult.statements?.reason,
+        filingsInserted: fundamentalResult.filingsInserted,
+        factsInserted: fundamentalResult.factsInserted,
+        reason: fundamentalResult.reason,
         error: fundamentalResult.error,
       },
       scores,
