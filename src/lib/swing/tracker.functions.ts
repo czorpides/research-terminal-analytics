@@ -52,7 +52,7 @@ interface SetupRow {
   atr14: number | null;
   horizon_sessions: number;
   components: SwingComponents;
-  metrics: Record<string, unknown>;
+  metrics: SwingTradeCandidate["metrics"];
   reasons: string[];
   risks: string[];
   outcome_status: SwingOutcomeStatus;
@@ -132,7 +132,7 @@ export interface SwingTrackerRow {
   latestObservedPrice: number | null;
   latestObservedAt: string | null;
   components: SwingComponents;
-  metrics: Record<string, unknown>;
+  metrics: SwingTradeCandidate["metrics"];
 }
 
 export interface SwingPatternStat {
