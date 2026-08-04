@@ -6,6 +6,7 @@ import {
   type SwingBar,
   type SwingTradeCandidate,
 } from "./model";
+import type { SwingExpectationSignal } from "./expectations";
 
 const MAX_UNIVERSE = 3_000;
 const DEEP_SCAN_CAP = 160;
@@ -61,6 +62,7 @@ export interface SwingWorkspaceCandidate {
   industryName: string | null;
   priceAsOf: string;
   trade: SwingTradeCandidate;
+  expectations: SwingExpectationSignal | null;
 }
 
 export interface SwingTradesWorkspace {
@@ -182,6 +184,16 @@ export const getSwingTradesWorkspace = createServerFn({ method: "GET" }).handler
       ]),
     );
 
+    let expectationSignals: Record<string, SwingExpectationSignal> = {};
+    try {
+      const { loadExpectationSignalsForAssets } = await import("./expectations.functions");
+      expectationSignals = await loadExpectationSignalsForAssets(selectedAssetIds);
+    } catch {
+      // Expectations are additive. A missing migration/provider must never stop
+      // the core deterministic Swing scan from loading.
+      expectationSignals = {};
+    }
+
     const candidates: SwingWorkspaceCandidate[] = [];
     for (const asset of selectedAssets) {
       const bars = barsByAsset.get(asset.id) ?? [];
@@ -212,6 +224,29 @@ export const getSwingTradesWorkspace = createServerFn({ method: "GET" }).handler
         trade.risks.push(`Price data is stale at ${Math.floor(ageDays)} days old.`);
         trade.highConviction = false;
       }
+
+      const expectations = expectationSignals[asset.id] ?? null;
+      if (expectations) {
+        Object.assign(trade.metrics as unknown as Record<string, unknown>, {
+          expectationsAdjustment: expectations.adjustment,
+          expectationsScore: expectations.score,
+          expectationsConfidence: expectations.confidence,
+          expectationsFreshness: expectations.freshness,
+          expectationsStrongPositive: expectations.strongPositive,
+          expectationsBlockHighConviction: expectations.blockHighConviction,
+          expectationsLastVerifiedAt: expectations.lastVerifiedAt,
+        });
+        if (expectations.strongPositive) {
+          trade.reasons.unshift(
+            `Analyst expectations are strengthening (${expectations.adjustment >= 0 ? "+" : ""}${expectations.adjustment.toFixed(1)} conviction points).`,
+          );
+        }
+        if (expectations.blockHighConviction) {
+          trade.risks.unshift("Analyst expectations show a material negative revision and block High Conviction in the expectation layer.");
+          trade.highConviction = false;
+        }
+      }
+
       const countryCode = asset.country_id
         ? countries.get(asset.country_id) ?? inferCountry(asset.exchange)
         : inferCountry(asset.exchange);
@@ -227,11 +262,13 @@ export const getSwingTradesWorkspace = createServerFn({ method: "GET" }).handler
         industryName: industry?.name ?? null,
         priceAsOf: latest.date,
         trade,
+        expectations,
       });
     }
 
     candidates.sort((left, right) =>
       Number(right.trade.highConviction) - Number(left.trade.highConviction) ||
+      expectationRank(right) - expectationRank(left) ||
       right.trade.setupScore - left.trade.setupScore ||
       (right.trade.geometry?.rewardRisk ?? 0) - (left.trade.geometry?.rewardRisk ?? 0),
     );
@@ -253,15 +290,19 @@ export const getSwingTradesWorkspace = createServerFn({ method: "GET" }).handler
       },
       candidates: candidates.slice(0, 100),
       methodology:
-        "The full active equity universe is first screened through several independent technical and recovery routes using existing platform scores. Up to 160 diverse candidates then receive a 90-session OHLCV analysis covering RSI, short-term momentum, support/resistance, relative volume, ATR, volatility behaviour, confirmation and explicit reward/risk geometry.",
+        "The full active equity universe is first screened through several independent technical and recovery routes using existing platform scores. Up to 160 diverse candidates then receive a 90-session OHLCV analysis covering RSI, short-term momentum, support/resistance, relative volume, ATR, volatility behaviour, confirmation and explicit reward/risk geometry. Validated analyst expectation revisions are a separate capped conviction overlay and never rewrite the raw Setup Score.",
       calibration: {
         status: "not_calibrated",
         note:
-          "Setup Score is a deterministic evidence score, not a claimed probability of profit. A point-in-time historical calibration layer is required before the platform can attach observed win rates to score bands.",
+          "Setup Score is a deterministic evidence score, not a claimed probability of profit. Point-in-time outcome and analyst-expectation vintages are retained so the ranking overlays can be calibrated without hindsight bias.",
       },
     };
   },
 );
+
+function expectationRank(candidate: SwingWorkspaceCandidate): number {
+  return candidate.trade.setupScore + (candidate.expectations?.adjustment ?? 0);
+}
 
 function selectDeepScan(
   assets: AssetRow[],

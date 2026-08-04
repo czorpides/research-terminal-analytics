@@ -5,6 +5,7 @@ export type DataCategory =
   | "price_intraday"
   | "fundamentals"
   | "earnings"
+  | "analyst_expectations"
   | "news"
   | "commodity"
   | "fx"
@@ -17,16 +18,17 @@ export interface FreshnessPolicy {
 }
 
 export const DEFAULT_FRESHNESS: Record<DataCategory, FreshnessPolicy> = {
-  macro_release:    { maxAgeSeconds: 60 * 60 * 24 * 7,   warnAgeSeconds: 60 * 60 * 24 * 2 },
-  price_daily:      { maxAgeSeconds: 60 * 60 * 24 * 2,   warnAgeSeconds: 60 * 60 * 24 },
-  price_intraday:   { maxAgeSeconds: 60 * 10,            warnAgeSeconds: 60 * 2 },
-  fundamentals:     { maxAgeSeconds: 60 * 60 * 24 * 100, warnAgeSeconds: 60 * 60 * 24 * 45 },
-  earnings:         { maxAgeSeconds: 60 * 60 * 24 * 2,   warnAgeSeconds: 60 * 60 * 12 },
-  news:             { maxAgeSeconds: 60 * 60 * 6,        warnAgeSeconds: 60 * 60 },
-  commodity:        { maxAgeSeconds: 60 * 60 * 6,        warnAgeSeconds: 60 * 60 },
-  fx:               { maxAgeSeconds: 60 * 10,            warnAgeSeconds: 60 * 2 },
-  alt_data:         { maxAgeSeconds: 60 * 60 * 24 * 3,   warnAgeSeconds: 60 * 60 * 24 },
-  corporate_action: { maxAgeSeconds: 60 * 60 * 24 * 3,   warnAgeSeconds: 60 * 60 * 12 },
+  macro_release:        { maxAgeSeconds: 60 * 60 * 24 * 7,   warnAgeSeconds: 60 * 60 * 24 * 2 },
+  price_daily:          { maxAgeSeconds: 60 * 60 * 24 * 2,   warnAgeSeconds: 60 * 60 * 24 },
+  price_intraday:       { maxAgeSeconds: 60 * 10,            warnAgeSeconds: 60 * 2 },
+  fundamentals:         { maxAgeSeconds: 60 * 60 * 24 * 100, warnAgeSeconds: 60 * 60 * 24 * 45 },
+  earnings:             { maxAgeSeconds: 60 * 60 * 24 * 2,   warnAgeSeconds: 60 * 60 * 12 },
+  analyst_expectations: { maxAgeSeconds: 60 * 60 * 24,       warnAgeSeconds: 60 * 60 * 6 },
+  news:                 { maxAgeSeconds: 60 * 60 * 6,        warnAgeSeconds: 60 * 60 },
+  commodity:            { maxAgeSeconds: 60 * 60 * 6,        warnAgeSeconds: 60 * 60 },
+  fx:                   { maxAgeSeconds: 60 * 10,            warnAgeSeconds: 60 * 2 },
+  alt_data:             { maxAgeSeconds: 60 * 60 * 24 * 3,   warnAgeSeconds: 60 * 60 * 24 },
+  corporate_action:     { maxAgeSeconds: 60 * 60 * 24 * 3,   warnAgeSeconds: 60 * 60 * 12 },
 };
 
 export type FreshnessState = "fresh" | "warn" | "stale";

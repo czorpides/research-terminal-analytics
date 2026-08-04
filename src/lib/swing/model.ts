@@ -746,7 +746,9 @@ function finalizeDraft(draft: SetupDraft, metrics: Metrics): SwingTradeCandidate
 function qualifiesHighConviction(candidate: SwingTradeCandidate): boolean {
   const disqualifyingRisk = candidate.risks.some((risk) => {
     const value = risk.toLowerCase();
-    return value.includes("within 3 days") || value.includes("price data is stale");
+    return value.includes("within 3 days") ||
+      value.includes("price data is stale") ||
+      value.includes("block high conviction");
   });
   return candidate.setupScore >= 80 &&
     candidate.status === "confirmed" &&

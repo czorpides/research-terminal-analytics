@@ -6,11 +6,13 @@ import { Crosshair, Radar as RadarIcon } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { OpportunityRadarDiscoveryView } from "@/components/research/OpportunityRadarDiscoveryView";
+import { SwingExpectationsPanel } from "@/components/research/SwingExpectationsPanel";
 import { SwingTradesIntegratedView } from "@/components/research/SwingTradesIntegratedView";
 import { Button } from "@/components/ui/button";
 import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
+import { getSwingExpectationsWorkspace } from "@/lib/swing/expectations.functions";
 import { refreshSwingTradesNow } from "@/lib/swing/refresh.functions";
 import { getSwingTrackerWorkspace } from "@/lib/swing/tracker.functions";
 import { getSwingTradesWorkspace } from "@/lib/swing/workspace.functions";
@@ -40,7 +42,7 @@ const regimeQueryOptions = queryOptions({
 });
 
 const swingQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "swing-trades-v3-integrated"],
+  queryKey: ["opportunity-radar", "swing-trades-v4-expectations"],
   queryFn: () => getSwingTradesWorkspace(),
   staleTime: 5 * 60 * 1000,
   refetchInterval: 5 * 60 * 1000,
@@ -50,6 +52,15 @@ const swingQueryOptions = queryOptions({
 const trackerQueryOptions = queryOptions({
   queryKey: ["opportunity-radar", "swing-outcomes-v2-integrated"],
   queryFn: () => getSwingTrackerWorkspace(),
+  staleTime: 5 * 60 * 1000,
+  refetchInterval: 5 * 60 * 1000,
+  refetchOnWindowFocus: true,
+  retry: false,
+});
+
+const expectationsQueryOptions = queryOptions({
+  queryKey: ["opportunity-radar", "swing-expectations-v1"],
+  queryFn: () => getSwingExpectationsWorkspace(),
   staleTime: 5 * 60 * 1000,
   refetchInterval: 5 * 60 * 1000,
   refetchOnWindowFocus: true,
@@ -85,6 +96,7 @@ function Radar() {
   const { data: regime } = useSuspenseQuery(regimeQueryOptions);
   const swingQuery = useQuery({ ...swingQueryOptions, enabled: view === "swing" });
   const trackerQuery = useQuery({ ...trackerQueryOptions, enabled: view === "swing" });
+  const expectationsQuery = useQuery({ ...expectationsQueryOptions, enabled: view === "swing" });
 
   async function handleSwingRefresh() {
     if (refreshing) return;
@@ -96,28 +108,25 @@ function Radar() {
     } catch (error) {
       setRefreshError(error instanceof Error ? error.message : String(error));
     } finally {
-      await Promise.allSettled([swingQuery.refetch(), trackerQuery.refetch()]);
+      await Promise.allSettled([
+        swingQuery.refetch(),
+        trackerQuery.refetch(),
+        expectationsQuery.refetch(),
+      ]);
       setRefreshing(false);
     }
   }
 
-  const trackerError = trackerQuery.error
-    ? trackerQuery.error instanceof Error
-      ? trackerQuery.error.message
-      : String(trackerQuery.error)
-    : null;
-  const swingError = swingQuery.error
-    ? swingQuery.error instanceof Error
-      ? swingQuery.error.message
-      : String(swingQuery.error)
-    : null;
+  const trackerError = errorText(trackerQuery.error);
+  const swingError = errorText(swingQuery.error);
+  const expectationsError = errorText(expectationsQuery.error);
 
   return (
     <AppShell>
       <SectionHeader
         code="OR · Opportunity Radar"
         title="Find the opportunity, then decide whether the timing is right"
-        purpose="The long-term Opportunity Radar ranks investable research theses. Swing Trades remains a separate timing tab, now with its outcome tracker, freshness controls and empirical learning built directly into the setup workflow."
+        purpose="The long-term Opportunity Radar ranks investable research theses. Swing Trades remains a separate timing tab, now with point-in-time outcome tracking, analyst expectation revisions, freshness controls and auditable empirical learning."
       />
 
       <div className="mb-5 flex flex-wrap gap-2 rounded-xl border border-border/70 bg-card/55 p-2">
@@ -144,16 +153,24 @@ function Radar() {
           regime={regime}
         />
       ) : swingQuery.data ? (
-        <SwingTradesIntegratedView
-          workspace={swingQuery.data}
-          regime={regime}
-          tracker={trackerQuery.data ?? null}
-          trackerLoading={trackerQuery.isPending}
-          trackerError={trackerError}
-          refreshing={refreshing}
-          refreshError={refreshError}
-          onRefresh={handleSwingRefresh}
-        />
+        <>
+          <SwingTradesIntegratedView
+            workspace={swingQuery.data}
+            regime={regime}
+            tracker={trackerQuery.data ?? null}
+            trackerLoading={trackerQuery.isPending}
+            trackerError={trackerError}
+            refreshing={refreshing}
+            refreshError={refreshError}
+            onRefresh={handleSwingRefresh}
+          />
+          <SwingExpectationsPanel
+            workspace={swingQuery.data}
+            expectations={expectationsQuery.data ?? null}
+            loading={expectationsQuery.isPending}
+            error={expectationsError}
+          />
+        </>
       ) : swingError ? (
         <div className="rounded-xl border border-red-500/30 bg-red-500/[0.05] p-6 text-sm">
           <div className="font-semibold text-red-600">The Swing Trade scan could not load.</div>
@@ -166,4 +183,9 @@ function Radar() {
       )}
     </AppShell>
   );
+}
+
+function errorText(error: unknown): string | null {
+  if (!error) return null;
+  return error instanceof Error ? error.message : String(error);
 }

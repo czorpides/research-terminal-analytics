@@ -19,6 +19,8 @@ export interface SwingLearningPattern {
 
 export interface SwingEmpiricalOverlay {
   adjustment: number;
+  expectationsAdjustment: number;
+  totalAdjustment: number;
   rankScore: number;
   matchedPatterns: string[];
   evidenceCount: number;
@@ -27,27 +29,34 @@ export interface SwingEmpiricalOverlay {
 
 const PRIOR_STRENGTH = 30;
 const MAX_ADJUSTMENT = 5;
+const MAX_EXPECTATIONS_ADJUSTMENT = 7;
 
 /**
  * Converts validated historical pattern evidence into a deliberately small
- * ranking overlay. It does not rewrite the raw technical score. Hit rates are
- * shrunk toward the overall baseline so a 30-trade pattern cannot dominate the
- * model after a lucky streak.
+ * ranking overlay. It does not rewrite the raw technical score. A separately
+ * validated analyst-expectation overlay may also contribute to the ranking,
+ * but remains visible and capped independently from the empirical outcome
+ * adjustment.
  */
 export function empiricalOverlayForSignal(
   signal: SwingLearningSignal,
   patterns: SwingLearningPattern[],
   baselineHitRate: number | null,
 ): SwingEmpiricalOverlay {
+  const expectationsAdjustment = round(
+    clamp(finite(signal.metrics.expectationsAdjustment) ?? 0, -MAX_EXPECTATIONS_ADJUSTMENT, MAX_EXPECTATIONS_ADJUSTMENT),
+    2,
+  );
+
   if (baselineHitRate === null || !Number.isFinite(baselineHitRate)) {
-    return emptyOverlay(signal.setupScore);
+    return emptyOverlay(signal.setupScore, expectationsAdjustment);
   }
 
   const keys = new Set(conditionKeysForSignal(signal));
   const matched = patterns.filter(
     (pattern) => pattern.validated && pattern.sampleSize >= 30 && keys.has(pattern.key),
   );
-  if (!matched.length) return emptyOverlay(signal.setupScore);
+  if (!matched.length) return emptyOverlay(signal.setupScore, expectationsAdjustment);
 
   const baseline = clamp(baselineHitRate, 1, 99);
   const deltas = matched.map((pattern) => {
@@ -59,11 +68,14 @@ export function empiricalOverlayForSignal(
   });
   const meanDelta = deltas.reduce((sum, value) => sum + value, 0) / deltas.length;
   // Roughly 5 percentage points of conservatively-smoothed hit-rate advantage
-  // is worth one ranking point. The overlay can never exceed +/-5 points.
+  // is worth one ranking point. The empirical overlay can never exceed +/-5.
   const adjustment = round(clamp(meanDelta / 5, -MAX_ADJUSTMENT, MAX_ADJUSTMENT), 2);
+  const totalAdjustment = round(adjustment + expectationsAdjustment, 2);
   return {
     adjustment,
-    rankScore: round(signal.setupScore + adjustment, 2),
+    expectationsAdjustment,
+    totalAdjustment,
+    rankScore: round(clamp(signal.setupScore + totalAdjustment, 0, 100), 2),
     matchedPatterns: matched.map((pattern) => pattern.label),
     evidenceCount: matched.length,
     active: true,
@@ -85,10 +97,12 @@ export function conditionKeysForSignal(signal: SwingLearningSignal): string[] {
   return keys;
 }
 
-function emptyOverlay(score: number): SwingEmpiricalOverlay {
+function emptyOverlay(score: number, expectationsAdjustment: number): SwingEmpiricalOverlay {
   return {
     adjustment: 0,
-    rankScore: score,
+    expectationsAdjustment,
+    totalAdjustment: expectationsAdjustment,
+    rankScore: round(clamp(score + expectationsAdjustment, 0, 100), 2),
     matchedPatterns: [],
     evidenceCount: 0,
     active: false,
