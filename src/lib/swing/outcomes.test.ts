@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateSwingOutcome, type SwingOutcomeBar } from "./outcomes";
+import { evaluateSwingOutcome, type SwingOutcomeBar } from "./outcomes.ts";
 
 const setup = {
   signalDate: "2026-01-02",
