@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const MINIMUM_MANAGED_EQUITIES = 2_400;
+import type {
+  EquityUniverseSyncOptions,
+  EquityUniverseSyncResult,
+} from "@/lib/ingestion/equities/universe.server";
+
+const TARGET_MANAGED_EQUITIES = 3_000;
+const MINIMUM_MANAGED_EQUITIES = 2_950;
 
 /**
  * Equity ingestion endpoint. The historical `/ingest/stooq` route now manages
@@ -29,12 +35,9 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
           }
 
           if (syncUniverse) {
-            const { syncManagedEquityUniverse } = await import(
-              "@/lib/ingestion/equities/universe.server"
-            );
             return Response.json(
-              await syncManagedEquityUniverse({
-                limit: integerParam(url, "limit"),
+              await syncUniverseWithFallback({
+                limit: integerParam(url, "limit") ?? TARGET_MANAGED_EQUITIES,
                 minMarketCap: numberParam(url, "minMarketCap"),
                 minPrice: numberParam(url, "minPrice"),
                 minVolume: numberParam(url, "minVolume"),
@@ -64,15 +67,17 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
 });
 
 async function ensureManagedUniverse(): Promise<
-  | { status: "not_needed"; activeEquities: number }
+  | { status: "not_needed"; activeEquities: number; target: number }
   | {
       status: "success";
       activeEquitiesBefore: number;
+      target: number;
       upserted: number;
       deactivated: number;
       selectedByMarket: Record<string, number>;
+      warnings: string[];
     }
-  | { status: "failed"; activeEquities: number; error: string }
+  | { status: "failed"; activeEquities: number; target: number; error: string }
 > {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { count, error } = await supabaseAdmin
@@ -84,27 +89,76 @@ async function ensureManagedUniverse(): Promise<
 
   const activeEquities = count ?? 0;
   if (activeEquities >= MINIMUM_MANAGED_EQUITIES) {
-    return { status: "not_needed", activeEquities };
+    return { status: "not_needed", activeEquities, target: TARGET_MANAGED_EQUITIES };
   }
 
   try {
-    const { syncManagedEquityUniverse } = await import(
-      "@/lib/ingestion/equities/universe.server"
-    );
-    const result = await syncManagedEquityUniverse({ limit: 3_000 });
+    const result = await syncUniverseWithFallback({
+      limit: TARGET_MANAGED_EQUITIES,
+      markets: ["US", "UK", "EU"],
+    });
     return {
       status: "success",
       activeEquitiesBefore: activeEquities,
+      target: TARGET_MANAGED_EQUITIES,
       upserted: result.upserted,
       deactivated: result.deactivated,
       selectedByMarket: result.selectedByMarket,
+      warnings: result.warnings,
     };
   } catch (error) {
     return {
       status: "failed",
       activeEquities,
+      target: TARGET_MANAGED_EQUITIES,
       error: (error as Error).message,
     };
+  }
+}
+
+async function syncUniverseWithFallback(
+  options: EquityUniverseSyncOptions,
+): Promise<EquityUniverseSyncResult> {
+  const { syncManagedEquityUniverse } = await import(
+    "@/lib/ingestion/equities/universe.server"
+  );
+
+  try {
+    return await syncManagedEquityUniverse(options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const markets = (options.markets ?? ["US", "UK", "EU"])
+      .map((market) => market.trim().toUpperCase())
+      .filter(Boolean);
+    const canFallbackToUs =
+      !options.exchanges?.length &&
+      markets.includes("US") &&
+      markets.some((market) => market !== "US") &&
+      !message.includes("(429)") &&
+      !message.includes("authentication failed");
+
+    if (!canFallbackToUs) throw error;
+
+    try {
+      const fallback = await syncManagedEquityUniverse({
+        ...options,
+        markets: ["US"],
+        exchanges: undefined,
+      });
+      return {
+        ...fallback,
+        warnings: [
+          `Global universe discovery failed; populated a US fallback universe instead: ${message}`,
+          ...fallback.warnings,
+        ],
+      };
+    } catch (fallbackError) {
+      const fallbackMessage =
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      throw new Error(
+        `Global universe bootstrap failed (${message}); US fallback also failed (${fallbackMessage})`,
+      );
+    }
   }
 }
 
