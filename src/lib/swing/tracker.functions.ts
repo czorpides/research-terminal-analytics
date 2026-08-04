@@ -16,6 +16,7 @@ import type {
 const TRACK_MIN_SCORE = 65;
 const OUTCOME_HORIZON = 40;
 const LIVE_QUOTE_CAP = 8;
+const MIN_PATTERN_SAMPLE = 30;
 const FMP_DAILY_LIMIT = 250;
 const TWELVE_DATA_DAILY_LIMIT = 800;
 const FMP_QUOTA_RESERVE = 60;
@@ -77,6 +78,21 @@ interface PriceRow {
   high: number | null;
   low: number | null;
   close: number | null;
+}
+
+interface AssetSymbolRow {
+  id: string;
+  symbol: string;
+}
+
+interface AssetInfoRow extends AssetSymbolRow {
+  name: string;
+}
+
+interface SnapshotRow {
+  setup_id: string;
+  observed_at: string;
+  price: number;
 }
 
 interface LiveQuote {
@@ -225,12 +241,12 @@ export async function refreshTrackedOutcomes(): Promise<number> {
   const setups = (setupData ?? []) as SetupRow[];
   if (!setups.length) return 0;
 
-  const assetIds = unique(setups.map((row) => row.asset_id));
+  const assetIds = unique(setups.map((setup) => setup.asset_id));
   const earliest = setups.reduce(
-    (value, row) => row.price_as_of < value ? row.price_as_of : value,
+    (value, setup) => setup.price_as_of < value ? setup.price_as_of : value,
     setups[0].price_as_of,
   );
-  const pricePages = await Promise.all(
+  const pages = await Promise.all(
     chunk(assetIds, 50).map((batch) =>
       db
         .from("prices_daily")
@@ -241,11 +257,10 @@ export async function refreshTrackedOutcomes(): Promise<number> {
         .limit(batch.length * 140),
     ),
   );
-  const priceError = pricePages.find((page: { error?: unknown }) => page.error)?.error;
-  if (priceError) throw priceError;
-  const barsByAsset = groupOutcomeBars(
-    pricePages.flatMap((page: { data?: unknown[] }) => page.data ?? []) as PriceRow[],
-  );
+  const pageError = pages.find((page: { error?: unknown }) => page.error)?.error;
+  if (pageError) throw pageError;
+  const priceRows = pages.flatMap((page: { data?: unknown[] }) => page.data ?? []) as PriceRow[];
+  const barsByAsset = groupOutcomeBars(priceRows);
 
   let updated = 0;
   for (const setup of setups) {
@@ -261,7 +276,7 @@ export async function refreshTrackedOutcomes(): Promise<number> {
       barsByAsset.get(setup.asset_id) ?? [],
     );
 
-    const update = {
+    const { error } = await db.from("swing_trade_setups").update({
       outcome_status: evaluation.status,
       target_behaviour: evaluation.targetBehaviour,
       sessions_observed: evaluation.sessionsObserved,
@@ -278,8 +293,7 @@ export async function refreshTrackedOutcomes(): Promise<number> {
       calibration_eligible: evaluation.calibrationEligible,
       last_evaluated_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    };
-    const { error } = await db.from("swing_trade_setups").update(update).eq("id", setup.id);
+    }).eq("id", setup.id);
     if (error) throw error;
     updated += 1;
   }
@@ -309,14 +323,14 @@ export async function runSwingIntradayMonitor(): Promise<{
     return { evaluated, quotesUpdated: 0, failures: [], providers: {}, asOf: new Date().toISOString() };
   }
 
-  const assetIds = unique(setups.map((row) => row.asset_id));
   const { data: assetData, error: assetError } = await db
     .from("assets")
     .select("id,symbol")
-    .in("id", assetIds);
+    .in("id", unique(setups.map((setup) => setup.asset_id)));
   if (assetError) throw assetError;
-  const symbols = new Map(
-    (assetData ?? []).map((row: { id: string; symbol: string }) => [String(row.id), String(row.symbol)]),
+  const assetRows = (assetData ?? []) as AssetSymbolRow[];
+  const symbols = new Map<string, string>(
+    assetRows.map((row): [string, string] => [String(row.id), String(row.symbol)]),
   );
 
   let quotesUpdated = 0;
@@ -328,7 +342,7 @@ export async function runSwingIntradayMonitor(): Promise<{
     try {
       const quote = await fetchLiveQuote(symbol);
       providers[quote.provider] = (providers[quote.provider] ?? 0) + 1;
-      await db.from("swing_trade_price_snapshots").insert({
+      const { error: snapshotError } = await db.from("swing_trade_price_snapshots").insert({
         setup_id: setup.id,
         asset_id: setup.asset_id,
         observed_at: quote.observedAt,
@@ -339,6 +353,7 @@ export async function runSwingIntradayMonitor(): Promise<{
         provider: quote.provider,
         source_kind: "intraday_quote",
       });
+      if (snapshotError) throw snapshotError;
       await applyIntradayQuote(setup, quote, db);
       quotesUpdated += 1;
     } catch (error) {
@@ -346,13 +361,7 @@ export async function runSwingIntradayMonitor(): Promise<{
     }
   }
 
-  return {
-    evaluated,
-    quotesUpdated,
-    failures,
-    providers,
-    asOf: new Date().toISOString(),
-  };
+  return { evaluated, quotesUpdated, failures, providers, asOf: new Date().toISOString() };
 }
 
 export const getSwingTrackerWorkspace = createServerFn({ method: "GET" }).handler(
@@ -368,8 +377,8 @@ export const getSwingTrackerWorkspace = createServerFn({ method: "GET" }).handle
     const setups = (setupData ?? []) as SetupRow[];
     if (!setups.length) return emptyTrackerWorkspace();
 
-    const assetIds = unique(setups.map((row) => row.asset_id));
-    const setupIds = setups.map((row) => row.id);
+    const assetIds = unique(setups.map((setup) => setup.asset_id));
+    const setupIds = setups.map((setup) => setup.id);
     const [assetResult, snapshotResult] = await Promise.all([
       db.from("assets").select("id,symbol,name").in("id", assetIds),
       db
@@ -382,67 +391,64 @@ export const getSwingTrackerWorkspace = createServerFn({ method: "GET" }).handle
     if (assetResult.error) throw assetResult.error;
     if (snapshotResult.error) throw snapshotResult.error;
 
-    const assets = new Map(
-      (assetResult.data ?? []).map((row: { id: string; symbol: string; name: string }) => [
+    const assetRows = (assetResult.data ?? []) as AssetInfoRow[];
+    const assets = new Map<string, { symbol: string; name: string }>(
+      assetRows.map((row): [string, { symbol: string; name: string }] => [
         String(row.id),
         { symbol: String(row.symbol), name: String(row.name) },
       ]),
     );
+    const snapshotRows = (snapshotResult.data ?? []) as SnapshotRow[];
     const latestSnapshots = new Map<string, { price: number; observedAt: string }>();
-    for (const row of snapshotResult.data ?? []) {
-      const setupId = String((row as { setup_id: string }).setup_id);
-      if (latestSnapshots.has(setupId)) continue;
-      latestSnapshots.set(setupId, {
-        price: Number((row as { price: number }).price),
-        observedAt: String((row as { observed_at: string }).observed_at),
+    for (const row of snapshotRows) {
+      if (latestSnapshots.has(row.setup_id)) continue;
+      latestSnapshots.set(row.setup_id, {
+        price: Number(row.price),
+        observedAt: String(row.observed_at),
       });
     }
 
-    const rows: SwingTrackerRow[] = setups.map((row) => {
-      const asset = assets.get(row.asset_id) ?? { symbol: "?", name: "Unknown security" };
-      const snapshot = latestSnapshots.get(row.id) ?? null;
+    const rows: SwingTrackerRow[] = setups.map((setup) => {
+      const asset = assets.get(setup.asset_id) ?? { symbol: "?", name: "Unknown security" };
+      const snapshot = latestSnapshots.get(setup.id) ?? null;
       return {
-        id: row.id,
-        assetId: row.asset_id,
+        id: setup.id,
+        assetId: setup.asset_id,
         symbol: asset.symbol,
         name: asset.name,
-        setupType: row.setup_type,
-        setupLabel: row.setup_label,
-        signalState: row.signal_state,
-        signalAt: row.signal_at,
-        priceAsOf: row.price_as_of,
-        setupScore: Number(row.setup_score),
-        highConviction: row.high_conviction,
-        entry: Number(row.entry_mid),
-        target: Number(row.target),
-        invalidation: Number(row.invalidation),
-        rewardRisk: Number(row.reward_risk),
-        outcomeStatus: row.outcome_status,
-        targetBehaviour: row.target_behaviour,
-        sessionsObserved: row.sessions_observed,
-        maxFavourablePct: finite(row.max_favourable_pct),
-        maxAdversePct: finite(row.max_adverse_pct),
-        targetOvershootPct: finite(row.target_overshoot_pct),
-        targetShortfallPct: finite(row.target_shortfall_pct),
-        latestReturnPct: finite(row.latest_return_pct),
+        setupType: setup.setup_type,
+        setupLabel: setup.setup_label,
+        signalState: setup.signal_state,
+        signalAt: setup.signal_at,
+        priceAsOf: setup.price_as_of,
+        setupScore: Number(setup.setup_score),
+        highConviction: setup.high_conviction,
+        entry: Number(setup.entry_mid),
+        target: Number(setup.target),
+        invalidation: Number(setup.invalidation),
+        rewardRisk: Number(setup.reward_risk),
+        outcomeStatus: setup.outcome_status,
+        targetBehaviour: setup.target_behaviour,
+        sessionsObserved: setup.sessions_observed,
+        maxFavourablePct: finite(setup.max_favourable_pct),
+        maxAdversePct: finite(setup.max_adverse_pct),
+        targetOvershootPct: finite(setup.target_overshoot_pct),
+        targetShortfallPct: finite(setup.target_shortfall_pct),
+        latestReturnPct: finite(setup.latest_return_pct),
         latestObservedPrice: snapshot?.price ?? null,
         latestObservedAt: snapshot?.observedAt ?? null,
-        components: row.components,
-        metrics: row.metrics,
+        components: setup.components,
+        metrics: setup.metrics,
       };
     });
 
     const eligible = rows.filter((row) =>
       ["target_hit", "stop_hit", "near_miss", "expired"].includes(row.outcomeStatus),
     );
-    const targetHits = rows.filter((row) => row.outcomeStatus === "target_hit").length;
-    const stopHits = rows.filter((row) => row.outcomeStatus === "stop_hit").length;
-    const nearMisses = rows.filter((row) => row.outcomeStatus === "near_miss").length;
-    const expired = rows.filter((row) => row.outcomeStatus === "expired").length;
-    const ambiguous = rows.filter((row) => row.outcomeStatus === "ambiguous_same_bar").length;
+    const targetHits = eligible.filter((row) => row.outcomeStatus === "target_hit").length;
     const patternStats = buildPatternStats(eligible);
-    const baselineHitRate = eligible.length ? round(targetHits / eligible.length * 100, 1) : null;
     const validated = patternStats.filter((pattern) => pattern.validated);
+    const baselineHitRate = eligible.length ? round(targetHits / eligible.length * 100, 1) : null;
     const latestObservedAt = [...latestSnapshots.values()]
       .map((snapshot) => snapshot.observedAt)
       .sort()
@@ -460,10 +466,10 @@ export const getSwingTrackerWorkspace = createServerFn({ method: "GET" }).handle
         active: rows.filter((row) => row.outcomeStatus === "active").length,
         resolvedEligible: eligible.length,
         targetHits,
-        stopHits,
-        nearMisses,
-        expired,
-        ambiguous,
+        stopHits: eligible.filter((row) => row.outcomeStatus === "stop_hit").length,
+        nearMisses: eligible.filter((row) => row.outcomeStatus === "near_miss").length,
+        expired: eligible.filter((row) => row.outcomeStatus === "expired").length,
+        ambiguous: rows.filter((row) => row.outcomeStatus === "ambiguous_same_bar").length,
         targetExceeded: rows.filter((row) => row.targetBehaviour === "exceeded").length,
       },
       performance: {
@@ -472,13 +478,13 @@ export const getSwingTrackerWorkspace = createServerFn({ method: "GET" }).handle
         averageMaxAdversePct: average(eligible.map((row) => row.maxAdversePct)),
       },
       learning: {
-        minimumSample: 30,
+        minimumSample: MIN_PATTERN_SAMPLE,
         status: validated.length ? "active" : "collecting",
         baselineHitRate,
         patterns: patternStats.slice(0, 12),
         note: validated.length
-          ? "Patterns with at least 30 resolved examples are now statistically eligible to influence future ranking. The raw technical model remains visible so the empirical layer can be audited separately."
-          : "The ledger is collecting point-in-time outcomes. Pattern-based ranking adjustments remain disabled until a condition has at least 30 resolved, non-ambiguous examples, which reduces the risk of learning from noise.",
+          ? "Patterns with at least 30 resolved examples are eligible for a separate empirical ranking overlay. The original technical score remains unchanged and auditable."
+          : "The ledger is collecting point-in-time outcomes. Empirical ranking remains disabled until a condition has at least 30 resolved, non-ambiguous examples, reducing the risk of learning from noise.",
       },
       rows,
     };
@@ -498,18 +504,17 @@ async function applyIntradayQuote(
   const targetHit = high >= setup.target;
   const stopHit = low <= setup.invalidation;
   const now = quote.observedAt;
-  const targetOvershootPct = Math.max(0, (high / setup.target - 1) * 100);
-  const targetShortfallPct = high < setup.target ? Math.max(0, (setup.target / high - 1) * 100) : 0;
+  const overshoot = Math.max(0, (high / setup.target - 1) * 100);
+  const shortfall = high < setup.target ? Math.max(0, (setup.target / high - 1) * 100) : 0;
   const maxPrice = setup.max_price === null ? high : Math.max(Number(setup.max_price), high);
   const minPrice = setup.min_price === null ? low : Math.min(Number(setup.min_price), low);
-
   const common = {
     max_price: maxPrice,
     min_price: minPrice,
     max_favourable_pct: (maxPrice / setup.entry_mid - 1) * 100,
     max_adverse_pct: (minPrice / setup.entry_mid - 1) * 100,
-    target_overshoot_pct: targetOvershootPct,
-    target_shortfall_pct: targetShortfallPct,
+    target_overshoot_pct: overshoot,
+    target_shortfall_pct: shortfall,
     latest_return_pct: (quote.price / setup.entry_mid - 1) * 100,
     last_evaluated_at: now,
     updated_at: now,
@@ -528,14 +533,14 @@ async function applyIntradayQuote(
     return;
   }
   if (targetHit) {
-    const exceedThreshold = Math.max(
+    const threshold = Math.max(
       1,
       setup.atr14 && setup.atr14 > 0 ? (setup.atr14 * 0.5 / setup.target) * 100 : 0,
     );
     await db.from("swing_trade_setups").update({
       ...common,
       outcome_status: "target_hit",
-      target_behaviour: targetOvershootPct >= exceedThreshold ? "exceeded" : "hit",
+      target_behaviour: overshoot >= threshold ? "exceeded" : "hit",
       target_hit_at: setup.target_hit_at ?? now,
       resolved_at: setup.resolved_at ?? now,
       calibration_eligible: true,
@@ -557,11 +562,11 @@ async function applyIntradayQuote(
 }
 
 async function fetchLiveQuote(symbol: string): Promise<LiveQuote> {
-  const fmpError = await tryFmpQuote(symbol);
-  if (fmpError.ok) return fmpError.quote;
+  const fmp = await tryFmpQuote(symbol);
+  if (fmp.ok) return fmp.quote;
   const twelve = await tryTwelveDataQuote(symbol);
   if (twelve.ok) return twelve.quote;
-  throw new Error(`No intraday quote available: FMP ${fmpError.error}; Twelve Data ${twelve.error}`);
+  throw new Error(`No intraday quote available: FMP ${fmp.error}; Twelve Data ${twelve.error}`);
 }
 
 async function tryFmpQuote(symbol: string): Promise<
@@ -689,7 +694,7 @@ function buildPatternStats(rows: SwingTrackerRow[]): SwingPatternStat[] {
       sampleSize: value.sampleSize,
       wins: value.wins,
       hitRate: round(value.wins / value.sampleSize * 100, 1),
-      validated: value.sampleSize >= 30,
+      validated: value.sampleSize >= MIN_PATTERN_SAMPLE,
     }))
     .sort((left, right) =>
       Number(right.validated) - Number(left.validated) ||
@@ -732,13 +737,9 @@ function emptyTrackerWorkspace(): SwingTrackerWorkspace {
       ambiguous: 0,
       targetExceeded: 0,
     },
-    performance: {
-      hitRate: null,
-      averageMaxFavourablePct: null,
-      averageMaxAdversePct: null,
-    },
+    performance: { hitRate: null, averageMaxFavourablePct: null, averageMaxAdversePct: null },
     learning: {
-      minimumSample: 30,
+      minimumSample: MIN_PATTERN_SAMPLE,
       status: "collecting",
       baselineHitRate: null,
       patterns: [],
@@ -750,10 +751,8 @@ function emptyTrackerWorkspace(): SwingTrackerWorkspace {
 
 async function looseDb() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  // The migration lands with this feature. Generated Supabase types are updated
-  // separately by the normal schema-generation workflow, so keep this boundary
-  // intentionally loose instead of pretending the new tables already exist in
-  // the checked-in generated file.
+  // The migration lands with this feature. Generated database types are updated by
+  // the normal schema-generation workflow after deployment.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return supabaseAdmin as any;
 }
