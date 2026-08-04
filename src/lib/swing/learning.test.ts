@@ -39,6 +39,7 @@ test("empirical overlay stays off before minimum sample", () => {
   );
   assert.equal(result.active, false);
   assert.equal(result.adjustment, 0);
+  assert.equal(result.expectationsAdjustment, 0);
   assert.equal(result.rankScore, 82);
 });
 
@@ -69,4 +70,18 @@ test("poor validated evidence can reduce ranking but is capped", () => {
   );
   assert.ok(result.adjustment < 0);
   assert.ok(result.adjustment >= -5);
+});
+
+test("fresh analyst expectations can move conviction rank even before empirical calibration", () => {
+  const withExpectations: SwingLearningSignal = {
+    ...signal,
+    metrics: { ...signal.metrics, expectationsAdjustment: 4.25 },
+  };
+  const result = empiricalOverlayForSignal(withExpectations, [], null);
+  assert.equal(result.active, false);
+  assert.equal(result.adjustment, 0);
+  assert.equal(result.expectationsAdjustment, 4.25);
+  assert.equal(result.totalAdjustment, 4.25);
+  assert.equal(result.rankScore, 86.25);
+  assert.equal(withExpectations.setupScore, 82);
 });
