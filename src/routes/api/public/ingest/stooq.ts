@@ -10,10 +10,8 @@ const MINIMUM_MANAGED_EQUITIES = 2_950;
 
 /**
  * Equity ingestion endpoint. The historical `/ingest/stooq` route now manages
- * a diversified US, UK and EU population, one ticker, a rotating price batch,
- * or the quota-aware intraday Swing Trade monitor.
- * A normal scheduled price call bootstraps the universe when coverage falls
- * materially below the 3,000-name target.
+ * the 3,000-name equity universe, bulk EOD refresh/backfill, one ticker, the
+ * fallback rotating per-symbol price batch, or the quota-aware Swing monitor.
  */
 export const Route = createFileRoute("/api/public/ingest/stooq")({
   server: {
@@ -27,11 +25,14 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
         const ticker = url.searchParams.get("ticker");
         const syncUniverse = url.searchParams.get("syncUniverse") === "1";
         const swingMonitor = url.searchParams.get("swingMonitor") === "1";
+        const bulkEod = url.searchParams.get("bulkEod") === "1";
+        const bulkBackfill = url.searchParams.get("bulkBackfill") === "1";
+        const refreshScreen = url.searchParams.get("refreshScreen") === "1";
 
         try {
           if (swingMonitor) {
             const { runScheduledSwingMonitor } = await import("@/lib/swing/monitor.server");
-            return Response.json(await runScheduledSwingMonitor());
+            return Response.json(await runScheduledSwingMonitor("scheduled"));
           }
 
           if (syncUniverse) {
@@ -45,6 +46,46 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
                 markets: csvParam(url, "markets"),
               }),
             );
+          }
+
+          if (bulkBackfill) {
+            const { runBulkEodBackfillBatch, refreshEquityTechnicalScreen } = await import(
+              "@/lib/ingestion/equities/bulk-eod.server"
+            );
+            const backfill = await runBulkEodBackfillBatch(integerParam(url, "limitDates") ?? 4);
+            const technicalScreenRows = backfill.insertedRows > 0
+              ? await refreshEquityTechnicalScreen()
+              : 0;
+            return Response.json({ ...backfill, technicalScreenRows });
+          }
+
+          if (bulkEod) {
+            const { runBulkEodIngest, refreshEquityTechnicalScreen } = await import(
+              "@/lib/ingestion/equities/bulk-eod.server"
+            );
+            const result = await runBulkEodIngest(dateParam(url, "date"));
+            if (result.status !== "failed") {
+              const technicalScreenRows = result.insertedRows > 0
+                ? await refreshEquityTechnicalScreen()
+                : 0;
+              return Response.json({ ...result, technicalScreenRows, fallback: null });
+            }
+
+            // Keep the old multi-provider path as a bounded safety net. It does
+            // not make the 3,000-name engine healthy by itself, so the runtime
+            // health gate will remain DEGRADED until bulk/full coverage returns.
+            const { runEquityIngestBatch } = await import("@/lib/ingestion/equities/ingest.server");
+            const fallback = await runEquityIngestBatch({
+              limit: integerParam(url, "fallbackLimit") ?? 250,
+            });
+            return Response.json({ ...result, fallback });
+          }
+
+          if (refreshScreen) {
+            const { refreshEquityTechnicalScreen } = await import(
+              "@/lib/ingestion/equities/bulk-eod.server"
+            );
+            return Response.json({ refreshed: await refreshEquityTechnicalScreen() });
           }
 
           const { runEquityIngest, runEquityIngestBatch } = await import(
@@ -181,4 +222,9 @@ function numberParam(url: URL, key: string): number | undefined {
 function integerParam(url: URL, key: string): number | undefined {
   const value = numberParam(url, key);
   return value === undefined ? undefined : Math.floor(value);
+}
+
+function dateParam(url: URL, key: string): string | undefined {
+  const value = url.searchParams.get(key)?.trim();
+  return value || undefined;
 }
