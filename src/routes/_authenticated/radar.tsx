@@ -6,6 +6,7 @@ import { Crosshair, Radar as RadarIcon } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { OpportunityRadarDiscoveryView } from "@/components/research/OpportunityRadarDiscoveryView";
+import { SwingOutcomesPanel } from "@/components/research/SwingOutcomesPanel";
 import { SwingTradesView } from "@/components/research/SwingTradesView";
 import { Button } from "@/components/ui/button";
 import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
@@ -38,10 +39,10 @@ const regimeQueryOptions = queryOptions({
 });
 
 const swingQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "swing-trades-v1"],
+  queryKey: ["opportunity-radar", "swing-trades-v2-intraday"],
   queryFn: () => getSwingTradesWorkspace(),
-  staleTime: 15 * 60 * 1000,
-  refetchInterval: 15 * 60 * 1000,
+  staleTime: 5 * 60 * 1000,
+  refetchInterval: 5 * 60 * 1000,
   refetchOnWindowFocus: true,
 });
 
@@ -104,7 +105,10 @@ function Radar() {
           regime={regime}
         />
       ) : swingQuery.data ? (
-        <SwingTradesView workspace={swingQuery.data} regime={regime} />
+        <>
+          <SwingTradesView workspace={swingQuery.data} regime={regime} />
+          <SwingOutcomesPanel />
+        </>
       ) : (
         <div className="rounded-xl border border-border/70 bg-card/55 p-8 text-center text-sm text-muted-foreground">
           Scanning the current equity universe for swing setups…
