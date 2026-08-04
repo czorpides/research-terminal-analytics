@@ -9,7 +9,7 @@ import {
 import type { SwingExpectationSignal } from "./expectations";
 
 const MAX_UNIVERSE = 3_000;
-const DEEP_SCAN_CAP = 160;
+const DEEP_SCAN_CAP = 200;
 const BAR_LOOKBACK = 90;
 
 type ScoreType = "momentum" | "trend" | "volatility" | "quality" | "valuation";
@@ -31,6 +31,22 @@ interface ScoreRow {
   confidence: number;
   inputs: Record<string, unknown>;
   computed_at: string;
+}
+
+interface TechnicalScreenRow {
+  asset_id: string;
+  as_of: string;
+  bars: number;
+  current_price: number | null;
+  return_5d_pct: number | null;
+  return_20d_pct: number | null;
+  ma20: number | null;
+  ma50: number | null;
+  high_90: number | null;
+  low_90: number | null;
+  latest_volume: number | null;
+  avg_volume_20: number | null;
+  relative_volume: number | null;
 }
 
 interface PriceRow {
@@ -104,22 +120,29 @@ export const getSwingTradesWorkspace = createServerFn({ method: "GET" }).handler
     if (!assets.length) return emptyWorkspace(activeEquities ?? 0);
 
     const assetIds = assets.map((asset) => asset.id);
-    const scorePages = await Promise.all(
-      chunk(assetIds, 75).map((batch) =>
-        supabaseAdmin
-          .from("latest_asset_scores")
-          .select("subject_id,score_type,value,confidence,inputs,computed_at")
-          .in("subject_id", batch)
-          .in("score_type", ["momentum", "trend", "volatility", "quality", "valuation"])
-          .limit(batch.length * 5),
+    const [scorePages, screenRows] = await Promise.all([
+      Promise.all(
+        chunk(assetIds, 75).map((batch) =>
+          supabaseAdmin
+            .from("latest_asset_scores")
+            .select("subject_id,score_type,value,confidence,inputs,computed_at")
+            .in("subject_id", batch)
+            .in("score_type", ["momentum", "trend", "volatility", "quality", "valuation"])
+            .limit(batch.length * 5),
+        ),
       ),
-    );
+      loadTechnicalScreen(assetIds),
+    ]);
     const scoreError = scorePages.find((page) => page.error)?.error;
     if (scoreError) throw scoreError;
     const scoreRows = scorePages.flatMap((page) => page.data ?? []) as unknown as ScoreRow[];
     const scores = scoreMap(scoreRows);
-    const selectedIds = selectDeepScan(assets, scores);
+    const technicalScreen = new Map(screenRows.map((row) => [row.asset_id, row]));
+    const selectedIds = selectDeepScan(assets, scores, technicalScreen);
     const selectedAssets = assets.filter((asset) => selectedIds.has(asset.id));
+    const scoreScreened = assets.filter((asset) =>
+      technicalScreen.has(asset.id) || hasTechnicalScore(scores.get(asset.id)),
+    ).length;
 
     const selectedAssetIds = selectedAssets.map((asset) => asset.id);
     const countryIds = unique(selectedAssets.map((asset) => asset.country_id).filter(isString));
@@ -283,14 +306,14 @@ export const getSwingTradesWorkspace = createServerFn({ method: "GET" }).handler
       modelVersion: SWING_MODEL_VERSION,
       universe: {
         activeEquities: activeEquities ?? assets.length,
-        scoreScreened: assets.length,
+        scoreScreened,
         deepScanned: selectedAssets.length,
         surfaced: candidates.length,
         cap: DEEP_SCAN_CAP,
       },
-      candidates: candidates.slice(0, 100),
+      candidates: candidates.slice(0, 120),
       methodology:
-        "The full active equity universe is first screened through several independent technical and recovery routes using existing platform scores. Up to 160 diverse candidates then receive a 90-session OHLCV analysis covering RSI, short-term momentum, support/resistance, relative volume, ATR, volatility behaviour, confirmation and explicit reward/risk geometry. Validated analyst expectation revisions are a separate capped conviction overlay and never rewrite the raw Setup Score.",
+        "The managed population is first screened from a cheap, database-native technical surface built from completed OHLCV across the full universe. That first pass uses recent returns, moving-average position, 90-session range location and relative volume, while existing quality/valuation evidence adds diversity where available. Up to 200 diverse candidates then receive the expensive 90-session Swing analysis covering RSI, momentum, support/resistance, relative volume, ATR, volatility behaviour, confirmation and reward/risk geometry. The broad screen nominates candidates only; it never rewrites the auditable Setup Score.",
       calibration: {
         status: "not_calibrated",
         note:
@@ -304,37 +327,91 @@ function expectationRank(candidate: SwingWorkspaceCandidate): number {
   return candidate.trade.setupScore + (candidate.expectations?.adjustment ?? 0);
 }
 
+async function loadTechnicalScreen(assetIds: string[]): Promise<TechnicalScreenRow[]> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // New migration table is intentionally read loosely until generated types
+    // are refreshed after deployment.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+    const pages = await Promise.all(
+      chunk(assetIds, 400).map((batch) =>
+        db
+          .from("equity_technical_screen")
+          .select("asset_id,as_of,bars,current_price,return_5d_pct,return_20d_pct,ma20,ma50,high_90,low_90,latest_volume,avg_volume_20,relative_volume")
+          .in("asset_id", batch)
+          .limit(batch.length),
+      ),
+    );
+    const pageError = pages.find((page: { error?: unknown }) => page.error)?.error;
+    if (pageError) return [];
+    return pages.flatMap((page: { data?: TechnicalScreenRow[] }) => page.data ?? []);
+  } catch {
+    return [];
+  }
+}
+
 function selectDeepScan(
   assets: AssetRow[],
   scores: Map<string, Partial<Record<ScoreType, ScoreRow>>>,
+  technicalScreen: Map<string, TechnicalScreenRow>,
 ): Set<string> {
   const rows = assets.map((asset) => {
     const bag = scores.get(asset.id) ?? {};
-    const momentum = finite(bag.momentum?.value);
-    const trend = finite(bag.trend?.value);
+    const screen = technicalScreen.get(asset.id) ?? null;
+    const oldMomentum = finite(bag.momentum?.value);
+    const oldTrend = finite(bag.trend?.value);
     const quality = finite(bag.quality?.value);
     const valuation = finite(bag.valuation?.value);
     const trendInputs = bag.trend?.inputs ?? {};
-    const current = finite(trendInputs.cur);
-    const high = finite(trendInputs.hi52);
+
+    const current = finite(screen?.current_price) ?? finite(trendInputs.cur);
+    const high = finite(screen?.high_90) ?? finite(trendInputs.hi52);
+    const low = finite(screen?.low_90);
+    const return5 = finite(screen?.return_5d_pct);
+    const return20 = finite(screen?.return_20d_pct);
+    const relativeVolume = finite(screen?.relative_volume);
+    const momentum = screen ? broadMomentumScore(return5, return20) : oldMomentum;
+    const trend = screen ? broadTrendScore(screen) : oldTrend;
     const drawdown = current !== null && high !== null && high > 0 ? current / high - 1 : null;
+    const rangeLocation = current !== null && high !== null && low !== null && high > low
+      ? (current - low) / (high - low)
+      : null;
     const technical = [momentum, trend].filter((value): value is number => value !== null);
     return {
       assetId: asset.id,
+      bars: screen?.bars ?? null,
       momentum,
       trend,
       quality,
       valuation,
       drawdown,
-      technicalMean: technical.length ? technical.reduce((sum, value) => sum + value, 0) / technical.length : null,
+      rangeLocation,
+      return5,
+      return20,
+      relativeVolume,
+      technicalMean: technical.length
+        ? technical.reduce((sum, value) => sum + value, 0) / technical.length
+        : null,
     };
-  }).filter((row) => row.technicalMean !== null || row.momentum !== null || row.trend !== null);
+  }).filter((row) =>
+    row.technicalMean !== null || row.return5 !== null || row.return20 !== null || row.relativeVolume !== null,
+  );
 
   const selected = new Set<string>();
-  addTop(selected, rows, (row) => row.technicalMean ?? -1, 48, true);
+  addTop(selected, rows, (row) => row.technicalMean ?? -1, 56, true);
   addTop(selected, rows, (row) => row.momentum ?? -1, 36, true);
-  addTop(selected, rows, (row) => row.trend ?? -1, 28, true);
-  addTop(selected, rows, (row) => row.technicalMean ?? 101, 24, false);
+  addTop(selected, rows, (row) => row.return20 ?? -999, 32, true);
+  addTop(selected, rows, (row) => row.return20 ?? 999, 28, false);
+  addTop(selected, rows, (row) => row.relativeVolume ?? -1, 32, true);
+  addTop(selected, rows, (row) => row.rangeLocation ?? -1, 28, true);
+  addTop(
+    selected,
+    rows.filter((row) => (row.return20 ?? 0) < 0 && (row.return5 ?? -999) > 0),
+    (row) => row.return5 ?? -999,
+    32,
+    true,
+  );
   addTop(
     selected,
     rows.filter((row) => (row.quality ?? 0) >= 50 || (row.valuation ?? 0) >= 55),
@@ -351,6 +428,45 @@ function selectDeepScan(
   );
 
   return new Set([...selected].slice(0, DEEP_SCAN_CAP));
+}
+
+function broadMomentumScore(return5: number | null, return20: number | null): number | null {
+  if (return5 === null && return20 === null) return null;
+  const raw = 50 + (return20 ?? 0) * 1.6 + (return5 ?? 0) * 1.2;
+  return clamp(raw, 0, 100);
+}
+
+function broadTrendScore(screen: TechnicalScreenRow): number | null {
+  const current = finite(screen.current_price);
+  if (current === null) return null;
+  const ma20 = finite(screen.ma20);
+  const ma50 = finite(screen.ma50);
+  const high90 = finite(screen.high_90);
+  let score = 50;
+  let evidence = 0;
+  if (ma20 !== null) {
+    score += current >= ma20 ? 14 : -14;
+    evidence += 1;
+  }
+  if (ma50 !== null) {
+    score += current >= ma50 ? 16 : -16;
+    evidence += 1;
+  }
+  if (ma20 !== null && ma50 !== null) {
+    score += ma20 >= ma50 ? 10 : -10;
+    evidence += 1;
+  }
+  if (high90 !== null && high90 > 0) {
+    const distance = current / high90 - 1;
+    if (distance >= -0.05) score += 10;
+    else if (distance <= -0.25) score -= 10;
+    evidence += 1;
+  }
+  return evidence ? clamp(score, 0, 100) : null;
+}
+
+function hasTechnicalScore(bag: Partial<Record<ScoreType, ScoreRow>> | undefined): boolean {
+  return Boolean(bag?.momentum || bag?.trend || bag?.volatility);
 }
 
 function addTop<T>(
@@ -458,7 +574,7 @@ function emptyWorkspace(activeEquities: number): SwingTradesWorkspace {
     modelVersion: SWING_MODEL_VERSION,
     universe: { activeEquities, scoreScreened: 0, deepScanned: 0, surfaced: 0, cap: DEEP_SCAN_CAP },
     candidates: [],
-    methodology: "No active scored equities are available yet.",
+    methodology: "No active screened equities are available yet.",
     calibration: {
       status: "not_calibrated",
       note: "Setup Score is not a probability of profit.",
@@ -468,8 +584,8 @@ function emptyWorkspace(activeEquities: number): SwingTradesWorkspace {
 
 function inferCountry(exchange: string | null): string {
   const value = (exchange ?? "").toUpperCase();
-  if (value.includes("LSE") || value.includes("LONDON")) return "UK";
-  if (["NASDAQ", "NYSE", "AMEX", "NYSE AMERICAN"].some((token) => value.includes(token))) return "US";
+  if (value.includes("LSE") || value.includes("LONDON") || value.includes("XLON")) return "UK";
+  if (["NASDAQ", "NYSE", "AMEX", "NYSE AMERICAN", "XNAS", "XNYS", "XASE"].some((token) => value.includes(token))) return "US";
   return "EU";
 }
 
@@ -491,4 +607,8 @@ function finite(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.max(low, Math.min(high, value));
 }
