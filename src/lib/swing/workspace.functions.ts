@@ -123,19 +123,20 @@ export const getSwingTradesWorkspace = createServerFn({ method: "GET" }).handler
     const countryIds = unique(selectedAssets.map((asset) => asset.country_id).filter(isString));
     const industryIds = unique(selectedAssets.map((asset) => asset.industry_id).filter(isString));
     const now = new Date();
+    const priceStart = new Date(now.getTime() - 160 * 86_400_000).toISOString().slice(0, 10);
     const eventStart = new Date(now.getTime() - 45 * 86_400_000).toISOString();
     const eventEnd = new Date(now.getTime() + 45 * 86_400_000).toISOString();
 
     const [pricePages, earningsPages, countryResult, industryResult] = await Promise.all([
       Promise.all(
-        chunk(selectedAssetIds, 8).map((batch) =>
+        chunk(selectedAssetIds, 6).map((batch) =>
           supabaseAdmin
             .from("prices_daily")
             .select("asset_id,trade_date,open,high,low,close,volume")
             .in("asset_id", batch)
-            .order("asset_id", { ascending: true })
+            .gte("trade_date", priceStart)
             .order("trade_date", { ascending: false })
-            .limit(batch.length * BAR_LOOKBACK),
+            .limit(900),
         ),
       ),
       Promise.all(
@@ -205,17 +206,12 @@ export const getSwingTradesWorkspace = createServerFn({ method: "GET" }).handler
         regimeAvailable: false,
       });
       if (!trade || trade.setupScore < 45) continue;
-
       const latest = bars.at(-1)!;
-      const ageDays = Math.max(
-        0,
-        (now.getTime() - new Date(`${latest.date}T21:00:00Z`).getTime()) / 86_400_000,
-      );
+      const ageDays = Math.max(0, (now.getTime() - new Date(`${latest.date}T21:00:00Z`).getTime()) / 86_400_000);
       if (ageDays > 7) {
         trade.risks.push(`Price data is stale at ${Math.floor(ageDays)} days old.`);
         trade.highConviction = false;
       }
-
       const countryCode = asset.country_id
         ? countries.get(asset.country_id) ?? inferCountry(asset.exchange)
         : inferCountry(asset.exchange);
@@ -289,9 +285,7 @@ function selectDeepScan(
       quality,
       valuation,
       drawdown,
-      technicalMean: technical.length
-        ? technical.reduce((sum, value) => sum + value, 0) / technical.length
-        : null,
+      technicalMean: technical.length ? technical.reduce((sum, value) => sum + value, 0) / technical.length : null,
     };
   }).filter((row) => row.technicalMean !== null || row.momentum !== null || row.trend !== null);
 
@@ -329,7 +323,8 @@ function addTop<T>(
     descending ? metric(right) - metric(left) : metric(left) - metric(right),
   );
   for (const row of sorted.slice(0, count)) {
-    target.add((row as { assetId: string }).assetId);
+    const assetId = (row as { assetId: string }).assetId;
+    target.add(assetId);
   }
 }
 
@@ -358,7 +353,10 @@ function groupBars(rows: PriceRow[]): Map<string, SwingBar[]> {
     });
     map.set(row.asset_id, list);
   }
-  for (const list of map.values()) list.sort((left, right) => left.date.localeCompare(right.date));
+  for (const [assetId, list] of map.entries()) {
+    list.sort((left, right) => left.date.localeCompare(right.date));
+    if (list.length > BAR_LOOKBACK) map.set(assetId, list.slice(-BAR_LOOKBACK));
+  }
   return map;
 }
 
@@ -386,9 +384,7 @@ function catalystEvidence(
     .sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at))[0] ?? null;
 
   if (upcoming) {
-    const days = Math.ceil(
-      (new Date(upcoming.scheduled_at).getTime() - nowMs) / 86_400_000,
-    );
+    const days = Math.ceil((new Date(upcoming.scheduled_at).getTime() - nowMs) / 86_400_000);
     if (days <= 3) {
       return {
         score: 40,
@@ -400,30 +396,16 @@ function catalystEvidence(
 
   if (recent?.surprise_pct !== null && recent?.surprise_pct !== undefined) {
     const surprise = Number(recent.surprise_pct);
-    const score = surprise >= 10
-      ? 82
-      : surprise >= 5
-        ? 72
-        : surprise > 0
-          ? 61
-          : surprise <= -10
-            ? 24
-            : surprise <= -5
-              ? 34
-              : 44;
+    const score = surprise >= 10 ? 82 : surprise >= 5 ? 72 : surprise > 0 ? 61 : surprise <= -10 ? 24 : surprise <= -5 ? 34 : 44;
     return {
       score,
       label: `Recent EPS surprise ${surprise >= 0 ? "+" : ""}${surprise.toFixed(1)}%`,
-      risk: surprise <= -5
-        ? "Recent earnings surprise was negative and may cap near-term follow-through."
-        : null,
+      risk: surprise <= -5 ? "Recent earnings surprise was negative and may cap near-term follow-through." : null,
     };
   }
 
   if (upcoming) {
-    const days = Math.ceil(
-      (new Date(upcoming.scheduled_at).getTime() - nowMs) / 86_400_000,
-    );
+    const days = Math.ceil((new Date(upcoming.scheduled_at).getTime() - nowMs) / 86_400_000);
     if (days <= 30) return { score: 54, label: `Earnings in ${days} days`, risk: null };
   }
   return { score: null, label: null, risk: null };
@@ -433,13 +415,7 @@ function emptyWorkspace(activeEquities: number): SwingTradesWorkspace {
   return {
     asOf: new Date().toISOString().slice(0, 10),
     modelVersion: SWING_MODEL_VERSION,
-    universe: {
-      activeEquities,
-      scoreScreened: 0,
-      deepScanned: 0,
-      surfaced: 0,
-      cap: DEEP_SCAN_CAP,
-    },
+    universe: { activeEquities, scoreScreened: 0, deepScanned: 0, surfaced: 0, cap: DEEP_SCAN_CAP },
     candidates: [],
     methodology: "No active scored equities are available yet.",
     calibration: {
@@ -458,9 +434,7 @@ function inferCountry(exchange: string | null): string {
 
 function chunk<T>(values: T[], size: number): T[][] {
   const output: T[][] = [];
-  for (let index = 0; index < values.length; index += size) {
-    output.push(values.slice(index, index + size));
-  }
+  for (let index = 0; index < values.length; index += size) output.push(values.slice(index, index + size));
   return output;
 }
 
@@ -473,6 +447,7 @@ function isString(value: string | null): value is string {
 }
 
 function finite(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) ? number : null;
 }
