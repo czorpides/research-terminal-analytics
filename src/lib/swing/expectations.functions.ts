@@ -240,11 +240,20 @@ async function ingestExpectationSnapshot(
   const key = process.env.FMP_API_KEY;
   if (!key) throw new Error("FMP_API_KEY missing");
 
-  const [estimatesPayload, consensusPayload, summaryPayload] = await Promise.all([
-    fmp("analyst-estimates", candidate.symbol, key, { period: "annual", page: "0", limit: "10" }),
-    fmp("price-target-consensus", candidate.symbol, key),
-    fmp("price-target-summary", candidate.symbol, key),
-  ]);
+  // FMP calls are intentionally serialised. The existing provider plan is
+  // quota/rate-limit constrained, so three simultaneous requests for one
+  // symbol are less reliable than a short paced sequence.
+  const estimatesPayload = await fmp(
+    "analyst-estimates",
+    candidate.symbol,
+    key,
+    { period: "annual", page: "0", limit: "10" },
+  );
+  await sleep(225);
+  const consensusPayload = await fmp("price-target-consensus", candidate.symbol, key);
+  await sleep(225);
+  const summaryPayload = await fmp("price-target-summary", candidate.symbol, key);
+
   const estimates = toRows<FmpEstimateRow>(estimatesPayload);
   const targetConsensus = firstRow<FmpTargetConsensus>(consensusPayload);
   const targetSummary = firstRow<FmpTargetSummary>(summaryPayload);
