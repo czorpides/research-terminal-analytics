@@ -6,6 +6,7 @@ import {
   Database,
   ShieldCheck,
   XCircle,
+  type LucideIcon,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -163,7 +164,7 @@ function Summary({
   label,
   value,
 }: {
-  icon: typeof Activity;
+  icon: LucideIcon;
   label: string;
   value: string;
 }) {
