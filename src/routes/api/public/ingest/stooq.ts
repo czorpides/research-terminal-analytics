@@ -4,7 +4,8 @@ const MINIMUM_MANAGED_EQUITIES = 2_400;
 
 /**
  * Equity ingestion endpoint. The historical `/ingest/stooq` route now manages
- * a diversified US, UK and EU population, one ticker, or a rotating price batch.
+ * a diversified US, UK and EU population, one ticker, a rotating price batch,
+ * or the quota-aware intraday Swing Trade monitor.
  * A normal scheduled price call bootstraps the universe when coverage falls
  * materially below the 3,000-name target.
  */
@@ -19,8 +20,14 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
         const url = new URL(request.url);
         const ticker = url.searchParams.get("ticker");
         const syncUniverse = url.searchParams.get("syncUniverse") === "1";
+        const swingMonitor = url.searchParams.get("swingMonitor") === "1";
 
         try {
+          if (swingMonitor) {
+            const { runScheduledSwingMonitor } = await import("@/lib/swing/monitor.server");
+            return Response.json(await runScheduledSwingMonitor());
+          }
+
           if (syncUniverse) {
             const { syncManagedEquityUniverse } = await import(
               "@/lib/ingestion/equities/universe.server"
