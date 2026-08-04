@@ -347,15 +347,17 @@ function buildReversal(m: Metrics, c: SwingContext): SetupDraft {
     reversalLocationScore(m),
     confirmationScoreFor(m, "oversold_reversal"),
   );
-  const wasOversold = m.rsiMin10 !== null && m.rsiMin10 <= 35;
-  const recovering = wasOversold && m.rsi14 !== null && m.rsi14 >= m.rsiMin10 + 5;
+  const rsiMin10 = m.rsiMin10;
+  const rsi14 = m.rsi14;
+  const wasOversold = rsiMin10 !== null && rsiMin10 <= 35;
+  const recovering = rsiMin10 !== null && rsi14 !== null && rsiMin10 <= 35 && rsi14 >= rsiMin10 + 5;
   const dislocated = m.drawdown52Pct !== null && m.drawdown52Pct <= -12;
   const confirmed = dislocated && recovering && (m.higherLow || m.ma20Reclaim) && m.bullishClose;
   const developing = dislocated && (recovering || m.higherLow || m.ma20Reclaim);
   const reasons = compact([
     dislocated ? `Price remains ${round(m.drawdown52Pct!, 1)}% below its trailing high.` : null,
-    wasOversold ? `RSI recently reached ${round(m.rsiMin10!, 1)}.` : null,
-    recovering ? `RSI has recovered to ${round(m.rsi14!, 1)}.` : null,
+    wasOversold ? `RSI recently reached ${round(rsiMin10!, 1)}.` : null,
+    recovering ? `RSI has recovered to ${round(rsi14!, 1)}.` : null,
     m.higherLow ? "A higher low provides early reversal structure." : null,
     m.ma20Reclaim ? "Price has reclaimed the 20-day average." : null,
   ]);
