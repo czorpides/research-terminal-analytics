@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { Crosshair, Radar as RadarIcon } from "lucide-react";
+import { AlertTriangle, Crosshair, Radar as RadarIcon } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
@@ -16,6 +16,9 @@ import { getSwingExpectationsWorkspace } from "@/lib/swing/expectations.function
 import { refreshSwingTradesNow } from "@/lib/swing/refresh.functions";
 import { getSwingTrackerWorkspace } from "@/lib/swing/tracker.functions";
 import { getSwingTradesWorkspace } from "@/lib/swing/workspace.functions";
+
+const MANAGED_EQUITY_TARGET = 3_000;
+const MANAGED_EQUITY_READY_FLOOR = 2_950;
 
 const radarQueryOptions = queryOptions({
   queryKey: ["opportunity-radar", "horizons-v5-discovery"],
@@ -117,9 +120,10 @@ function Radar() {
     }
   }
 
-  const trackerError = errorText(trackerQuery.error);
+  const trackerError = trackerErrorText(trackerQuery.error);
   const swingError = errorText(swingQuery.error);
   const expectationsError = errorText(expectationsQuery.error);
+  const universeUnderfilled = workspace.universe.activeEquities < MANAGED_EQUITY_READY_FLOOR;
 
   return (
     <AppShell>
@@ -145,6 +149,24 @@ function Radar() {
           <Crosshair className="mr-2 h-4 w-4" /> Swing Trades
         </Button>
       </div>
+
+      {universeUnderfilled && (
+        <section className="mb-5 rounded-xl border border-amber-500/35 bg-amber-500/[0.06] p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div>
+              <div className="text-sm font-semibold">Managed equity universe is incomplete</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                The database currently has {workspace.universe.activeEquities.toLocaleString()} active equities
+                against a managed target of {MANAGED_EQUITY_TARGET.toLocaleString()}. This is an ingestion/deployment
+                coverage fault, not a {workspace.universe.activeEquities.toLocaleString()}-company model cap. Both
+                Opportunity Radar and Swing Trades are designed to first-pass screen the managed population up to
+                the 3,000-name workspace capacity.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {view === "opportunity" ? (
         <OpportunityRadarDiscoveryView
@@ -183,6 +205,21 @@ function Radar() {
       )}
     </AppShell>
   );
+}
+
+function trackerErrorText(error: unknown): string | null {
+  const message = errorText(error);
+  if (!message) return null;
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("swing_trade_setups") ||
+    normalized.includes("swing_trade_price_snapshots") ||
+    normalized.includes("schema cache") ||
+    normalized.includes("relation") && normalized.includes("does not exist")
+  ) {
+    return `Swing tracking schema is missing from the deployed database. The tracker repair migration must be applied before outcome tracking can run. Original database error: ${message}`;
+  }
+  return message;
 }
 
 function errorText(error: unknown): string | null {
