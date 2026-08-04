@@ -67,11 +67,12 @@ export async function runBulkEodIngest(date = previousUtcBusinessDate()): Promis
     url.searchParams.set("apikey", key);
     const response = await fetch(url.toString());
     if (!response.ok) {
-      const status = response.status === 429 || response.status === 402
-        ? "rate_limit"
-        : response.status === 401 || response.status === 403
-          ? "auth"
-          : "error";
+      const status =
+        response.status === 429
+          ? "rate_limit"
+          : response.status === 401 || response.status === 403
+            ? "auth"
+            : "error";
       await recordCall("fmp", status, `eod-bulk HTTP ${response.status}`);
       throw new Error(
         response.status === 402 || response.status === 403
@@ -210,10 +211,24 @@ export async function runBulkEodBackfillBatch(limitDates = 4): Promise<BulkEodBa
   let insertedRows = 0;
 
   for (const date of dates) {
-    await db
+    const { data: queueRow, error: queueError } = await db
       .from("equity_eod_backfill_queue")
-      .update({ status: "running", attempts: db.rpc ? undefined : undefined, updated_at: new Date().toISOString() })
+      .select("attempts")
+      .eq("market_date", date)
+      .maybeSingle();
+    if (queueError) throw queueError;
+    const attempts = Number(queueRow?.attempts ?? 0) + 1;
+
+    const { error: runningError } = await db
+      .from("equity_eod_backfill_queue")
+      .update({
+        status: "running",
+        attempts,
+        last_error: null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("market_date", date);
+    if (runningError) throw runningError;
 
     const result = await runBulkEodIngest(date);
     results.push(result);
@@ -223,30 +238,30 @@ export async function runBulkEodBackfillBatch(limitDates = 4): Promise<BulkEodBa
     else if (result.status === "no_data") noDataDates += 1;
     else failedDates += 1;
 
-    const { data: queueRow } = await db
-      .from("equity_eod_backfill_queue")
-      .select("attempts")
-      .eq("market_date", date)
-      .maybeSingle();
-    const attempts = Number(queueRow?.attempts ?? 0) + 1;
-    await db
+    const { error: completeError } = await db
       .from("equity_eod_backfill_queue")
       .update({
         status,
-        attempts,
         last_error: result.error,
         completed_at: result.status === "failed" ? null : new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq("market_date", date);
+    if (completeError) throw completeError;
 
-    if (result.error?.includes("not available to the configured API plan") || result.error?.includes("quota")) break;
+    if (
+      result.error?.includes("not available to the configured API plan") ||
+      result.error?.includes("quota")
+    ) {
+      break;
+    }
   }
 
-  const { count: remainingDates } = await db
+  const { count: remainingDates, error: remainingError } = await db
     .from("equity_eod_backfill_queue")
     .select("market_date", { count: "exact", head: true })
-    .eq("status", "pending");
+    .in("status", ["pending", "running"]);
+  if (remainingError) throw remainingError;
 
   return {
     attemptedDates: results.length,
@@ -339,7 +354,8 @@ async function sourceIdForFmp(): Promise<string | null> {
 }
 
 async function beginRun(sourceId: string, date: string): Promise<string> {
-  const { data, error } = await supabaseAdmin
+  const db = looseDb();
+  const { data, error } = await db
     .from("ingestion_runs")
     .insert({
       source_id: sourceId,
@@ -360,7 +376,8 @@ async function finishRun(
   details: Record<string, unknown>,
   error?: string,
 ) {
-  await supabaseAdmin
+  const db = looseDb();
+  const { error: updateError } = await db
     .from("ingestion_runs")
     .update({
       status,
@@ -370,6 +387,7 @@ async function finishRun(
       details,
     })
     .eq("id", runId);
+  if (updateError) throw updateError;
 }
 
 function normalizeExchange(value: string | null | undefined): string | null {
