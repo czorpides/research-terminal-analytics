@@ -7,12 +7,14 @@ import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { OpportunityRadarDiscoveryView } from "@/components/research/OpportunityRadarDiscoveryView";
 import { SwingExpectationsPanel } from "@/components/research/SwingExpectationsPanel";
+import { SwingOperationalStatus } from "@/components/research/SwingOperationalStatus";
 import { SwingTradesIntegratedView } from "@/components/research/SwingTradesIntegratedView";
 import { Button } from "@/components/ui/button";
 import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
 import { getSwingExpectationsWorkspace } from "@/lib/swing/expectations.functions";
+import { getSwingOperationalHealth } from "@/lib/swing/health.functions";
 import { refreshSwingTradesNow } from "@/lib/swing/refresh.functions";
 import { getSwingTrackerWorkspace } from "@/lib/swing/tracker.functions";
 import { getSwingTradesWorkspace } from "@/lib/swing/workspace.functions";
@@ -45,7 +47,7 @@ const regimeQueryOptions = queryOptions({
 });
 
 const swingQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "swing-trades-v4-expectations"],
+  queryKey: ["opportunity-radar", "swing-trades-v5-operational"],
   queryFn: () => getSwingTradesWorkspace(),
   staleTime: 5 * 60 * 1000,
   refetchInterval: 5 * 60 * 1000,
@@ -66,6 +68,15 @@ const expectationsQueryOptions = queryOptions({
   queryFn: () => getSwingExpectationsWorkspace(),
   staleTime: 5 * 60 * 1000,
   refetchInterval: 5 * 60 * 1000,
+  refetchOnWindowFocus: true,
+  retry: false,
+});
+
+const swingHealthQueryOptions = queryOptions({
+  queryKey: ["opportunity-radar", "swing-operational-health-v1"],
+  queryFn: () => getSwingOperationalHealth(),
+  staleTime: 30 * 1000,
+  refetchInterval: 60 * 1000,
   refetchOnWindowFocus: true,
   retry: false,
 });
@@ -100,6 +111,7 @@ function Radar() {
   const swingQuery = useQuery({ ...swingQueryOptions, enabled: view === "swing" });
   const trackerQuery = useQuery({ ...trackerQueryOptions, enabled: view === "swing" });
   const expectationsQuery = useQuery({ ...expectationsQueryOptions, enabled: view === "swing" });
+  const swingHealthQuery = useQuery({ ...swingHealthQueryOptions, enabled: view === "swing" });
 
   async function handleSwingRefresh() {
     if (refreshing) return;
@@ -115,6 +127,7 @@ function Radar() {
         swingQuery.refetch(),
         trackerQuery.refetch(),
         expectationsQuery.refetch(),
+        swingHealthQuery.refetch(),
       ]);
       setRefreshing(false);
     }
@@ -123,6 +136,7 @@ function Radar() {
   const trackerError = trackerErrorText(trackerQuery.error);
   const swingError = errorText(swingQuery.error);
   const expectationsError = errorText(expectationsQuery.error);
+  const swingHealthError = errorText(swingHealthQuery.error);
   const universeUnderfilled = workspace.universe.activeEquities < MANAGED_EQUITY_READY_FLOOR;
 
   return (
@@ -176,6 +190,11 @@ function Radar() {
         />
       ) : swingQuery.data ? (
         <>
+          <SwingOperationalStatus
+            health={swingHealthQuery.data ?? null}
+            loading={swingHealthQuery.isPending}
+            error={swingHealthError}
+          />
           <SwingTradesIntegratedView
             workspace={swingQuery.data}
             regime={regime}
