@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { empiricalOverlayForSignal, type SwingLearningSignal } from "./learning";
+import { empiricalOverlayForSignal, type SwingLearningSignal } from "./learning.ts";
 import type { SwingComponents } from "./model";
 
 function components(): SwingComponents {
