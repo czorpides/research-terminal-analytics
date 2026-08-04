@@ -118,10 +118,11 @@ test("material negative revisions can block High Conviction", () => {
 });
 
 test("EPS sign changes do not manufacture misleading revision percentages", () => {
-  const result = buildExpectationSignal(
-    snapshot({ fy1EpsAvg: 0.5 }),
-    baseline = snapshot({ fy1EpsAvg: -0.4, observedAt: "2026-07-05T10:00:00.000Z" }),
-    NOW,
-  );
+  const negativeBaseline = snapshot({
+    fy1EpsAvg: -0.4,
+    observedAt: "2026-07-05T10:00:00.000Z",
+    lastVerifiedAt: "2026-07-05T10:00:00.000Z",
+  });
+  const result = buildExpectationSignal(snapshot({ fy1EpsAvg: 0.5 }), negativeBaseline, NOW);
   assert.equal(result.fy1EpsRevisionPct, null);
 });
