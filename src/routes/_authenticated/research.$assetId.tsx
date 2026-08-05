@@ -4,6 +4,8 @@ import { ChevronLeft } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { AdvancedSecurityResearchView } from "@/components/research/AdvancedSecurityResearchView";
+import { getOpportunityCandidateFreshness } from "@/lib/opportunity/integrity.functions";
+import { applyOpportunityEvidenceIntegrity } from "@/lib/opportunity/integrity";
 import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import { presentOpportunityCandidate } from "@/lib/opportunity/presentation";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
@@ -17,7 +19,13 @@ const detailQuery = (assetId: string) => queryOptions({
 
 const radarQuery = queryOptions({
   queryKey: ["opportunity-radar", "horizons-v6-evidence-integrity"],
-  queryFn: () => getOpportunityRadarWorkspace(),
+  queryFn: async () => {
+    const [workspace, freshness] = await Promise.all([
+      getOpportunityRadarWorkspace(),
+      getOpportunityCandidateFreshness(),
+    ]);
+    return applyOpportunityEvidenceIntegrity(workspace, freshness);
+  },
   staleTime: 15 * 60 * 1000,
 });
 
