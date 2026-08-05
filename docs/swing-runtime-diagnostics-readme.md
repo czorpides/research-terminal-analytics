@@ -1,0 +1,1 @@
+This branch adds a read-only authenticated diagnostics route. It does not alter live provider credentials or database contents.
