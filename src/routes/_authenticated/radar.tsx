@@ -12,6 +12,8 @@ import { SwingOperationalStatus } from "@/components/research/SwingOperationalSt
 import { SwingTradesIntegratedView } from "@/components/research/SwingTradesIntegratedView";
 import { Button } from "@/components/ui/button";
 import { getOpportunityRadarHealth } from "@/lib/opportunity/health.functions";
+import { getOpportunityCandidateFreshness } from "@/lib/opportunity/integrity.functions";
+import { applyOpportunityEvidenceIntegrity } from "@/lib/opportunity/integrity";
 import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
@@ -25,15 +27,21 @@ const MANAGED_EQUITY_TARGET = 3_000;
 const MANAGED_EQUITY_READY_FLOOR = 2_950;
 
 const radarQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "horizons-v5-discovery"],
-  queryFn: () => getOpportunityRadarWorkspace(),
+  queryKey: ["opportunity-radar", "horizons-v6-evidence-integrity"],
+  queryFn: async () => {
+    const [workspace, freshness] = await Promise.all([
+      getOpportunityRadarWorkspace(),
+      getOpportunityCandidateFreshness(),
+    ]);
+    return applyOpportunityEvidenceIntegrity(workspace, freshness);
+  },
   staleTime: 15 * 60 * 1000,
   refetchInterval: 15 * 60 * 1000,
   refetchOnWindowFocus: true,
 });
 
 const opportunityHealthQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "readiness-v1"],
+  queryKey: ["opportunity-radar", "readiness-v2-regional"],
   queryFn: () => getOpportunityRadarHealth(),
   staleTime: 60 * 1000,
   refetchInterval: 2 * 60 * 1000,
