@@ -26,7 +26,7 @@ export const refreshSwingTradesNow = createServerFn({ method: "POST" }).handler(
   async (): Promise<SwingManualRefreshResult> => {
     try {
       const { runScheduledSwingMonitor } = await import("./monitor.server");
-      const result = await runScheduledSwingMonitor();
+      const result = await runScheduledSwingMonitor("manual");
       return {
         ok: true,
         refreshedAt: result.asOf,
