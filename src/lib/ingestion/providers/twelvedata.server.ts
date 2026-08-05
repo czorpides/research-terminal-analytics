@@ -1,6 +1,12 @@
 import { ProviderError, type PriceBar, type PriceProvider } from "./types";
 
-function toTd(sym: string): string { return sym.replace("-", "."); }
+function parseTdSymbol(input: string): { symbol: string; exchange: string | null } {
+  const [rawSymbol, rawExchange] = input.split("|", 2);
+  return {
+    symbol: rawSymbol.replace("-", "."),
+    exchange: rawExchange?.trim() ? rawExchange.trim() : null,
+  };
+}
 
 export const twelvedata: PriceProvider = {
   code: "twelvedata", name: "Twelve Data", dailyLimit: 800, minMsBetweenCalls: 8000, priority: 2,
@@ -18,8 +24,10 @@ export const twelvedata: PriceProvider = {
   async fetchDaily(symbol, opts) {
     const key = process.env.TWELVEDATA_API_KEY;
     if (!key) throw new ProviderError("no key", "auth");
+    const mapped = parseTdSymbol(symbol);
     const url = new URL("https://api.twelvedata.com/time_series");
-    url.searchParams.set("symbol", toTd(symbol));
+    url.searchParams.set("symbol", mapped.symbol);
+    if (mapped.exchange) url.searchParams.set("exchange", mapped.exchange);
     url.searchParams.set("interval", "1day");
     url.searchParams.set("outputsize", "5000");
     if (opts.from) url.searchParams.set("start_date", opts.from);
