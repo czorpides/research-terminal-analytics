@@ -3045,6 +3045,7 @@ export type Database = {
         | "fx"
         | "alt_data"
         | "corporate_action"
+        | "price_daily_bulk"
       ingestion_status: "pending" | "running" | "success" | "partial" | "failed"
       source_tier:
         | "tier1_official"
@@ -3215,6 +3216,7 @@ export const Constants = {
         "fx",
         "alt_data",
         "corporate_action",
+        "price_daily_bulk",
       ],
       ingestion_status: ["pending", "running", "success", "partial", "failed"],
       source_tier: [
