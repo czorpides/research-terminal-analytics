@@ -152,10 +152,7 @@ export async function refreshSwingExpectationEvidence(
         else if (result === "unchanged") summary.unchanged += 1;
         else if (result === "quarantined") summary.quarantined += 1;
       } catch (error) {
-        summary.failures.push({
-          symbol: candidate.symbol,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        summary.failures.push({ symbol: candidate.symbol, error: failureMessage(error) });
       }
       await sleep(350);
     }
@@ -164,7 +161,7 @@ export async function refreshSwingExpectationEvidence(
   } catch (error) {
     return {
       ...emptyRefreshSummary(),
-      failures: [{ symbol: "workspace", error: error instanceof Error ? error.message : String(error) }],
+      failures: [{ symbol: "workspace", error: failureMessage(error) }],
       asOf: new Date().toISOString(),
     };
   }
@@ -240,9 +237,6 @@ async function ingestExpectationSnapshot(
   const key = process.env.FMP_API_KEY;
   if (!key) throw new Error("FMP_API_KEY missing");
 
-  // FMP calls are intentionally serialised. The existing provider plan is
-  // quota/rate-limit constrained, so three simultaneous requests for one
-  // symbol are less reliable than a short paced sequence.
   const estimatesPayload = await fmp(
     "analyst-estimates",
     candidate.symbol,
@@ -279,11 +273,7 @@ async function ingestExpectationSnapshot(
   const confidence = expectationConfidence(normalized);
   const { createHash } = await import("node:crypto");
   const sourceHash = createHash("sha256")
-    .update(JSON.stringify({
-      estimates,
-      targetConsensus,
-      targetSummary,
-    }))
+    .update(JSON.stringify({ estimates, targetConsensus, targetSummary }))
     .digest("hex");
 
   const { data: existing, error: existingError } = await db
@@ -434,19 +424,19 @@ function validateNormalized(
   const high = finite(value.consensus?.targetHigh);
   if (low !== null && high !== null && low > high) reasons.push("target_low_exceeds_target_high");
   if (median !== null && low !== null && median < low) reasons.push("target_median_below_target_low");
-  if (median !== null && high !== null && median > high) reasons.push("target_median_above_target_high");
+  if (median !== null && high !== null && median > high) reasons.push("target_median_above_high");
   if (consensus !== null && low !== null && consensus < low) reasons.push("target_consensus_below_target_low");
   if (consensus !== null && high !== null && consensus > high) reasons.push("target_consensus_above_target_high");
 
-  for (const [label, target] of [
+  for (const [label, targetValue] of [
     ["consensus", consensus],
     ["median", median],
     ["month_avg", finite(value.summary?.lastMonthAvgPriceTarget)],
     ["quarter_avg", finite(value.summary?.lastQuarterAvgPriceTarget)],
   ] as const) {
-    if (target !== null && target <= 0) reasons.push(`target_${label}_non_positive`);
-    if (target !== null && price !== null) {
-      const ratio = target / price;
+    if (targetValue !== null && targetValue <= 0) reasons.push(`target_${label}_non_positive`);
+    if (targetValue !== null && price !== null) {
+      const ratio = targetValue / price;
       if (ratio > 5 || ratio < 0.2) reasons.push(`target_${label}_extreme_vs_reference_price`);
     }
   }
@@ -612,8 +602,17 @@ async function fmp(endpoint: string, symbol: string, key: string, params: Record
   try {
     const response = await fetch(url.toString());
     if (!response.ok) {
-      const status = response.status === 429 || response.status === 402 ? "rate_limit" : response.status === 401 || response.status === 403 ? "auth" : "error";
+      const status = response.status === 402
+        ? "entitlement"
+        : response.status === 429
+          ? "rate_limit"
+          : response.status === 401 || response.status === 403
+            ? "auth"
+            : "error";
       await recordCall("fmp", status, `${endpoint} HTTP ${response.status}`);
+      if (response.status === 402) {
+        throw new Error(`FMP ${endpoint} entitlement unavailable (HTTP 402)`);
+      }
       throw new Error(`FMP ${endpoint} HTTP ${response.status}`);
     }
     const payload = await response.json() as unknown;
@@ -621,7 +620,7 @@ async function fmp(endpoint: string, symbol: string, key: string, params: Record
     return payload;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("FMP ")) throw error;
-    await recordCall("fmp", "error", error instanceof Error ? error.message : String(error));
+    await recordCall("fmp", "error", failureMessage(error));
     throw error;
   }
 }
@@ -684,6 +683,19 @@ function clampInt(value: number, low: number, high: number): number {
   return Math.max(low, Math.min(high, Math.trunc(value)));
 }
 
+function failureMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts = [record.code, record.message, record.details, record.hint]
+      .filter((value) => value !== null && value !== undefined && String(value).trim())
+      .map(String);
+    if (parts.length) return parts.join(" · ");
+    try { return JSON.stringify(record); } catch { return String(error); }
+  }
+  return String(error);
+}
+
 function emptyRefreshSummary(): ExpectationRefreshSummary {
   return {
     attempted: 0,
@@ -698,8 +710,6 @@ function emptyRefreshSummary(): ExpectationRefreshSummary {
 
 async function looseDb() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  // New migration tables are intentionally accessed loosely until the normal
-  // generated Supabase type refresh runs after deployment.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return supabaseAdmin as any;
 }
