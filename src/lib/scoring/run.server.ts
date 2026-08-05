@@ -1,13 +1,4 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { computeConfidence } from "@/lib/reliability/confidence";
-import { computeMomentum, MOMENTUM_CALC_VERSION } from "./momentum.server";
-import { computeTrend, TREND_CALC_VERSION } from "./trend.server";
-import { computeVolatility, VOL_CALC_VERSION } from "./volatility.server";
-import {
-  loadLatestFundamentals,
-  computeValuationScore,
-  computeQualityScore,
-} from "./valuation.server";
 import { FUNDAMENTAL_METRICS } from "@/lib/ingestion/fundamentals/metrics";
 import { loadAnnualFinancialHistory } from "@/lib/opportunity/fundamental-history.server";
 import {
@@ -15,7 +6,17 @@ import {
   computePiotroski,
   rankMagicFormula,
 } from "@/lib/opportunity/fundamental-models";
+import { computeConfidence } from "@/lib/reliability/confidence";
+import type { SourceTier } from "@/lib/reliability/tiers";
+import { computeMomentum, MOMENTUM_CALC_VERSION } from "./momentum.server";
 import type { Bar } from "./series";
+import { computeTrend, TREND_CALC_VERSION } from "./trend.server";
+import {
+  computeQualityScore,
+  computeValuationScore,
+  loadLatestFundamentals,
+} from "./valuation.server";
+import { computeVolatility, VOL_CALC_VERSION } from "./volatility.server";
 
 export interface ScoreRunResult {
   assetsScored: number;
@@ -31,78 +32,91 @@ export interface FundamentalScoreRunResult {
   fundamentalsScored: number;
   rowsInserted: number;
 }
+export interface TechnicalScoreBatchResult {
+  requested: number;
+  selected: number;
+  assetsScored: number;
+  failures: number;
+  failedAssets: Array<{ assetId: string; error: string }>;
+  complete: boolean;
+}
 
 interface FundamentalAsset {
   id: string;
   industry_id: string | null;
 }
 
-async function loadBars(assetId: string): Promise<Bar[]> {
-  const { data } = await supabaseAdmin
+interface LoadedBars {
+  bars: Bar[];
+  latestSourceId: string | null;
+}
+
+const sourceTierCache = new Map<string, Promise<SourceTier>>();
+
+async function loadBars(assetId: string): Promise<LoadedBars> {
+  const { data, error } = await supabaseAdmin
     .from("prices_daily")
-    .select("trade_date, close, volume")
+    .select("trade_date, close, volume, source_id")
     .eq("asset_id", assetId)
     .order("trade_date", { ascending: true })
     .limit(2000);
-  return (data ?? [])
-    .filter((r) => r.close !== null)
-    .map((r) => ({
-      date: r.trade_date as string,
-      close: Number(r.close),
-      volume: r.volume === null ? null : Number(r.volume),
-    }));
+  if (error) throw error;
+
+  const valid = (data ?? []).filter((row) => row.close !== null);
+  const latest = valid.at(-1) ?? null;
+  return {
+    bars: valid.map((row) => ({
+      date: row.trade_date as string,
+      close: Number(row.close),
+      volume: row.volume === null ? null : Number(row.volume),
+    })),
+    latestSourceId: latest?.source_id ? String(latest.source_id) : null,
+  };
 }
 
+async function sourceTierFor(sourceId: string | null): Promise<SourceTier> {
+  if (!sourceId) return "tier4_alternative";
+  const cached = sourceTierCache.get(sourceId);
+  if (cached) return cached;
+
+  const promise = (async (): Promise<SourceTier> => {
+    const { data, error } = await supabaseAdmin
+      .from("data_sources")
+      .select("tier")
+      .eq("id", sourceId)
+      .maybeSingle();
+    if (error || !data?.tier) return "tier4_alternative";
+    const tier = String(data.tier);
+    return isSourceTier(tier) ? tier : "tier4_alternative";
+  })();
+  sourceTierCache.set(sourceId, promise);
+  return promise;
+}
+
+/**
+ * Recalculate one asset's price-derived Opportunity Radar evidence from the
+ * authoritative prices_daily store. Quality/freshness is provider-neutral: the
+ * confidence tier is read from the source attached to the latest stored bar,
+ * rather than consulting legacy Stooq ingestion state.
+ */
 export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    // Quality gate: block scoring if the latest Stooq ingestion run for this
-    // asset's symbol was blocked by QC.
-    const { data: asset } = await supabaseAdmin
-      .from("assets")
-      .select("symbol")
-      .eq("id", assetId)
-      .maybeSingle();
-    const symbol = asset?.symbol as string | undefined;
-    if (symbol) {
-      const { data: stooqSource } = await supabaseAdmin
-        .from("data_sources")
-        .select("id")
-        .eq("provider_code", "stooq")
-        .maybeSingle();
-      if (stooqSource?.id) {
-        const { data: recent } = await supabaseAdmin
-          .from("ingestion_runs")
-          .select("status, error, details, started_at")
-          .eq("source_id", stooqSource.id as string)
-          .eq("data_category", "price_daily")
-          .order("started_at", { ascending: false })
-          .limit(200);
-        const match = (recent ?? []).find((r) => {
-          const d = r.details as { symbol?: string } | null;
-          return d?.symbol === symbol;
-        });
-        if (match && match.status === "failed") {
-          return { ok: false, error: `quality_gate_blocked: ${match.error ?? "unknown"}` };
-        }
-      }
-    }
-
-    const bars = await loadBars(assetId);
-    if (bars.length === 0) return { ok: false, error: "no prices" };
-    const latest = bars[bars.length - 1];
+    const loaded = await loadBars(assetId);
+    if (loaded.bars.length === 0) return { ok: false, error: "no prices" };
+    const latest = loaded.bars[loaded.bars.length - 1];
     const ageSec = Math.max(
       0,
       Math.floor((Date.now() - new Date(`${latest.date}T21:00:00Z`).getTime()) / 1000),
     );
     const dataConf = computeConfidence({
-      tier: "tier2_regulated",
+      tier: await sourceTierFor(loaded.latestSourceId),
       category: "price_daily",
       ageSeconds: ageSec,
     });
 
-    const momo = computeMomentum(bars);
-    const trend = computeTrend(bars);
-    const vol = computeVolatility(bars);
+    const momo = computeMomentum(loaded.bars);
+    const trend = computeTrend(loaded.bars);
+    const vol = computeVolatility(loaded.bars);
     const now = new Date().toISOString();
 
     const rows = [
@@ -156,23 +170,61 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
   }
 }
 
+/**
+ * Score the next stale slice selected by Postgres relative to the latest
+ * successful full-universe bulk EOD run. This is intentionally separate from
+ * fundamental scoring so a 3,000-name daily technical refresh remains bounded.
+ */
+export async function runTechnicalScoresBatch(limit = 250): Promise<TechnicalScoreBatchResult> {
+  const requested = clampInteger(limit, 1, 500);
+  // Runtime RPC was added after the generated Supabase types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabaseAdmin as any;
+  const { data, error } = await db.rpc("get_opportunity_score_batch", { p_limit: requested });
+  if (error) throw error;
+
+  const scoreBatchRows = (data ?? []) as Array<{ asset_id: string }>;
+  const assetIds: string[] = scoreBatchRows.map((row) => String(row.asset_id));
+  let assetsScored = 0;
+  const failedAssets: Array<{ assetId: string; error: string }> = [];
+
+  for (const batch of chunk(assetIds, 20)) {
+    const results = await Promise.all(
+      batch.map(async (assetId) => ({ assetId, result: await runScoresForAsset(assetId) })),
+    );
+    for (const { assetId, result } of results) {
+      if (result.ok) assetsScored += 1;
+      else failedAssets.push({ assetId, error: result.error ?? "unknown scoring failure" });
+    }
+  }
+
+  const { data: remainingData, error: remainingError } = await db.rpc("get_opportunity_score_batch", {
+    p_limit: 1,
+  });
+  if (remainingError) throw remainingError;
+
+  return {
+    requested,
+    selected: assetIds.length,
+    assetsScored,
+    failures: failedAssets.length,
+    failedAssets,
+    complete: (remainingData ?? []).length === 0,
+  };
+}
+
 export async function runScoresForAllAssets(): Promise<ScoreRunResultDetailed> {
   const { data: assets } = await supabaseAdmin
     .from("assets")
     .select("id, industry_id")
     .eq("active", true);
-  let ok = 0,
-    failed = 0,
-    blocked = 0,
-    fundOk = 0;
-  const blockedAssets: string[] = [];
+  let ok = 0;
+  let failed = 0;
+  let fundOk = 0;
   for (const a of assets ?? []) {
-    const r = await runScoresForAsset(a.id as string);
-    if (r.ok) ok++;
-    else if (r.error?.startsWith("quality_gate_blocked")) {
-      blocked++;
-      blockedAssets.push(a.id as string);
-    } else failed++;
+    const result = await runScoresForAsset(a.id as string);
+    if (result.ok) ok += 1;
+    else failed += 1;
   }
 
   const fundamentals = await runFundamentalScoresForAllAssets(
@@ -183,7 +235,13 @@ export async function runScoresForAllAssets(): Promise<ScoreRunResultDetailed> {
   );
   fundOk = fundamentals.fundamentalsScored;
 
-  return { assetsScored: ok, failures: failed, blocked, blockedAssets, fundamentalsScored: fundOk };
+  return {
+    assetsScored: ok,
+    failures: failed,
+    blocked: 0,
+    blockedAssets: [],
+    fundamentalsScored: fundOk,
+  };
 }
 
 /**
@@ -373,4 +431,24 @@ export async function runFundamentalScoresForAllAssets(
     fundamentalsScored: fundOk,
     rowsInserted: fundRows.length,
   };
+}
+
+function isSourceTier(value: string): value is SourceTier {
+  return [
+    "tier1_official",
+    "tier2_regulated",
+    "tier3_reputable",
+    "tier4_alternative",
+  ].includes(value);
+}
+
+function clampInteger(value: number, minimum: number, maximum: number): number {
+  const integer = Math.floor(Number.isFinite(value) ? value : minimum);
+  return Math.max(minimum, Math.min(maximum, integer));
+}
+
+function chunk<T>(values: T[], size: number): T[][] {
+  const output: T[][] = [];
+  for (let index = 0; index < values.length; index += size) output.push(values.slice(index, index + size));
+  return output;
 }

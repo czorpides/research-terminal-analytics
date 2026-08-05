@@ -6,10 +6,12 @@ import { AlertTriangle, Crosshair, Radar as RadarIcon } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { OpportunityRadarDiscoveryView } from "@/components/research/OpportunityRadarDiscoveryView";
+import { OpportunityRadarReadinessStatus } from "@/components/research/OpportunityRadarReadinessStatus";
 import { SwingExpectationsPanel } from "@/components/research/SwingExpectationsPanel";
 import { SwingOperationalStatus } from "@/components/research/SwingOperationalStatus";
 import { SwingTradesIntegratedView } from "@/components/research/SwingTradesIntegratedView";
 import { Button } from "@/components/ui/button";
+import { getOpportunityRadarHealth } from "@/lib/opportunity/health.functions";
 import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 import { getRegimeMonitor } from "@/lib/panels/regime.functions";
@@ -28,6 +30,15 @@ const radarQueryOptions = queryOptions({
   staleTime: 15 * 60 * 1000,
   refetchInterval: 15 * 60 * 1000,
   refetchOnWindowFocus: true,
+});
+
+const opportunityHealthQueryOptions = queryOptions({
+  queryKey: ["opportunity-radar", "readiness-v1"],
+  queryFn: () => getOpportunityRadarHealth(),
+  staleTime: 60 * 1000,
+  refetchInterval: 2 * 60 * 1000,
+  refetchOnWindowFocus: true,
+  retry: false,
 });
 
 const institutionalQueryOptions = queryOptions({
@@ -108,6 +119,10 @@ function Radar() {
   const { data: workspace } = useSuspenseQuery(radarQueryOptions);
   const { data: institutionalWorkspace } = useSuspenseQuery(institutionalQueryOptions);
   const { data: regime } = useSuspenseQuery(regimeQueryOptions);
+  const opportunityHealthQuery = useQuery({
+    ...opportunityHealthQueryOptions,
+    enabled: view === "opportunity",
+  });
   const swingQuery = useQuery({ ...swingQueryOptions, enabled: view === "swing" });
   const trackerQuery = useQuery({ ...trackerQueryOptions, enabled: view === "swing" });
   const expectationsQuery = useQuery({ ...expectationsQueryOptions, enabled: view === "swing" });
@@ -183,11 +198,14 @@ function Radar() {
       )}
 
       {view === "opportunity" ? (
-        <OpportunityRadarDiscoveryView
-          workspace={workspace}
-          institutionalWorkspace={institutionalWorkspace}
-          regime={regime}
-        />
+        <>
+          <OpportunityRadarReadinessStatus health={opportunityHealthQuery.data ?? null} />
+          <OpportunityRadarDiscoveryView
+            workspace={workspace}
+            institutionalWorkspace={institutionalWorkspace}
+            regime={regime}
+          />
+        </>
       ) : swingQuery.data ? (
         <>
           <SwingOperationalStatus
