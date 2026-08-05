@@ -1,1 +1,0 @@
-Diagnostics cover Supabase runtime-table availability, active equity population, FMP company-screener returned row counts by exchange, and optional FMP bulk EOD entitlement.
