@@ -77,9 +77,12 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
               return Response.json({ ...result, technicalScreenRows, fallback: null });
             }
 
-            // Keep the old multi-provider path as a bounded safety net. It does
-            // not make the 3,000-name engine healthy by itself, so the runtime
-            // health gate will remain DEGRADED until bulk/full coverage returns.
+            // Keep the old multi-provider path as a bounded safety net for
+            // transient data failures only. An entitlement/auth/quota failure
+            // is structural and should not burn hundreds of per-symbol calls.
+            if (structuralProviderFailure(result.error)) {
+              return Response.json({ ...result, fallback: null });
+            }
             const { runEquityIngestBatch } = await import("@/lib/ingestion/equities/ingest.server");
             const fallback = await runEquityIngestBatch({
               limit: integerParam(url, "fallbackLimit") ?? 250,
@@ -105,8 +108,8 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
             offset: integerParam(url, "offset"),
           });
           return Response.json({ ...batch, universeBootstrap });
-        } catch (e) {
-          return new Response(`Ingestion error: ${(e as Error).message}`, { status: 500 });
+        } catch (error) {
+          return new Response(`Ingestion error: ${errorMessage(error)}`, { status: 500 });
         }
       },
     },
@@ -158,7 +161,7 @@ async function ensureManagedUniverse(): Promise<
       status: "failed",
       activeEquities,
       target: TARGET_MANAGED_EQUITIES,
-      error: (error as Error).message,
+      error: errorMessage(error),
     };
   }
 }
@@ -173,7 +176,7 @@ async function syncUniverseWithFallback(
   try {
     return await syncManagedEquityUniverse(options);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     const markets = (options.markets ?? ["US", "UK", "EU"])
       .map((market) => market.trim().toUpperCase())
       .filter(Boolean);
@@ -181,8 +184,7 @@ async function syncUniverseWithFallback(
       !options.exchanges?.length &&
       markets.includes("US") &&
       markets.some((market) => market !== "US") &&
-      !message.includes("(429)") &&
-      !message.includes("authentication failed");
+      !structuralProviderFailure(message);
 
     if (!canFallbackToUs) throw error;
 
@@ -200,13 +202,39 @@ async function syncUniverseWithFallback(
         ],
       };
     } catch (fallbackError) {
-      const fallbackMessage =
-        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
       throw new Error(
-        `Global universe bootstrap failed (${message}); US fallback also failed (${fallbackMessage})`,
+        `Global universe bootstrap failed (${message}); US fallback also failed (${errorMessage(fallbackError)})`,
       );
     }
   }
+}
+
+function structuralProviderFailure(value: string | null | undefined): boolean {
+  const message = (value ?? "").toLowerCase();
+  return [
+    "entitlement",
+    "api_key missing",
+    "authentication",
+    "http 401",
+    "http 402",
+    "http 403",
+    "http 429",
+    "quota",
+    "rate limit",
+  ].some((token) => message.includes(token));
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts = [record.code, record.message, record.details, record.hint]
+      .filter((value) => value !== null && value !== undefined && String(value).trim())
+      .map(String);
+    if (parts.length) return parts.join(" · ");
+    try { return JSON.stringify(record); } catch { return String(error); }
+  }
+  return String(error);
 }
 
 function csvParam(url: URL, key: string): string[] | undefined {
