@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown } from "lucide-react";
+import { AlertTriangle, ChevronDown, Crosshair } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
@@ -73,11 +73,19 @@ function OpportunityRadarPage() {
 
   return (
     <AppShell>
-      <SectionHeader
-        code="OR · Opportunity Radar"
-        title="One research queue. One company research screen."
-        purpose="Find medium- and long-term investment opportunities without carrying multiple legacy Radar interfaces. Open any company for the full valuation, financial, expectations and model evidence screen."
-      />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <SectionHeader
+          code="OR · Opportunity Radar"
+          title="One research queue. One company research screen."
+          purpose="Find medium- and long-term investment opportunities without carrying multiple legacy Radar interfaces. Open any company for the full valuation, financial, expectations and model evidence screen."
+        />
+        <Link
+          to="/swing-trades"
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border/70 bg-card/50 px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/[0.06] hover:text-foreground"
+        >
+          <Crosshair className="h-4 w-4" /> Open Swing Trades
+        </Link>
+      </div>
 
       {universeUnderfilled && (
         <section className="mb-5 rounded-xl border border-amber-500/35 bg-amber-500/[0.06] p-4">
