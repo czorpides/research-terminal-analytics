@@ -1,0 +1,1 @@
+Acceptance target: diagnostics must distinguish missing Supabase runtime tables from FMP screener/bulk entitlement limits without returning secrets.
