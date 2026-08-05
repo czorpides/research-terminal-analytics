@@ -1,9 +1,19 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import {
+  EODHD_EXCHANGE_TARGETS,
+  eodhdErrorMessage,
+  eodhdExchangeToMic,
+  fetchEodhdAccount,
+  fetchEodhdBulkEod,
+  fetchEodhdDaily,
+  fetchEodhdSymbolList,
+  isEodhdConfigured,
+} from "@/lib/ingestion/providers/eodhd-market.server";
 
 const FMP_SCREENER_URL = "https://financialmodelingprep.com/stable/company-screener";
 const FMP_EOD_BULK_URL = "https://financialmodelingprep.com/stable/eod-bulk";
 const REQUEST_LIMIT = 1_000;
-const DEFAULT_EXCHANGES = ["NASDAQ", "NYSE", "LSE"];
+const DEFAULT_FMP_EXCHANGES = ["NASDAQ", "NYSE", "LSE"];
 
 interface TableDiagnostic {
   available: boolean;
@@ -11,11 +21,11 @@ interface TableDiagnostic {
   error: string | null;
 }
 
-interface FmpExchangeDiagnostic {
-  exchange: string;
+interface HttpProbe {
+  label: string;
   httpStatus: number;
   rows: number | null;
-  cappedAtRequestLimit: boolean;
+  available: boolean;
   error: string | null;
 }
 
@@ -23,8 +33,10 @@ export async function runSwingRuntimeDiagnostics(url: URL) {
   // New runtime tables can legitimately be absent while deployment is incomplete.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabaseAdmin as any;
-  const exchanges = csvParam(url, "exchanges") ?? DEFAULT_EXCHANGES;
+  const probeEodhd = url.searchParams.get("probeEodhd") === "1";
   const probeBulk = url.searchParams.get("probeBulk") === "1";
+  const probeFmp = url.searchParams.get("probeFmp") === "1";
+  const probeFundamentals = url.searchParams.get("probeFundamentals") === "1";
 
   const [assets, technicalScreen, trackerSetups, trackerSnapshots, monitorRuns, backfillQueue] =
     await Promise.all([
@@ -42,28 +54,242 @@ export async function runSwingRuntimeDiagnostics(url: URL) {
       diagnoseTable(db, "equity_eod_backfill_queue", "market_date"),
     ]);
 
-  const fmp = await diagnoseFmp(exchanges, probeBulk);
+  const [eodhd, fmp] = await Promise.all([
+    diagnoseEodhd(probeEodhd, probeBulk),
+    diagnoseFmp(url, probeFmp, probeBulk, probeFundamentals),
+  ]);
+
+  const database = {
+    activeEquities: assets,
+    technicalScreen,
+    trackerSetups,
+    trackerSnapshots,
+    monitorRuns,
+    backfillQueue,
+  };
 
   return {
     asOf: new Date().toISOString(),
-    database: {
-      activeEquities: assets,
-      technicalScreen,
-      trackerSetups,
-      trackerSnapshots,
-      monitorRuns,
-      backfillQueue,
-    },
+    database,
+    eodhd,
     fmp,
-    interpretation: interpret({
-      activeEquities: assets,
-      technicalScreen,
-      trackerSetups,
-      trackerSnapshots,
-      monitorRuns,
-      backfillQueue,
-      fmp,
-    }),
+    interpretation: interpret({ ...database, eodhd, fmp }),
+  };
+}
+
+async function diagnoseEodhd(probe: boolean, probeBulk: boolean) {
+  if (!isEodhdConfigured()) {
+    return {
+      configured: false,
+      probed: false,
+      account: null,
+      symbolLists: [] as HttpProbe[],
+      dailySamples: [] as HttpProbe[],
+      bulkEod: null as HttpProbe | null,
+      error: "EODHD_API_KEY missing",
+    };
+  }
+  if (!probe) {
+    return {
+      configured: true,
+      probed: false,
+      account: null,
+      symbolLists: [] as HttpProbe[],
+      dailySamples: [] as HttpProbe[],
+      bulkEod: null as HttpProbe | null,
+      error: null,
+    };
+  }
+
+  let account: null | {
+    dailyRateLimit: number | null;
+    apiRequests: number | null;
+    apiRequestsDate: string | null;
+    subscriptionType: string | null;
+    error: string | null;
+  } = null;
+  try {
+    const value = await fetchEodhdAccount();
+    account = {
+      dailyRateLimit: finite(value.dailyRateLimit),
+      apiRequests: finite(value.apiRequests),
+      apiRequestsDate: value.apiRequestsDate ?? null,
+      subscriptionType: value.subscriptionType ?? null,
+      error: null,
+    };
+  } catch (error) {
+    account = {
+      dailyRateLimit: null,
+      apiRequests: null,
+      apiRequestsDate: null,
+      subscriptionType: null,
+      error: eodhdErrorMessage(error),
+    };
+  }
+
+  const symbolLists: HttpProbe[] = [];
+  for (const target of EODHD_EXCHANGE_TARGETS) {
+    try {
+      const rows = await fetchEodhdSymbolList(target.code);
+      const eligible = target.code === "US"
+        ? rows.filter((row) => eodhdExchangeToMic(row.Exchange) !== null).length
+        : rows.length;
+      symbolLists.push({
+        label: target.code,
+        httpStatus: 200,
+        rows: eligible,
+        available: true,
+        error: eligible === rows.length ? null : `${rows.length - eligible} unsupported/OTC US listings excluded`,
+      });
+    } catch (error) {
+      symbolLists.push({
+        label: target.code,
+        httpStatus: providerStatus(error),
+        rows: null,
+        available: false,
+        error: eodhdErrorMessage(error),
+      });
+    }
+  }
+
+  const from = new Date(Date.now() - 180 * 86_400_000).toISOString().slice(0, 10);
+  const samples = [
+    ["AAPL.US", "US"],
+    ["BP.LSE", "UK"],
+    ["SAP.XETRA", "DE"],
+    ["AIR.PA", "FR"],
+    ["ASML.AS", "NL"],
+  ] as const;
+  const dailySamples: HttpProbe[] = [];
+  for (const [ticker, label] of samples) {
+    try {
+      const rows = await fetchEodhdDaily(ticker, { from });
+      dailySamples.push({
+        label: `${label}:${ticker}`,
+        httpStatus: 200,
+        rows: rows.length,
+        available: rows.length >= 90,
+        error: rows.length >= 90 ? null : `Only ${rows.length} daily bars returned`,
+      });
+    } catch (error) {
+      dailySamples.push({
+        label: `${label}:${ticker}`,
+        httpStatus: providerStatus(error),
+        rows: null,
+        available: false,
+        error: eodhdErrorMessage(error),
+      });
+    }
+  }
+
+  let bulkEod: HttpProbe | null = null;
+  if (probeBulk) {
+    try {
+      const rows = await fetchEodhdBulkEod("US", { date: previousUtcBusinessDate() });
+      bulkEod = {
+        label: "US bulk EOD",
+        httpStatus: 200,
+        rows: rows.length,
+        available: rows.length > 0,
+        error: rows.length > 0 ? null : "EODHD bulk endpoint returned no rows",
+      };
+    } catch (error) {
+      bulkEod = {
+        label: "US bulk EOD",
+        httpStatus: providerStatus(error),
+        rows: null,
+        available: false,
+        error: eodhdErrorMessage(error),
+      };
+    }
+  }
+
+  return {
+    configured: true,
+    probed: true,
+    account,
+    symbolLists,
+    dailySamples,
+    bulkEod,
+    error: null,
+  };
+}
+
+async function diagnoseFmp(url: URL, probe: boolean, probeBulk: boolean, probeFundamentals: boolean) {
+  const key = process.env.FMP_API_KEY;
+  if (!key) {
+    return {
+      configured: false,
+      probed: false,
+      screener: [] as HttpProbe[],
+      bulkEod: null as HttpProbe | null,
+      fundamentals: [] as HttpProbe[],
+      error: "FMP_API_KEY missing",
+    };
+  }
+  if (!probe && !probeFundamentals) {
+    return {
+      configured: true,
+      probed: false,
+      screener: [] as HttpProbe[],
+      bulkEod: null as HttpProbe | null,
+      fundamentals: [] as HttpProbe[],
+      error: null,
+    };
+  }
+
+  const screener: HttpProbe[] = [];
+  if (probe) {
+    const exchanges = csvParam(url, "exchanges") ?? DEFAULT_FMP_EXCHANGES;
+    for (const exchange of exchanges.slice(0, 20)) {
+      const endpoint = new URL(FMP_SCREENER_URL);
+      endpoint.searchParams.set("exchange", exchange);
+      endpoint.searchParams.set("isEtf", "false");
+      endpoint.searchParams.set("isFund", "false");
+      endpoint.searchParams.set("isActivelyTrading", "true");
+      endpoint.searchParams.set("marketCapMoreThan", "300000000");
+      endpoint.searchParams.set("priceMoreThan", "2");
+      endpoint.searchParams.set("volumeMoreThan", "50000");
+      endpoint.searchParams.set("limit", String(REQUEST_LIMIT));
+      endpoint.searchParams.set("apikey", key);
+      screener.push(await rawHttpProbe(exchange, endpoint));
+    }
+  }
+
+  let bulkEod: HttpProbe | null = null;
+  if (probe && probeBulk) {
+    const endpoint = new URL(FMP_EOD_BULK_URL);
+    endpoint.searchParams.set("date", previousUtcBusinessDate());
+    endpoint.searchParams.set("apikey", key);
+    bulkEod = await rawHttpProbe("FMP bulk EOD", endpoint);
+  }
+
+  const fundamentals: HttpProbe[] = [];
+  if (probeFundamentals) {
+    const requests: Array<{ endpoint: string; params?: Record<string, string> }> = [
+      { endpoint: "profile" },
+      { endpoint: "key-metrics-ttm" },
+      { endpoint: "ratios-ttm" },
+      { endpoint: "income-statement", params: { period: "annual", limit: "1" } },
+      { endpoint: "balance-sheet-statement", params: { period: "annual", limit: "1" } },
+      { endpoint: "cash-flow-statement", params: { period: "annual", limit: "1" } },
+    ];
+    for (const request of requests) {
+      const endpoint = new URL(`https://financialmodelingprep.com/stable/${request.endpoint}`);
+      endpoint.searchParams.set("symbol", "AAPL");
+      for (const [name, value] of Object.entries(request.params ?? {})) endpoint.searchParams.set(name, value);
+      endpoint.searchParams.set("apikey", key);
+      fundamentals.push(await rawHttpProbe(request.endpoint, endpoint));
+    }
+  }
+
+  return {
+    configured: true,
+    probed: probe || probeFundamentals,
+    screener,
+    bulkEod,
+    fundamentals,
+    error: null,
   };
 }
 
@@ -94,94 +320,21 @@ async function diagnoseCount(
   }
 }
 
-async function diagnoseFmp(exchanges: string[], probeBulk: boolean) {
-  const key = process.env.FMP_API_KEY;
-  if (!key) {
+async function rawHttpProbe(label: string, endpoint: URL): Promise<HttpProbe> {
+  try {
+    const response = await fetch(endpoint.toString());
+    const body = await safeJson(response);
+    const rows = Array.isArray(body) ? body.length : body && typeof body === "object" ? 1 : null;
     return {
-      configured: false,
-      screener: [] as FmpExchangeDiagnostic[],
-      totalRows: null as number | null,
-      bulkEod: null,
-      error: "FMP_API_KEY missing",
+      label,
+      httpStatus: response.status,
+      rows,
+      available: response.ok && rows !== null && rows > 0,
+      error: response.ok ? null : providerError(response.status, body),
     };
+  } catch (error) {
+    return { label, httpStatus: 0, rows: null, available: false, error: errorMessage(error) };
   }
-
-  const screener: FmpExchangeDiagnostic[] = [];
-  for (const exchange of exchanges.slice(0, 20)) {
-    const endpoint = new URL(FMP_SCREENER_URL);
-    endpoint.searchParams.set("exchange", exchange);
-    endpoint.searchParams.set("isEtf", "false");
-    endpoint.searchParams.set("isFund", "false");
-    endpoint.searchParams.set("isActivelyTrading", "true");
-    endpoint.searchParams.set("marketCapMoreThan", "300000000");
-    endpoint.searchParams.set("priceMoreThan", "2");
-    endpoint.searchParams.set("volumeMoreThan", "50000");
-    endpoint.searchParams.set("limit", String(REQUEST_LIMIT));
-    endpoint.searchParams.set("apikey", key);
-
-    try {
-      const response = await fetch(endpoint.toString());
-      const body = await safeJson(response);
-      const rows = Array.isArray(body) ? body.length : null;
-      screener.push({
-        exchange,
-        httpStatus: response.status,
-        rows,
-        cappedAtRequestLimit: rows === REQUEST_LIMIT,
-        error: response.ok && Array.isArray(body) ? null : providerError(response.status, body),
-      });
-    } catch (error) {
-      screener.push({
-        exchange,
-        httpStatus: 0,
-        rows: null,
-        cappedAtRequestLimit: false,
-        error: errorMessage(error),
-      });
-    }
-  }
-
-  let bulkEod: null | {
-    attempted: boolean;
-    httpStatus: number;
-    rows: number | null;
-    available: boolean;
-    error: string | null;
-  } = null;
-
-  if (probeBulk) {
-    const endpoint = new URL(FMP_EOD_BULK_URL);
-    endpoint.searchParams.set("date", previousUtcBusinessDate());
-    endpoint.searchParams.set("apikey", key);
-    try {
-      const response = await fetch(endpoint.toString());
-      const body = await safeJson(response);
-      const rows = Array.isArray(body) ? body.length : null;
-      bulkEod = {
-        attempted: true,
-        httpStatus: response.status,
-        rows,
-        available: response.ok && Array.isArray(body),
-        error: response.ok && Array.isArray(body) ? null : providerError(response.status, body),
-      };
-    } catch (error) {
-      bulkEod = {
-        attempted: true,
-        httpStatus: 0,
-        rows: null,
-        available: false,
-        error: errorMessage(error),
-      };
-    }
-  }
-
-  return {
-    configured: true,
-    screener,
-    totalRows: screener.reduce((sum, item) => sum + (item.rows ?? 0), 0),
-    bulkEod,
-    error: null,
-  };
 }
 
 function interpret(input: {
@@ -191,6 +344,7 @@ function interpret(input: {
   trackerSnapshots: TableDiagnostic;
   monitorRuns: TableDiagnostic;
   backfillQueue: TableDiagnostic;
+  eodhd: Awaited<ReturnType<typeof diagnoseEodhd>>;
   fmp: Awaited<ReturnType<typeof diagnoseFmp>>;
 }): string[] {
   const findings: string[] = [];
@@ -201,50 +355,55 @@ function interpret(input: {
     input.monitorRuns,
     input.backfillQueue,
   ].filter((item) => !item.available).length;
-
   if (missingRuntimeTables > 0) {
-    findings.push(
-      `${missingRuntimeTables} required Swing runtime table(s) are unavailable. The Supabase migration/deployment is incomplete.`,
-    );
+    findings.push(`${missingRuntimeTables} required Swing runtime table(s) are unavailable.`);
   }
 
   const active = input.activeEquities.count ?? 0;
   if (input.activeEquities.available && active < 2_950) {
-    findings.push(`Only ${active} active equities exist in the database; the managed-universe bootstrap has not completed.`);
+    findings.push(`Only ${active} active equities exist in the database; managed-universe bootstrap is incomplete.`);
   }
 
-  if (input.fmp.configured) {
-    const successful = input.fmp.screener.filter((item) => item.httpStatus === 200 && item.rows !== null);
-    const total = successful.reduce((sum, item) => sum + (item.rows ?? 0), 0);
-    if (successful.length > 0 && total < 100) {
-      findings.push(
-        `FMP returned only ${total} screener rows across ${successful.length} successful exchange request(s). Provider-plan coverage or endpoint restrictions are a likely universe bottleneck.`,
-      );
-    } else if (total >= 500) {
-      findings.push(
-        `FMP returned ${total} screener rows across the diagnostic exchanges, so a provider asset-count cap is unlikely to explain a ~59-name database universe.`,
-      );
+  if (input.eodhd.probed) {
+    const dailyLimit = input.eodhd.account?.dailyRateLimit ?? null;
+    if (dailyLimit !== null && dailyLimit < 100_000) {
+      findings.push(`EODHD account reports ${dailyLimit} API units/day; production bulk jobs must remain disabled until paid All World EOD entitlement is active.`);
+    }
+    const lists = input.eodhd.symbolLists.filter((item) => item.available);
+    const listed = lists.reduce((sum, item) => sum + (item.rows ?? 0), 0);
+    if (listed >= 3_000) {
+      findings.push(`EODHD reference-data probe exposes ${listed} supported common-stock listings across the target markets; universe capacity is sufficient.`);
+    }
+    if (input.eodhd.bulkEod && !input.eodhd.bulkEod.available) {
+      findings.push(`EODHD bulk EOD is not yet usable: ${input.eodhd.bulkEod.error ?? `HTTP ${input.eodhd.bulkEod.httpStatus}`}.`);
+    } else if (input.eodhd.bulkEod?.available) {
+      findings.push(`EODHD bulk EOD is available (${input.eodhd.bulkEod.rows ?? 0} US rows in the probe).`);
     }
   }
 
-  if (input.fmp.bulkEod && !input.fmp.bulkEod.available) {
-    findings.push(
-      `FMP bulk EOD probe failed with HTTP ${input.fmp.bulkEod.httpStatus}; the configured plan may not include the bulk endpoint.`,
-    );
+  const restrictedFundamentals = input.fmp.fundamentals.filter((item) => item.httpStatus === 402 || item.httpStatus === 403);
+  if (restrictedFundamentals.length) {
+    findings.push(`FMP fundamentals entitlement is missing for: ${restrictedFundamentals.map((item) => item.label).join(", ")}.`);
+  } else if (input.fmp.fundamentals.length && input.fmp.fundamentals.every((item) => item.available)) {
+    findings.push("FMP fundamental endpoints remain available and can stay as the platform's fundamental-data source.");
   }
 
-  if (findings.length === 0) findings.push("No obvious deployment or provider coverage fault was detected by this probe.");
+  if (!findings.length) findings.push("No obvious deployment or provider capability fault was detected by this probe.");
   return findings;
+}
+
+function providerStatus(error: unknown): number {
+  if (error && typeof error === "object" && "status" in error) {
+    const value = Number((error as { status?: unknown }).status);
+    return Number.isFinite(value) ? value : 0;
+  }
+  return 0;
 }
 
 async function safeJson(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return null;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text.slice(0, 500);
-  }
+  try { return JSON.parse(text) as unknown; } catch { return text.slice(0, 500); }
 }
 
 function providerError(status: number, body: unknown): string {
@@ -257,7 +416,7 @@ function providerError(status: number, body: unknown): string {
   return `HTTP ${status}`;
 }
 
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (error && typeof error === "object") {
     const record = error as Record<string, unknown>;
@@ -265,11 +424,7 @@ function errorMessage(error: unknown): string {
       .filter((value) => value !== null && value !== undefined && String(value).trim())
       .map(String);
     if (parts.length) return parts.join(" · ");
-    try {
-      return JSON.stringify(record);
-    } catch {
-      return String(error);
-    }
+    try { return JSON.stringify(record); } catch { return String(error); }
   }
   return String(error);
 }
@@ -281,6 +436,11 @@ function csvParam(url: URL, key: string): string[] | undefined {
     .map((value) => value.trim().toUpperCase())
     .filter(Boolean);
   return values?.length ? values : undefined;
+}
+
+function finite(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function previousUtcBusinessDate(now = new Date()): string {
