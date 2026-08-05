@@ -74,7 +74,11 @@ export function applyOpportunityEvidenceIntegrity(
     const horizons = Object.fromEntries(
       HORIZONS.map((horizon) => [
         horizon,
-        scoreOpportunityHorizon(horizon, evidence, [...sectorBlocks, ...blocks]),
+        // Freshness is represented by missing/low-confidence evidence so the
+        // existing unresolved-critical rules fail closed without converting a
+        // data-age problem into a company-level hard Avoid. Only genuine sector
+        // model incompatibilities use the scorer's additional-block channel.
+        scoreOpportunityHorizon(horizon, evidence, sectorBlocks),
       ]),
     ) as OpportunityCandidate["horizons"];
 
