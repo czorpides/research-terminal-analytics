@@ -59,7 +59,8 @@ export function applyOpportunityEvidenceIntegrity(
 
   const freshnessByAsset = new Map(payload.assets.map((row) => [row.assetId, row]));
   const candidates = workspace.candidates.map((candidate) => {
-    const row = freshnessByAsset.get(candidate.assetId);
+    const normalizedCandidate = normalizeCandidateMarket(candidate);
+    const row = freshnessByAsset.get(normalizedCandidate.assetId);
     const freshness: CandidateEvidenceFreshness = {
       technical: classifyTechnicalFreshness(
         [row?.momentumAt, row?.trendAt, row?.volatilityAt],
@@ -67,9 +68,9 @@ export function applyOpportunityEvidenceIntegrity(
       ),
       fundamentals: classifyFundamentalFreshness(row?.fundamentalAsOf),
     };
-    const evidence = enforceFreshness(candidate.evidence, freshness);
+    const evidence = enforceFreshness(normalizedCandidate.evidence, freshness);
     const blocks = freshnessBlocks(freshness);
-    const sectorBlocks = sectorModelBlocks(candidate.industryCode);
+    const sectorBlocks = sectorModelBlocks(normalizedCandidate.industryCode);
     const horizons = Object.fromEntries(
       HORIZONS.map((horizon) => [
         horizon,
@@ -79,7 +80,7 @@ export function applyOpportunityEvidenceIntegrity(
 
     const funnel = Object.fromEntries(
       HORIZONS.map((horizon) => {
-        const existing = candidate.funnel[horizon];
+        const existing = normalizedCandidate.funnel[horizon];
         return [
           horizon,
           blocks.length === 0
@@ -95,17 +96,17 @@ export function applyOpportunityEvidenceIntegrity(
     ) as OpportunityCandidate["funnel"];
 
     return {
-      ...candidate,
+      ...normalizedCandidate,
       evidence,
       horizons,
       funnel,
       evidenceFreshness: freshness,
       narrative: {
-        ...candidate.narrative,
-        detail: `${candidate.narrative.detail} ${freshnessSummary(freshness)}`,
+        ...normalizedCandidate.narrative,
+        detail: `${normalizedCandidate.narrative.detail} ${freshnessSummary(freshness)}`,
         watch: unique([
           ...blocks,
-          ...candidate.narrative.watch,
+          ...normalizedCandidate.narrative.watch,
         ]),
       },
     } satisfies OpportunityCandidate;
@@ -125,6 +126,17 @@ export function applyOpportunityEvidenceIntegrity(
         medianConfidence: round1(median(results.map((result) => result.dataConfidence))),
       };
     }),
+    coverage: modernCoverage(candidates),
+    capabilities: workspace.capabilities.map((capability) =>
+      capability.capability === "Market prices and technical history"
+        ? {
+            ...capability,
+            state: "live" as const,
+            currentUse: "EODHD provides the managed US/UK/EU universe, adjusted EOD history and daily whole-exchange refresh; raw close remains the displayed/traded price.",
+            productionRequirement: "Maintain global >=95% and regional >=90% fresh-price, 252-session and technical-score coverage.",
+          }
+        : capability,
+    ),
     modelNote: `${workspace.modelNote} Evidence-integrity overlay: long-horizon technicals use adjusted closes; stale technical/fundamental inputs cannot promote a candidate to production eligibility.`,
   };
 }
@@ -165,6 +177,58 @@ function enforceFreshness(
   }
 
   return evidence;
+}
+
+function modernCoverage(candidates: OpportunityCandidate[]): OpportunityRadarWorkspace["coverage"] {
+  const counts = { US: 0, UK: 0, EU: 0 };
+  for (const candidate of candidates) {
+    if (candidate.countryCode === "US") counts.US += 1;
+    else if (candidate.countryCode === "GB" || candidate.countryCode === "UK") counts.UK += 1;
+    else if (["DE", "FR", "NL"].includes(candidate.countryCode)) counts.EU += 1;
+  }
+  return [
+    {
+      market: "United States",
+      code: "US",
+      state: "shadow",
+      trackedAssets: counts.US,
+      available: "EODHD managed-universe membership, adjusted daily history and fresh technical scoring; FMP fundamentals where mapped.",
+      missing: "Fundamental and statement coverage is still being expanded and freshness-gated asset by asset.",
+      activationRule: "Market evidence >=95% globally, >=90% in-region, with critical candidate evidence current before production eligibility.",
+    },
+    {
+      market: "United Kingdom",
+      code: "UK",
+      state: "shadow",
+      trackedAssets: counts.UK,
+      available: "EODHD LSE universe and adjusted daily history are live; provider-symbol identity maps FMP/Twelve Data separately.",
+      missing: "Fundamental/statement coverage must catch up across the UK sleeve; no bare-ticker assumptions are permitted.",
+      activationRule: "At least 90% regional EOD, 252-session history and fresh technical-score coverage, plus current critical evidence per candidate.",
+    },
+    {
+      market: "Continental Europe",
+      code: "EU",
+      state: "shadow",
+      trackedAssets: counts.EU,
+      available: "EODHD Xetra, Paris and Amsterdam universe/history are live with exchange-qualified provider mappings.",
+      missing: "FMP provider symbols require successful-response verification and fundamental/statement coverage remains incomplete.",
+      activationRule: "At least 90% regional EOD, 252-session history and fresh technical-score coverage, with no stale critical evidence promoted to eligibility.",
+    },
+  ];
+}
+
+function normalizeCandidateMarket(candidate: OpportunityCandidate): OpportunityCandidate {
+  if (candidate.countryCode !== "UNMAPPED") return candidate;
+  const countryCode = candidate.exchange === "XASE"
+    ? "US"
+    : candidate.exchange === "XETR"
+      ? "DE"
+      : candidate.exchange === "XPAR"
+        ? "FR"
+        : candidate.exchange === "XAMS"
+          ? "NL"
+          : candidate.countryCode;
+  return countryCode === candidate.countryCode ? candidate : { ...candidate, countryCode };
 }
 
 function sectorModelBlocks(industryCode: string | null): string[] {
