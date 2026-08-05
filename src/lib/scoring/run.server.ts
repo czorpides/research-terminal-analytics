@@ -56,18 +56,20 @@ const sourceTierCache = new Map<string, Promise<SourceTier>>();
 async function loadBars(assetId: string): Promise<LoadedBars> {
   const { data, error } = await supabaseAdmin
     .from("prices_daily")
-    .select("trade_date, close, volume, source_id")
+    .select("trade_date, close, adj_close, volume, source_id")
     .eq("asset_id", assetId)
     .order("trade_date", { ascending: true })
     .limit(2000);
   if (error) throw error;
 
-  const valid = (data ?? []).filter((row) => row.close !== null);
+  // Long-horizon Opportunity evidence must be corporate-action adjusted. Raw
+  // close remains the canonical displayed/traded price elsewhere in the app.
+  const valid = (data ?? []).filter((row) => row.adj_close !== null || row.close !== null);
   const latest = valid.at(-1) ?? null;
   return {
     bars: valid.map((row) => ({
       date: row.trade_date as string,
-      close: Number(row.close),
+      close: Number(row.adj_close ?? row.close),
       volume: row.volume === null ? null : Number(row.volume),
     })),
     latestSourceId: latest?.source_id ? String(latest.source_id) : null,
@@ -118,6 +120,11 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
     const trend = computeTrend(loaded.bars);
     const vol = computeVolatility(loaded.bars);
     const now = new Date().toISOString();
+    const provenance = {
+      _price_basis: "adjusted_close",
+      _price_source_id: loaded.latestSourceId,
+      _bar_count: loaded.bars.length,
+    };
 
     const rows = [
       {
@@ -128,7 +135,7 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
         confidence: Math.round(dataConf.value * 0.9),
         calc_version: MOMENTUM_CALC_VERSION,
         computed_at: now,
-        inputs: momo.inputs,
+        inputs: { ...momo.inputs, ...provenance },
         weights: {},
         positives: momo.positives,
         deductions: momo.deductions,
@@ -141,7 +148,7 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
         confidence: dataConf.value,
         calc_version: TREND_CALC_VERSION,
         computed_at: now,
-        inputs: trend.inputs,
+        inputs: { ...trend.inputs, ...provenance },
         weights: {},
         positives: trend.positives,
         deductions: trend.deductions,
@@ -154,7 +161,7 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
         confidence: dataConf.value,
         calc_version: VOL_CALC_VERSION,
         computed_at: now,
-        inputs: vol.inputs,
+        inputs: { ...vol.inputs, ...provenance },
         weights: {},
         positives: vol.positives,
         deductions: vol.deductions,
