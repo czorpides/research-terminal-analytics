@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { deriveProviderSymbol } from "@/lib/ingestion/providers/asset-symbols.server";
+import { deriveProviderSymbol } from "../ingestion/providers/asset-symbols.ts";
 import {
   classifyFundamentalFreshness,
   classifyTechnicalFreshness,
