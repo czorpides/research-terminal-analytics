@@ -70,6 +70,7 @@ export function applyOpportunityEvidenceIntegrity(
     };
     const evidence = enforceFreshness(normalizedCandidate.evidence, freshness);
     const blocks = freshnessBlocks(freshness);
+    const technicalHold = freshness.technical.state === "stale" || freshness.technical.state === "missing";
     const sectorBlocks = sectorModelBlocks(normalizedCandidate.industryCode);
     const horizons = Object.fromEntries(
       HORIZONS.map((horizon) => [
@@ -87,13 +88,18 @@ export function applyOpportunityEvidenceIntegrity(
         const existing = normalizedCandidate.funnel[horizon];
         return [
           horizon,
-          blocks.length === 0
-            ? existing
-            : {
+          technicalHold
+            ? {
                 ...existing,
                 nominated: false,
                 shadowPriority: Math.min(existing.shadowPriority, 45),
-                detail: `${existing.detail} Evidence-integrity hold: ${blocks.join(" ")}`,
+                detail: `${existing.detail} Market-evidence hold: ${freshness.technical.detail}`,
+              }
+            : {
+                ...existing,
+                detail: blocks.length
+                  ? `${existing.detail} Evidence-integrity warning: ${blocks.join(" ")}`
+                  : existing.detail,
               },
         ];
       }),
