@@ -10,8 +10,9 @@ const MINIMUM_MANAGED_EQUITIES = 2_950;
 
 /**
  * Equity ingestion endpoint. The historical `/ingest/stooq` route now manages
- * the 3,000-name equity universe, bulk EOD refresh/backfill, one ticker, the
- * fallback rotating per-symbol price batch, or the quota-aware Swing monitor.
+ * the 3,000-name equity universe, bulk EOD refresh/backfill, adjusted-history
+ * reconciliation, one ticker, the fallback rotating per-symbol price batch, or
+ * the quota-aware Swing monitor.
  */
 export const Route = createFileRoute("/api/public/ingest/stooq")({
   server: {
@@ -27,6 +28,7 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
         const swingMonitor = url.searchParams.get("swingMonitor") === "1";
         const bulkEod = url.searchParams.get("bulkEod") === "1";
         const bulkBackfill = url.searchParams.get("bulkBackfill") === "1";
+        const adjustedReconcile = url.searchParams.get("adjustedReconcile") === "1";
         const refreshScreen = url.searchParams.get("refreshScreen") === "1";
         const diagnostics = url.searchParams.get("diagnostics") === "1";
 
@@ -63,6 +65,15 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
               ? await refreshEquityTechnicalScreen()
               : 0;
             return Response.json({ ...backfill, technicalScreenRows });
+          }
+
+          if (adjustedReconcile) {
+            const { runAdjustedHistoryReconciliationBatch } = await import(
+              "@/lib/ingestion/equities/adjusted-history.server"
+            );
+            return Response.json(
+              await runAdjustedHistoryReconciliationBatch(integerParam(url, "limit") ?? 50),
+            );
           }
 
           if (bulkEod) {

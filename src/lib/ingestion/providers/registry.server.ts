@@ -3,6 +3,7 @@ import { twelvedata } from "./twelvedata.server";
 import { fmp } from "./fmp.server";
 import { alphavantage } from "./alphavantage.server";
 import { canUse, recordCall } from "./quota.server";
+import type { ProviderSymbolMap } from "./asset-symbols.server";
 import type { PriceBar, PriceProvider, ProviderCode } from "./types";
 import { ProviderError } from "./types";
 
@@ -26,16 +27,31 @@ export async function pickProvider(exclude: ProviderCode[] = []): Promise<PriceP
 }
 
 /** Fetch bars via preferred provider; fail over to the next on auth/rate/network errors. */
-export async function fetchWithFailover(symbol: string, opts: { from?: string; to?: string } = {}): Promise<{ provider: ProviderCode; bars: PriceBar[]; attempts: Array<{ provider: ProviderCode; error: string }> }> {
+export async function fetchWithFailover(
+  symbol: string,
+  opts: { from?: string; to?: string } = {},
+  providerSymbols?: ProviderSymbolMap,
+): Promise<{
+  provider: ProviderCode;
+  providerSymbol: string;
+  bars: PriceBar[];
+  attempts: Array<{ provider: ProviderCode; error: string }>;
+}> {
   const attempts: Array<{ provider: ProviderCode; error: string }> = [];
   const excluded: ProviderCode[] = [];
   for (let i = 0; i < ALL_PROVIDERS.length; i++) {
     const p = await pickProvider(excluded);
     if (!p) break;
+    const requestSymbol = mappedSymbol(p.code, symbol, providerSymbols);
+    if (!requestSymbol) {
+      attempts.push({ provider: p.code, error: "no provider symbol mapping for this exchange" });
+      excluded.push(p.code);
+      continue;
+    }
     try {
-      const bars = await p.fetchDaily(symbol, opts);
+      const bars = await p.fetchDaily(requestSymbol, opts);
       await recordCall(p.code, "ok");
-      return { provider: p.code, bars, attempts };
+      return { provider: p.code, providerSymbol: requestSymbol, bars, attempts };
     } catch (e) {
       const err = e as ProviderError;
       const status = err.code === "rate_limit" ? "rate_limit" : err.code === "auth" ? "auth" : "error";
@@ -48,15 +64,23 @@ export async function fetchWithFailover(symbol: string, opts: { from?: string; t
 }
 
 /** Cross-check the latest close using a different provider. */
-export async function crossVerifyLatest(symbol: string, primary: ProviderCode, expectedClose: number, expectedDate: string): Promise<{ verifier: ProviderCode | null; agrees: boolean; delta?: number; detail: string }> {
+export async function crossVerifyLatest(
+  symbol: string,
+  primary: ProviderCode,
+  expectedClose: number,
+  expectedDate: string,
+  providerSymbols?: ProviderSymbolMap,
+): Promise<{ verifier: ProviderCode | null; agrees: boolean; delta?: number; detail: string }> {
   const candidates = ALL_PROVIDERS
     .filter((p) => p.code !== primary && p.isConfigured())
     .sort((a, b) => a.priority - b.priority);
   for (const p of candidates) {
+    const requestSymbol = mappedSymbol(p.code, symbol, providerSymbols);
+    if (!requestSymbol) continue;
     const { ok } = await canUse(p.code, p.dailyLimit);
     if (!ok) continue;
     try {
-      const bars = await p.fetchDaily(symbol, { from: expectedDate, to: expectedDate });
+      const bars = await p.fetchDaily(requestSymbol, { from: expectedDate, to: expectedDate });
       await recordCall(p.code, "ok");
       const bar = bars.find((b) => b.date === expectedDate) ?? bars[bars.length - 1];
       if (!bar) return { verifier: p.code, agrees: false, detail: `${p.name}: no bar for ${expectedDate}` };
@@ -83,4 +107,13 @@ export async function pingAll(): Promise<Array<{ code: ProviderCode; name: strin
     }
   }
   return out;
+}
+
+function mappedSymbol(
+  provider: ProviderCode,
+  canonicalSymbol: string,
+  providerSymbols?: ProviderSymbolMap,
+): string | null {
+  if (!providerSymbols) return canonicalSymbol;
+  return providerSymbols[provider] ?? null;
 }
