@@ -13,6 +13,7 @@ import {
   type OpportunitySignalKey,
 } from "./model";
 import type {
+  CandidateFundamentalModels,
   OpportunityCandidate,
   OpportunityRadarWorkspace,
 } from "./workspace.functions";
@@ -69,8 +70,13 @@ export function applyOpportunityEvidenceIntegrity(
       fundamentals: classifyFundamentalFreshness(row?.fundamentalAsOf),
     };
     const evidence = enforceFreshness(normalizedCandidate.evidence, freshness);
+    const fundamentalModels = enforceFundamentalModelFreshness(
+      normalizedCandidate.fundamentalModels,
+      freshness,
+    );
     const blocks = freshnessBlocks(freshness);
     const technicalHold = freshness.technical.state === "stale" || freshness.technical.state === "missing";
+    const fundamentalHold = freshness.fundamentals.state === "stale" || freshness.fundamentals.state === "missing";
     const sectorBlocks = sectorModelBlocks(normalizedCandidate.industryCode);
     const horizons = Object.fromEntries(
       HORIZONS.map((horizon) => [
@@ -86,17 +92,25 @@ export function applyOpportunityEvidenceIntegrity(
     const funnel = Object.fromEntries(
       HORIZONS.map((horizon) => {
         const existing = normalizedCandidate.funnel[horizon];
+        const routes = fundamentalHold
+          ? existing.routes.filter((route) => route === "price_dislocation")
+          : existing.routes;
         return [
           horizon,
           technicalHold
             ? {
                 ...existing,
+                routes: [],
                 nominated: false,
+                piotroskiValidation: "unavailable" as const,
                 shadowPriority: Math.min(existing.shadowPriority, 45),
                 detail: `${existing.detail} Market-evidence hold: ${freshness.technical.detail}`,
               }
             : {
                 ...existing,
+                routes,
+                nominated: routes.length > 0,
+                piotroskiValidation: fundamentalHold ? "unavailable" as const : existing.piotroskiValidation,
                 detail: blocks.length
                   ? `${existing.detail} Evidence-integrity warning: ${blocks.join(" ")}`
                   : existing.detail,
@@ -110,6 +124,7 @@ export function applyOpportunityEvidenceIntegrity(
       evidence,
       horizons,
       funnel,
+      fundamentalModels,
       evidenceFreshness: freshness,
       narrative: {
         ...normalizedCandidate.narrative,
@@ -187,6 +202,60 @@ function enforceFreshness(
   }
 
   return evidence;
+}
+
+function enforceFundamentalModelFreshness(
+  base: CandidateFundamentalModels,
+  freshness: CandidateEvidenceFreshness,
+): CandidateFundamentalModels {
+  if (freshness.fundamentals.state === "stale" || freshness.fundamentals.state === "missing") {
+    return {
+      piotroski: {
+        state: "missing",
+        score: null,
+        provisionalScore: null,
+        availableTests: 0,
+        coverage: 0,
+        tests: [],
+        knownAt: null,
+      },
+      magicFormula: {
+        state: "missing",
+        eligible: false,
+        exclusionReason: `Current fundamental evidence is ${freshness.fundamentals.state}.`,
+        returnOnCapital: null,
+        earningsYield: null,
+        universeRank: null,
+        universeSize: 0,
+        universePercentile: null,
+        industryRank: null,
+        industrySize: 0,
+        industryPercentile: null,
+        periodEnd: null,
+        knownAt: null,
+      },
+    };
+  }
+
+  if (freshness.fundamentals.state !== "warning") return base;
+  const multiplier = freshnessConfidenceMultiplier("warning");
+  return {
+    piotroski: {
+      ...base.piotroski,
+      state: base.piotroski.state === "missing" ? "missing" : "partial",
+      coverage: round1(base.piotroski.coverage * multiplier),
+    },
+    magicFormula: {
+      ...base.magicFormula,
+      universePercentile: confidenceAdjustPercentile(base.magicFormula.universePercentile, multiplier),
+      industryPercentile: confidenceAdjustPercentile(base.magicFormula.industryPercentile, multiplier),
+    },
+  };
+}
+
+function confidenceAdjustPercentile(value: number | null, multiplier: number): number | null {
+  if (value === null) return null;
+  return round1(50 + (value - 50) * multiplier);
 }
 
 function modernCoverage(candidates: OpportunityCandidate[]): OpportunityRadarWorkspace["coverage"] {
