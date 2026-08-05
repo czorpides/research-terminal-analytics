@@ -2,9 +2,15 @@ import { createHash } from "node:crypto";
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
-import { FUNDAMENTAL_METRICS } from "./metrics";
+import {
+  markProviderSymbolFailed,
+  markProviderSymbolVerified,
+  providerSymbolForAsset,
+  type AssetProviderIdentity,
+} from "@/lib/ingestion/providers/asset-symbols.server";
 import { canUse, recordCall } from "@/lib/ingestion/providers/quota.server";
 import { STATEMENT_METRICS, type StatementMetricCode } from "@/lib/opportunity/fundamental-models";
+import { FUNDAMENTAL_METRICS } from "./metrics";
 
 export interface FundamentalsIngestResult {
   status: "success" | "failed" | "skipped";
@@ -14,6 +20,7 @@ export interface FundamentalsIngestResult {
   filingsInserted?: number;
   factsInserted?: number;
   values?: Record<string, number | null>;
+  providerSymbol?: string;
   error?: string;
   reason?: string;
 }
@@ -146,18 +153,47 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Backwards-compatible ticker entrypoint. A ticker is accepted only when it
+ * uniquely identifies one active internal asset; cross-provider identity is
+ * then resolved from asset_id + exchange.
+ */
 export async function runFundamentalsIngest(symbol: string): Promise<FundamentalsIngestResult> {
+  const asset = await resolveUniqueAssetBySymbol(symbol);
+  return runFundamentalsIngestForAsset(asset.id);
+}
+
+export async function runFundamentalsIngestForAsset(assetId: string): Promise<FundamentalsIngestResult> {
+  const { data, error } = await supabaseAdmin
+    .from("assets")
+    .select("id,symbol,exchange")
+    .eq("id", assetId)
+    .eq("active", true)
+    .eq("asset_class", "equity")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`Asset ${assetId} not in active equity universe`);
+  return ingestFundamentalsForAsset({
+    id: String(data.id),
+    symbol: String(data.symbol),
+    exchange: data.exchange ? String(data.exchange) : null,
+  });
+}
+
+async function ingestFundamentalsForAsset(asset: AssetProviderIdentity): Promise<FundamentalsIngestResult> {
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) throw new Error("FMP_API_KEY missing");
 
-  const { data: asset } = await supabaseAdmin
-    .from("assets")
-    .select("id")
-    .eq("symbol", symbol)
-    .eq("active", true)
-    .maybeSingle();
-  if (!asset) throw new Error(`Asset ${symbol} not in universe`);
-  const assetId = asset.id as string;
+  const providerSymbol = await providerSymbolForAsset(asset, "fmp");
+  if (!providerSymbol) {
+    return {
+      status: "skipped",
+      symbol: asset.symbol,
+      runId: "",
+      rowsInserted: 0,
+      reason: `No FMP provider symbol is mapped for ${asset.symbol} on ${asset.exchange ?? "unknown exchange"}.`,
+    };
+  }
 
   const { data: source } = await supabaseAdmin
     .from("data_sources")
@@ -169,7 +205,14 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
 
   const gate = await canUse("fmp", 250, 3);
   if (!gate.ok) {
-    return { status: "skipped", symbol, runId: "", rowsInserted: 0, reason: gate.reason };
+    return {
+      status: "skipped",
+      symbol: asset.symbol,
+      providerSymbol,
+      runId: "",
+      rowsInserted: 0,
+      reason: gate.reason,
+    };
   }
 
   const { data: run } = await supabaseAdmin
@@ -178,16 +221,31 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
       source_id: sourceId,
       data_category: "fundamentals",
       status: "running",
-      details: { symbol, category: "fundamentals" },
+      details: {
+        symbol: asset.symbol,
+        exchange: asset.exchange,
+        providerSymbol,
+        category: "fundamentals",
+      },
     })
     .select("id")
     .single();
   const runId = run!.id as string;
 
   try {
-    const km = await fmp<FmpKeyMetrics>("key-metrics-ttm", symbol, apiKey);
-    const ra = await fmp<FmpRatios>("ratios-ttm", symbol, apiKey);
-    const pr = await fmp<FmpProfile>("profile", symbol, apiKey);
+    const km = await fmp<FmpKeyMetrics>("key-metrics-ttm", providerSymbol, apiKey);
+    const ra = await fmp<FmpRatios>("ratios-ttm", providerSymbol, apiKey);
+    const pr = await fmp<FmpProfile>("profile", providerSymbol, apiKey);
+    if (!(km?.length || ra?.length || pr?.length)) {
+      await markProviderSymbolFailed(
+        asset,
+        "fmp",
+        providerSymbol,
+        "All current-fundamental endpoints returned empty arrays.",
+      );
+      throw new Error(`FMP provider symbol ${providerSymbol} returned no current-fundamental rows`);
+    }
+
     const k = km?.[0] ?? {};
     const r = ra?.[0] ?? {};
     const p = pr?.[0] ?? {};
@@ -225,7 +283,7 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
       .filter(([, v]) => v !== null)
       .map(([metric_code, value_num]) => ({
         subject_type: "asset" as const,
-        subject_id: assetId,
+        subject_id: asset.id,
         metric_code,
         value_num,
         as_of: asOf,
@@ -241,9 +299,15 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
     const { error } = await supabaseAdmin.from("data_points").insert(rows as any);
     if (error) throw error;
 
-    const statements = await refreshAnnualStatementHistory({ assetId, symbol, sourceId, apiKey });
+    const statements = await refreshAnnualStatementHistory({
+      assetId: asset.id,
+      symbol: providerSymbol,
+      sourceId,
+      apiKey,
+    });
     const rowsInserted = rows.length + statements.factsInserted;
 
+    await markProviderSymbolVerified(asset, "fmp", providerSymbol);
     await supabaseAdmin
       .from("ingestion_runs")
       .update({
@@ -251,7 +315,9 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
         finished_at: new Date().toISOString(),
         rows_ingested: rowsInserted,
         details: {
-          symbol,
+          symbol: asset.symbol,
+          exchange: asset.exchange,
+          providerSymbol,
           provider: "fmp",
           values,
           statements,
@@ -263,7 +329,8 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
 
     return {
       status: "success",
-      symbol,
+      symbol: asset.symbol,
+      providerSymbol,
       runId,
       rowsInserted,
       filingsInserted: statements.filingsInserted,
@@ -280,54 +347,115 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
           error: e.message,
         })
         .eq("id", runId);
-      return { status: "skipped", symbol, runId, rowsInserted: 0, reason: e.message };
+      return {
+        status: "skipped",
+        symbol: asset.symbol,
+        providerSymbol,
+        runId,
+        rowsInserted: 0,
+        reason: e.message,
+      };
     }
     const message = failureMessage(e);
     await supabaseAdmin
       .from("ingestion_runs")
       .update({ status: "failed", finished_at: new Date().toISOString(), error: message })
       .eq("id", runId);
-    return { status: "failed", symbol, runId, rowsInserted: 0, error: message };
+    return {
+      status: "failed",
+      symbol: asset.symbol,
+      providerSymbol,
+      runId,
+      rowsInserted: 0,
+      error: message,
+    };
   }
 }
 
 export async function runAllFundamentalsIngest(
-  opts: { symbols?: string[] } = {},
+  opts: { symbols?: string[]; assetIds?: string[] } = {},
 ): Promise<FundamentalsIngestResult[]> {
-  let syms = opts.symbols;
-  if (!syms) {
-    const { data } = await supabaseAdmin.from("assets").select("symbol").eq("active", true);
-    syms = (data ?? []).map((a) => a.symbol as string);
+  let assetIds = opts.assetIds;
+  if (!assetIds && opts.symbols) {
+    assetIds = [];
+    for (const symbol of opts.symbols) {
+      try {
+        assetIds.push((await resolveUniqueAssetBySymbol(symbol)).id);
+      } catch {
+        // Ambiguous symbols are deliberately not guessed. Add a failed result
+        // below by preserving a sentinel id that cannot resolve.
+        assetIds.push(`symbol:${symbol}`);
+      }
+    }
   }
+  if (!assetIds) {
+    const { data, error } = await supabaseAdmin
+      .from("assets")
+      .select("id")
+      .eq("active", true)
+      .eq("asset_class", "equity");
+    if (error) throw error;
+    assetIds = (data ?? []).map((a) => String(a.id));
+  }
+
   const out: FundamentalsIngestResult[] = [];
-  for (let index = 0; index < syms.length; index += 1) {
-    const s = syms[index];
+  for (let index = 0; index < assetIds.length; index += 1) {
+    const assetId = assetIds[index];
     const gate = await canUse("fmp", 250, 3);
     if (!gate.ok) {
-      out.push({ status: "skipped", symbol: s, runId: "", rowsInserted: 0, reason: gate.reason });
+      out.push({ status: "skipped", symbol: assetId, runId: "", rowsInserted: 0, reason: gate.reason });
       continue;
     }
     try {
-      const result = await runFundamentalsIngest(s);
+      const result = assetId.startsWith("symbol:")
+        ? {
+            status: "failed" as const,
+            symbol: assetId.slice("symbol:".length),
+            runId: "",
+            rowsInserted: 0,
+            error: "Ticker is ambiguous across active exchanges; use asset identity instead.",
+          }
+        : await runFundamentalsIngestForAsset(assetId);
       out.push(result);
       if (result.status === "skipped" && result.reason?.toLowerCase().includes("entitlement unavailable")) {
-        for (const remaining of syms.slice(index + 1)) {
+        for (const remaining of assetIds.slice(index + 1)) {
           out.push({
             status: "skipped",
             symbol: remaining,
             runId: "",
             rowsInserted: 0,
-            reason: "FMP fundamentals entitlement unavailable; remaining symbols were not requested.",
+            reason: "FMP fundamentals entitlement unavailable; remaining assets were not requested.",
           });
         }
         break;
       }
     } catch (e) {
-      out.push({ status: "failed", symbol: s, runId: "", rowsInserted: 0, error: failureMessage(e) });
+      out.push({ status: "failed", symbol: assetId, runId: "", rowsInserted: 0, error: failureMessage(e) });
     }
     await new Promise((r) => setTimeout(r, 1250));
   }
   return out;
+}
+
+async function resolveUniqueAssetBySymbol(symbol: string): Promise<AssetProviderIdentity> {
+  const { data, error } = await supabaseAdmin
+    .from("assets")
+    .select("id,symbol,exchange")
+    .eq("symbol", symbol.toUpperCase())
+    .eq("active", true)
+    .eq("asset_class", "equity")
+    .limit(2);
+  if (error) throw error;
+  if (!data?.length) throw new Error(`Asset ${symbol} not in universe`);
+  if (data.length > 1) {
+    throw new Error(`Asset ticker ${symbol} is ambiguous across active exchanges; resolve by asset id.`);
+  }
+  const asset = data[0];
+  return {
+    id: String(asset.id),
+    symbol: String(asset.symbol),
+    exchange: asset.exchange ? String(asset.exchange) : null,
+  };
 }
 
 async function refreshAnnualStatementHistory(input: {
