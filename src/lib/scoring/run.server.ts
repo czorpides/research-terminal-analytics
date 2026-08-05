@@ -183,7 +183,8 @@ export async function runTechnicalScoresBatch(limit = 250): Promise<TechnicalSco
   const { data, error } = await db.rpc("get_opportunity_score_batch", { p_limit: requested });
   if (error) throw error;
 
-  const assetIds = (data ?? []).map((row: { asset_id: string }) => String(row.asset_id));
+  const scoreBatchRows = (data ?? []) as Array<{ asset_id: string }>;
+  const assetIds: string[] = scoreBatchRows.map((row) => String(row.asset_id));
   let assetsScored = 0;
   const failedAssets: Array<{ assetId: string; error: string }> = [];
 
