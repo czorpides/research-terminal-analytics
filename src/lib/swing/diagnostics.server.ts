@@ -3,6 +3,7 @@ import {
   EODHD_EXCHANGE_TARGETS,
   eodhdErrorMessage,
   eodhdExchangeToMic,
+  eodhdNumber,
   fetchEodhdAccount,
   fetchEodhdBulkEod,
   fetchEodhdDaily,
@@ -29,8 +30,13 @@ interface HttpProbe {
   error: string | null;
 }
 
+interface EodhdBulkProbe extends HttpProbe {
+  marketCapRows: number | null;
+  averageVolumeRows: number | null;
+  screeningFieldCoveragePct: number | null;
+}
+
 export async function runSwingRuntimeDiagnostics(url: URL) {
-  // New runtime tables can legitimately be absent while deployment is incomplete.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabaseAdmin as any;
   const probeEodhd = url.searchParams.get("probeEodhd") === "1";
@@ -85,7 +91,7 @@ async function diagnoseEodhd(probe: boolean, probeBulk: boolean) {
       account: null,
       symbolLists: [] as HttpProbe[],
       dailySamples: [] as HttpProbe[],
-      bulkEod: null as HttpProbe | null,
+      bulkEod: null as EodhdBulkProbe | null,
       error: "EODHD_API_KEY missing",
     };
   }
@@ -96,7 +102,7 @@ async function diagnoseEodhd(probe: boolean, probeBulk: boolean) {
       account: null,
       symbolLists: [] as HttpProbe[],
       dailySamples: [] as HttpProbe[],
-      bulkEod: null as HttpProbe | null,
+      bulkEod: null as EodhdBulkProbe | null,
       error: null,
     };
   }
@@ -182,22 +188,48 @@ async function diagnoseEodhd(probe: boolean, probeBulk: boolean) {
     }
   }
 
-  let bulkEod: HttpProbe | null = null;
+  let bulkEod: EodhdBulkProbe | null = null;
   if (probeBulk) {
     try {
-      const rows = await fetchEodhdBulkEod("US", { date: previousUtcBusinessDate() });
+      // The production universe depends on the extended bulk payload for both
+      // market-cap and average-volume eligibility. Diagnose those fields now,
+      // before any universe mutation or scheduler activation.
+      const rows = await fetchEodhdBulkEod("US", { extended: true });
+      const marketCapRows = rows.filter(
+        (row) => eodhdNumber(row.MarketCapitalization ?? row.market_capitalization) !== null,
+      ).length;
+      const averageVolumeRows = rows.filter(
+        (row) => eodhdNumber(row.avgvol_50d ?? row.avgvol_14d ?? row.avgvol_200d) !== null,
+      ).length;
+      const screeningRows = rows.filter(
+        (row) =>
+          eodhdNumber(row.MarketCapitalization ?? row.market_capitalization) !== null &&
+          eodhdNumber(row.avgvol_50d ?? row.avgvol_14d ?? row.avgvol_200d) !== null,
+      ).length;
+      const coverage = rows.length ? screeningRows / rows.length * 100 : 0;
       bulkEod = {
-        label: "US bulk EOD",
+        label: "US extended bulk EOD",
         httpStatus: 200,
         rows: rows.length,
-        available: rows.length > 0,
-        error: rows.length > 0 ? null : "EODHD bulk endpoint returned no rows",
+        marketCapRows,
+        averageVolumeRows,
+        screeningFieldCoveragePct: coverage,
+        available: rows.length > 0 && screeningRows > 0,
+        error:
+          rows.length === 0
+            ? "EODHD extended bulk endpoint returned no rows"
+            : screeningRows === 0
+              ? "Extended bulk rows did not expose market-cap + average-volume screening fields"
+              : null,
       };
     } catch (error) {
       bulkEod = {
-        label: "US bulk EOD",
+        label: "US extended bulk EOD",
         httpStatus: providerStatus(error),
         rows: null,
+        marketCapRows: null,
+        averageVolumeRows: null,
+        screeningFieldCoveragePct: null,
         available: false,
         error: eodhdErrorMessage(error),
       };
@@ -375,9 +407,12 @@ function interpret(input: {
       findings.push(`EODHD reference-data probe exposes ${listed} supported common-stock listings across the target markets; universe capacity is sufficient.`);
     }
     if (input.eodhd.bulkEod && !input.eodhd.bulkEod.available) {
-      findings.push(`EODHD bulk EOD is not yet usable: ${input.eodhd.bulkEod.error ?? `HTTP ${input.eodhd.bulkEod.httpStatus}`}.`);
+      findings.push(`EODHD extended bulk EOD is not yet usable: ${input.eodhd.bulkEod.error ?? `HTTP ${input.eodhd.bulkEod.httpStatus}`}.`);
     } else if (input.eodhd.bulkEod?.available) {
-      findings.push(`EODHD bulk EOD is available (${input.eodhd.bulkEod.rows ?? 0} US rows in the probe).`);
+      findings.push(
+        `EODHD extended bulk EOD is available (${input.eodhd.bulkEod.rows ?? 0} US rows; ` +
+        `${input.eodhd.bulkEod.screeningFieldCoveragePct?.toFixed(1) ?? "unknown"}% expose both market-cap and average-volume screening evidence).`,
+      );
     }
   }
 
@@ -439,6 +474,7 @@ function csvParam(url: URL, key: string): string[] | undefined {
 }
 
 function finite(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
