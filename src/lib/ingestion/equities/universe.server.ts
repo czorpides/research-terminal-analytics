@@ -1,40 +1,28 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import {
+  EODHD_EXCHANGE_TARGETS,
+  eodhdErrorMessage,
+  eodhdExchangeToMic,
+  eodhdNumber,
+  fetchEodhdBulkEod,
+  fetchEodhdSymbolList,
+  isEodhdConfigured,
+  type EodhdBulkEodRow,
+  type EodhdExchangeTarget,
+  type EodhdSymbolRow,
+  type ManagedMarket,
+} from "@/lib/ingestion/providers/eodhd-market.server";
 
-const FMP_SCREENER_URL = "https://financialmodelingprep.com/stable/company-screener";
 const MAX_UNIVERSE_SIZE = 3_000;
-const REQUEST_LIMIT = 1_000;
 
-export type EquityMarketRegion = "US" | "UK" | "EU";
+export type EquityMarketRegion = ManagedMarket;
 
 const DEFAULT_MARKETS: EquityMarketRegion[] = ["US", "UK", "EU"];
 const REGION_WEIGHTS: Record<EquityMarketRegion, number> = {
-  US: 0.5,
-  UK: 0.15,
-  EU: 0.35,
+  US: 2 / 3,
+  UK: 1 / 6,
+  EU: 1 / 6,
 };
-
-const DISCOVERY_REQUESTS: Array<{
-  region: EquityMarketRegion;
-  exchange: string;
-}> = [
-  { region: "US", exchange: "NASDAQ" },
-  { region: "US", exchange: "NYSE" },
-  { region: "US", exchange: "AMEX" },
-  { region: "UK", exchange: "LSE" },
-  { region: "EU", exchange: "XETRA" },
-  { region: "EU", exchange: "EURONEXT" },
-  { region: "EU", exchange: "PAR" },
-  { region: "EU", exchange: "AMS" },
-  { region: "EU", exchange: "BRU" },
-  { region: "EU", exchange: "LIS" },
-  { region: "EU", exchange: "MIL" },
-  { region: "EU", exchange: "MC" },
-  { region: "EU", exchange: "STO" },
-  { region: "EU", exchange: "CPH" },
-  { region: "EU", exchange: "HEL" },
-  { region: "EU", exchange: "WSE" },
-  { region: "EU", exchange: "VIE" },
-];
 
 export interface EquityUniverseSyncOptions {
   limit?: number;
@@ -46,7 +34,7 @@ export interface EquityUniverseSyncOptions {
 }
 
 export interface EquityUniverseSyncResult {
-  provider: "fmp";
+  provider: "eodhd";
   discovered: number;
   eligible: number;
   upserted: number;
@@ -64,35 +52,18 @@ export interface EquityUniverseSyncResult {
   };
 }
 
-interface FmpScreenerRow {
-  symbol?: string;
-  companyName?: string;
-  name?: string;
-  marketCap?: number;
-  price?: number;
-  volume?: number;
-  exchange?: string;
-  exchangeShortName?: string;
-  sector?: string;
-  industry?: string;
-  country?: string;
-  currency?: string;
-  isEtf?: boolean;
-  isFund?: boolean;
-  isActivelyTrading?: boolean;
-}
-
 interface NormalizedEquity {
   symbol: string;
   name: string;
   exchange: string;
+  isin: string | null;
   marketCap: number;
   price: number;
   volume: number;
-  sectorCode: string | null;
   countryIso2: string;
   currency: string;
   region: EquityMarketRegion;
+  sourceExchange: EodhdExchangeTarget["code"];
 }
 
 interface ExistingAsset {
@@ -104,14 +75,19 @@ interface ExistingAsset {
 export async function syncUsEquityUniverse(
   options: EquityUniverseSyncOptions = {},
 ): Promise<EquityUniverseSyncResult> {
-  return syncManagedEquityUniverse(options);
+  return syncManagedEquityUniverse({ ...options, markets: options.markets ?? ["US"] });
 }
 
+/**
+ * Build the managed equity universe from EODHD reference data plus the latest
+ * extended bulk-EOD snapshot. The reference list establishes active common
+ * stocks; the bulk snapshot supplies price, market-cap and average-volume
+ * evidence without one request per security.
+ */
 export async function syncManagedEquityUniverse(
   options: EquityUniverseSyncOptions = {},
 ): Promise<EquityUniverseSyncResult> {
-  const key = process.env.FMP_API_KEY;
-  if (!key) throw new Error("FMP_API_KEY missing");
+  if (!isEodhdConfigured()) throw new Error("EODHD_API_KEY missing");
 
   const limit = clampInteger(options.limit ?? MAX_UNIVERSE_SIZE, 1, MAX_UNIVERSE_SIZE);
   const minMarketCap = clampNumber(options.minMarketCap ?? 300_000_000, 0);
@@ -121,59 +97,53 @@ export async function syncManagedEquityUniverse(
   const requestedExchanges = unique(
     (options.exchanges ?? []).map((value) => value.trim().toUpperCase()).filter(Boolean),
   );
-  const requests = DISCOVERY_REQUESTS.filter(
-    (request) =>
-      markets.includes(request.region) &&
-      (requestedExchanges.length === 0 || requestedExchanges.includes(request.exchange)),
+  const targets = EODHD_EXCHANGE_TARGETS.filter(
+    (target) => markets.includes(target.market) && targetMatches(target, requestedExchanges),
   );
-  if (requests.length === 0) throw new Error("No supported equity markets were selected");
+  if (!targets.length) throw new Error("No supported EODHD equity markets were selected");
 
-  const raw: FmpScreenerRow[] = [];
+  const candidates: NormalizedEquity[] = [];
   const warnings: string[] = [];
-  for (const request of requests) {
-    const url = new URL(FMP_SCREENER_URL);
-    url.searchParams.set("exchange", request.exchange);
-    url.searchParams.set("isEtf", "false");
-    url.searchParams.set("isFund", "false");
-    url.searchParams.set("isActivelyTrading", "true");
-    url.searchParams.set("marketCapMoreThan", String(minMarketCap));
-    url.searchParams.set("priceMoreThan", String(minPrice));
-    url.searchParams.set("volumeMoreThan", String(minVolume));
-    url.searchParams.set("limit", String(REQUEST_LIMIT));
-    url.searchParams.set("apikey", key);
+  let discovered = 0;
 
-    const response = await fetch(url.toString());
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(`FMP universe sync authentication failed (${response.status})`);
-    }
-    if (response.status === 402 || response.status === 429) {
-      throw new Error(`FMP universe sync rate limited (${response.status})`);
-    }
-    if (!response.ok) {
-      warnings.push(`${request.exchange}: HTTP ${response.status}`);
-      continue;
+  for (const target of targets) {
+    let symbols: EodhdSymbolRow[];
+    let snapshot: EodhdBulkEodRow[];
+    try {
+      [symbols, snapshot] = await Promise.all([
+        fetchEodhdSymbolList(target.code),
+        fetchEodhdBulkEod(target.code, { extended: true }),
+      ]);
+    } catch (error) {
+      throw new Error(`${target.code}: ${eodhdErrorMessage(error)}`);
     }
 
-    const body = (await response.json()) as unknown;
-    if (!Array.isArray(body)) {
-      warnings.push(`${request.exchange}: invalid payload`);
-      continue;
+    discovered += symbols.length;
+    const latestBySymbol = bestBulkRows(snapshot);
+    let exchangeEligible = 0;
+    for (const row of symbols) {
+      const equity = normalizeEodhdEquity(row, latestBySymbol, target, {
+        minMarketCap,
+        minPrice,
+        minVolume,
+      });
+      if (!equity) continue;
+      candidates.push(equity);
+      exchangeEligible += 1;
     }
-    raw.push(...(body as FmpScreenerRow[]));
+    if (exchangeEligible === 0) {
+      warnings.push(`${target.code}: no securities passed the price/liquidity/market-cap screen`);
+    }
   }
 
-  const normalized = new Map<string, NormalizedEquity>();
-  for (const row of raw) {
-    const equity = normalizeEquity(row, { minMarketCap, minPrice, minVolume, markets });
-    if (!equity) continue;
-    const key = assetKey(equity.symbol, equity.exchange);
-    const existing = normalized.get(key);
-    if (!existing || equity.marketCap > existing.marketCap) normalized.set(key, equity);
-  }
-
-  const selected = selectBalancedUniverse([...normalized.values()], limit, markets);
-  if (selected.length === 0) {
-    throw new Error("Universe sync produced no eligible common stocks; existing assets were not changed");
+  const deduplicated = deduplicateListings(candidates);
+  const selected = selectBalancedUniverse(deduplicated, limit, markets);
+  const minimumSafeSelection = limit >= 2_950 ? 2_950 : Math.max(1, Math.floor(limit * 0.9));
+  if (selected.length < minimumSafeSelection) {
+    throw new Error(
+      `EODHD universe produced only ${selected.length}/${limit} eligible equities; ` +
+      `minimum safe selection is ${minimumSafeSelection}. Existing assets were not changed.`,
+    );
   }
 
   const countryRows = unique(selected.map((equity) => equity.countryIso2)).map((iso2) => ({
@@ -186,26 +156,20 @@ export async function syncManagedEquityUniverse(
     .upsert(countryRows, { onConflict: "iso2", ignoreDuplicates: false });
   if (countryUpsertError) throw countryUpsertError;
 
-  const [{ data: countries, error: countryError }, { data: industries, error: industryError }] =
-    await Promise.all([
-      supabaseAdmin.from("countries").select("id,iso2").in(
-        "iso2",
-        countryRows.map((row) => row.iso2),
-      ),
-      supabaseAdmin.from("industries").select("id,code"),
-    ]);
+  const { data: countries, error: countryError } = await supabaseAdmin
+    .from("countries")
+    .select("id,iso2")
+    .in("iso2", countryRows.map((row) => row.iso2));
   if (countryError) throw countryError;
-  if (industryError) throw industryError;
-
   const countryIds = new Map((countries ?? []).map((row) => [String(row.iso2), String(row.id)]));
-  const industryIds = new Map((industries ?? []).map((row) => [String(row.code), String(row.id)]));
+
   const rows = selected.map((equity) => ({
     symbol: equity.symbol,
     name: equity.name,
     asset_class: "equity" as const,
     country_id: countryIds.get(equity.countryIso2) ?? null,
     currency: equity.currency,
-    industry_id: equity.sectorCode ? industryIds.get(equity.sectorCode) ?? null : null,
+    industry_id: null,
     exchange: equity.exchange,
     active: true,
   }));
@@ -246,18 +210,85 @@ export async function syncManagedEquityUniverse(
   for (const equity of selected) selectedByMarket[equity.region] += 1;
 
   return {
-    provider: "fmp",
-    discovered: raw.length,
-    eligible: normalized.size,
+    provider: "eodhd",
+    discovered,
+    eligible: deduplicated.length,
     upserted,
     deactivated,
-    excluded: Math.max(0, raw.length - normalized.size),
-    exchanges: requests.map((request) => request.exchange),
+    excluded: Math.max(0, discovered - deduplicated.length),
+    exchanges: targets.map((target) => target.code),
     markets,
     selectedByMarket,
     warnings,
     filters: { limit, minMarketCap, minPrice, minVolume },
   };
+}
+
+function normalizeEodhdEquity(
+  row: EodhdSymbolRow,
+  latestBySymbol: Map<string, EodhdBulkEodRow>,
+  target: EodhdExchangeTarget,
+  filters: { minMarketCap: number; minPrice: number; minVolume: number },
+): NormalizedEquity | null {
+  const symbol = String(row.Code ?? "").trim().toUpperCase();
+  const name = String(row.Name ?? "").trim();
+  const type = String(row.Type ?? "").trim().toLowerCase();
+  if (!symbol || !name || (type && !type.includes("common"))) return null;
+  if (!/^[A-Z0-9][A-Z0-9.\-_/]{0,24}$/.test(symbol)) return null;
+  if (nonCommonSecurityName(name)) return null;
+
+  const mic = target.code === "US" ? eodhdExchangeToMic(row.Exchange) : target.mic;
+  if (!mic) return null;
+
+  const latest = latestBySymbol.get(symbol);
+  if (!latest) return null;
+  const marketCap = eodhdNumber(latest.MarketCapitalization ?? latest.market_capitalization);
+  const price = eodhdNumber(latest.close ?? latest.adjusted_close);
+  const volume = eodhdNumber(latest.avgvol_50d ?? latest.avgvol_14d ?? latest.volume);
+  if (marketCap === null || marketCap < filters.minMarketCap) return null;
+  if (price === null || price < filters.minPrice) return null;
+  if (volume === null || volume < filters.minVolume) return null;
+
+  return {
+    symbol,
+    name,
+    exchange: mic,
+    isin: cleanIsin(row.Isin),
+    marketCap,
+    price,
+    volume,
+    countryIso2: target.countryIso2,
+    currency: String(row.Currency ?? target.defaultCurrency).trim().toUpperCase() || target.defaultCurrency,
+    region: target.market,
+    sourceExchange: target.code,
+  };
+}
+
+function bestBulkRows(rows: EodhdBulkEodRow[]): Map<string, EodhdBulkEodRow> {
+  const result = new Map<string, EodhdBulkEodRow>();
+  for (const row of rows) {
+    const symbol = String(row.code ?? "").trim().toUpperCase();
+    if (!symbol) continue;
+    const current = result.get(symbol);
+    if (!current || (eodhdNumber(row.volume) ?? 0) > (eodhdNumber(current.volume) ?? 0)) {
+      result.set(symbol, row);
+    }
+  }
+  return result;
+}
+
+function deduplicateListings(equities: NormalizedEquity[]): NormalizedEquity[] {
+  const byIdentity = new Map<string, NormalizedEquity>();
+  for (const equity of equities) {
+    const identity = equity.isin ? `isin:${equity.isin}` : `listing:${assetKey(equity.symbol, equity.exchange)}`;
+    const existing = byIdentity.get(identity);
+    if (!existing || compareQuality(equity, existing) < 0) byIdentity.set(identity, equity);
+  }
+  return [...byIdentity.values()];
+}
+
+function compareQuality(left: NormalizedEquity, right: NormalizedEquity): number {
+  return right.marketCap - left.marketCap || right.volume - left.volume || left.symbol.localeCompare(right.symbol);
 }
 
 function selectBalancedUniverse(
@@ -266,7 +297,7 @@ function selectBalancedUniverse(
   markets: EquityMarketRegion[],
 ): NormalizedEquity[] {
   const ranked = [...equities].sort(
-    (left, right) => right.marketCap - left.marketCap || left.symbol.localeCompare(right.symbol),
+    (left, right) => right.marketCap - left.marketCap || right.volume - left.volume || left.symbol.localeCompare(right.symbol),
   );
   const selected = new Map<string, NormalizedEquity>();
   const activeWeight = markets.reduce((sum, market) => sum + REGION_WEIGHTS[market], 0);
@@ -283,273 +314,69 @@ function selectBalancedUniverse(
   return [...selected.values()].slice(0, limit);
 }
 
-function normalizeEquity(
-  row: FmpScreenerRow,
-  filters: {
-    minMarketCap: number;
-    minPrice: number;
-    minVolume: number;
-    markets: EquityMarketRegion[];
-  },
-): NormalizedEquity | null {
-  const symbol = String(row.symbol ?? "").trim().toUpperCase();
-  const name = String(row.companyName ?? row.name ?? "").trim();
-  const exchange = exchangeMic(String(row.exchangeShortName ?? row.exchange ?? ""));
-  const marketCap = finite(row.marketCap);
-  const price = finite(row.price);
-  const volume = finite(row.volume);
-  const countryIso2 = countryIso(String(row.country ?? ""), exchange);
-  const region = marketRegion(countryIso2);
-
-  if (!symbol || !name || !exchange || !countryIso2 || !region) return null;
-  if (!filters.markets.includes(region)) return null;
-  if (!/^[A-Z0-9][A-Z0-9.\-_/]{0,24}$/.test(symbol)) return null;
-  if (row.isEtf === true || row.isFund === true || row.isActivelyTrading === false) return null;
-  if (nonCommonSecurityName(name)) return null;
-  if (marketCap === null || marketCap < filters.minMarketCap) return null;
-  if (price === null || price < filters.minPrice) return null;
-  if (volume === null || volume < filters.minVolume) return null;
-
-  return {
-    symbol,
-    name,
-    exchange,
-    marketCap,
-    price,
-    volume,
-    sectorCode: sectorCode(row.sector ?? row.industry ?? null),
-    countryIso2,
-    currency: String(row.currency ?? defaultCurrency(countryIso2)).trim().toUpperCase(),
-    region,
+function targetMatches(target: EodhdExchangeTarget, requested: string[]): boolean {
+  if (!requested.length) return true;
+  const aliases: Record<EodhdExchangeTarget["code"], string[]> = {
+    US: ["US", "NASDAQ", "NYSE", "AMEX", "XNAS", "XNYS", "XASE"],
+    LSE: ["LSE", "XLON"],
+    XETRA: ["XETRA", "XETR"],
+    PA: ["PA", "PAR", "XPAR"],
+    AS: ["AS", "AMS", "XAMS"],
   };
-}
-
-function exchangeMic(value: string): string | null {
-  const normalized = value.trim().toUpperCase();
-  const aliases: Record<string, string> = {
-    NASDAQ: "XNAS",
-    "NASDAQ GLOBAL SELECT": "XNAS",
-    "NASDAQ GLOBAL MARKET": "XNAS",
-    XNAS: "XNAS",
-    NYSE: "XNYS",
-    "NEW YORK STOCK EXCHANGE": "XNYS",
-    XNYS: "XNYS",
-    AMEX: "XASE",
-    "NYSE AMERICAN": "XASE",
-    NYSEAMERICAN: "XASE",
-    XASE: "XASE",
-    LSE: "XLON",
-    LONDON: "XLON",
-    XLON: "XLON",
-    XETRA: "XETR",
-    XETR: "XETR",
-    PAR: "XPAR",
-    PARIS: "XPAR",
-    XPAR: "XPAR",
-    AMS: "XAMS",
-    AMSTERDAM: "XAMS",
-    XAMS: "XAMS",
-    BRU: "XBRU",
-    BRUSSELS: "XBRU",
-    XBRU: "XBRU",
-    LIS: "XLIS",
-    LISBON: "XLIS",
-    XLIS: "XLIS",
-    MIL: "XMIL",
-    MILAN: "XMIL",
-    XMIL: "XMIL",
-    MC: "XMAD",
-    MADRID: "XMAD",
-    XMAD: "XMAD",
-    STO: "XSTO",
-    STOCKHOLM: "XSTO",
-    XSTO: "XSTO",
-    CPH: "XCSE",
-    COPENHAGEN: "XCSE",
-    XCSE: "XCSE",
-    HEL: "XHEL",
-    HELSINKI: "XHEL",
-    XHEL: "XHEL",
-    WSE: "XWAR",
-    WARSAW: "XWAR",
-    XWAR: "XWAR",
-    VIE: "XWBO",
-    VIENNA: "XWBO",
-    XWBO: "XWBO",
-    EURONEXT: "XPAR",
-  };
-  if (aliases[normalized]) return aliases[normalized];
-  return normalized && normalized.length <= 16 ? normalized : null;
-}
-
-function countryIso(value: string, exchange: string | null): string | null {
-  const normalized = value.trim().toUpperCase();
-  const aliases: Record<string, string> = {
-    US: "US",
-    USA: "US",
-    "UNITED STATES": "US",
-    GB: "GB",
-    GBR: "GB",
-    UK: "GB",
-    "UNITED KINGDOM": "GB",
-    DE: "DE",
-    DEU: "DE",
-    GERMANY: "DE",
-    FR: "FR",
-    FRA: "FR",
-    FRANCE: "FR",
-    NL: "NL",
-    NLD: "NL",
-    NETHERLANDS: "NL",
-    BE: "BE",
-    BEL: "BE",
-    BELGIUM: "BE",
-    PT: "PT",
-    PRT: "PT",
-    PORTUGAL: "PT",
-    IT: "IT",
-    ITA: "IT",
-    ITALY: "IT",
-    ES: "ES",
-    ESP: "ES",
-    SPAIN: "ES",
-    SE: "SE",
-    SWE: "SE",
-    SWEDEN: "SE",
-    DK: "DK",
-    DNK: "DK",
-    DENMARK: "DK",
-    FI: "FI",
-    FIN: "FI",
-    FINLAND: "FI",
-    PL: "PL",
-    POL: "PL",
-    POLAND: "PL",
-    AT: "AT",
-    AUT: "AT",
-    AUSTRIA: "AT",
-    IE: "IE",
-    IRL: "IE",
-    IRELAND: "IE",
-    CZ: "CZ",
-    CZE: "CZ",
-    CZECHIA: "CZ",
-  };
-  if (aliases[normalized]) return aliases[normalized];
-  const byExchange: Record<string, string> = {
-    XNAS: "US",
-    XNYS: "US",
-    XASE: "US",
-    XLON: "GB",
-    XETR: "DE",
-    XPAR: "FR",
-    XAMS: "NL",
-    XBRU: "BE",
-    XLIS: "PT",
-    XMIL: "IT",
-    XMAD: "ES",
-    XSTO: "SE",
-    XCSE: "DK",
-    XHEL: "FI",
-    XWAR: "PL",
-    XWBO: "AT",
-  };
-  return exchange ? byExchange[exchange] ?? null : null;
-}
-
-function marketRegion(iso2: string | null): EquityMarketRegion | null {
-  if (iso2 === "US") return "US";
-  if (iso2 === "GB") return "UK";
-  if (iso2 && ["DE", "FR", "NL", "BE", "PT", "IT", "ES", "SE", "DK", "FI", "PL", "AT", "IE", "CZ"].includes(iso2)) {
-    return "EU";
-  }
-  return null;
+  return aliases[target.code].some((value) => requested.includes(value));
 }
 
 function normalizeMarkets(values?: string[]): EquityMarketRegion[] {
-  const normalized = unique(
-    (values?.length ? values : DEFAULT_MARKETS)
-      .map((value) => value.trim().toUpperCase())
-      .map((value) => (value === "GB" || value === "UK" ? "UK" : value === "EUROPE" ? "EU" : value))
-      .filter((value): value is EquityMarketRegion => ["US", "UK", "EU"].includes(value)),
+  const requested = unique((values ?? DEFAULT_MARKETS).map((value) => value.trim().toUpperCase()));
+  const normalized = requested.filter((value): value is EquityMarketRegion =>
+    value === "US" || value === "UK" || value === "EU",
   );
-  return normalized.length ? normalized : [...DEFAULT_MARKETS];
+  return normalized.length ? normalized : DEFAULT_MARKETS;
 }
 
-function countryName(iso2: string): string {
-  const names: Record<string, string> = {
-    US: "United States",
-    GB: "United Kingdom",
-    DE: "Germany",
-    FR: "France",
-    NL: "Netherlands",
-    BE: "Belgium",
-    PT: "Portugal",
-    IT: "Italy",
-    ES: "Spain",
-    SE: "Sweden",
-    DK: "Denmark",
-    FI: "Finland",
-    PL: "Poland",
-    AT: "Austria",
-    IE: "Ireland",
-    CZ: "Czechia",
-  };
-  return names[iso2] ?? iso2;
-}
-
-function regionLabel(iso2: string): string {
-  return iso2 === "US" ? "North America" : iso2 === "GB" ? "Europe / UK" : "Europe / EU";
-}
-
-function defaultCurrency(iso2: string): string {
-  if (iso2 === "US") return "USD";
-  if (iso2 === "GB") return "GBP";
-  if (iso2 === "SE") return "SEK";
-  if (iso2 === "DK") return "DKK";
-  if (iso2 === "PL") return "PLN";
-  if (iso2 === "CZ") return "CZK";
-  return "EUR";
-}
-
-function sectorCode(value: string | null): string | null {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (!normalized) return null;
-  if (normalized.includes("technology")) return "SEC_TECH";
-  if (normalized.includes("financial")) return "SEC_FIN";
-  if (normalized.includes("health")) return "SEC_HC";
-  if (normalized.includes("consumer cyclical") || normalized.includes("consumer discretionary")) return "SEC_CD";
-  if (normalized.includes("consumer defensive") || normalized.includes("consumer staples")) return "SEC_CS";
-  if (normalized.includes("industrial")) return "SEC_IND";
-  if (normalized.includes("energy")) return "SEC_ENE";
-  if (normalized.includes("basic material") || normalized === "materials") return "SEC_MAT";
-  if (normalized.includes("utilit")) return "SEC_UTL";
-  if (normalized.includes("real estate")) return "SEC_RE";
-  if (normalized.includes("communication")) return "SEC_COM";
-  return null;
+function cleanIsin(value: string | null | undefined): string | null {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(normalized) ? normalized : null;
 }
 
 function nonCommonSecurityName(name: string): boolean {
-  return /\b(etf|fund|warrant|rights?|units?|preferred|preference|depositary|debentures?|notes?|bonds?|certificate|trust units?)\b/i.test(name);
+  const value = name.toUpperCase();
+  return [
+    " ETF",
+    " ETN",
+    " FUND",
+    " WARRANT",
+    " WTS",
+    " PREFERRED",
+    " DEPOSITARY PREFERRED",
+    " UNIT",
+    " RIGHTS",
+    " NOTES DUE",
+  ].some((token) => value.includes(token));
 }
 
-function assetKey(symbol: string, exchange: string | null): string {
-  return `${String(symbol).trim().toUpperCase()}:${String(exchange ?? "").trim().toUpperCase()}`;
+function countryName(iso2: string): string {
+  return ({ US: "United States", GB: "United Kingdom", DE: "Germany", FR: "France", NL: "Netherlands" } as Record<string, string>)[iso2] ?? iso2;
 }
 
-function finite(value: unknown): number | null {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+function regionLabel(iso2: string): string {
+  if (iso2 === "US") return "North America";
+  return "Europe";
 }
 
-function clampNumber(value: number, minimum: number): number {
-  return Math.max(minimum, Number.isFinite(value) ? value : minimum);
-}
-
-function clampInteger(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, Math.floor(Number.isFinite(value) ? value : minimum)));
+function assetKey(symbol: string, exchange: string | null | undefined): string {
+  return `${symbol.trim().toUpperCase()}:${(exchange ?? "").trim().toUpperCase()}`;
 }
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
+}
+
+function clampInteger(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+function clampNumber(value: number, min: number): number {
+  return Number.isFinite(value) ? Math.max(min, value) : min;
 }
