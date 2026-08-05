@@ -1,0 +1,1 @@
+Purpose: determine whether the Swing engine is offline because database migrations are absent, the managed universe never populated, or the FMP plan restricts screener/bulk coverage.
