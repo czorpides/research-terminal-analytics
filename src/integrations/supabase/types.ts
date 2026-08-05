@@ -648,6 +648,95 @@ export type Database = {
           },
         ]
       }
+      equity_eod_backfill_queue: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          last_error: string | null
+          market_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          last_error?: string | null
+          market_date: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          last_error?: string | null
+          market_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      equity_technical_screen: {
+        Row: {
+          as_of: string
+          asset_id: string
+          avg_volume_20: number | null
+          bars: number
+          current_price: number | null
+          high_90: number | null
+          latest_volume: number | null
+          low_90: number | null
+          ma20: number | null
+          ma50: number | null
+          relative_volume: number | null
+          return_20d_pct: number | null
+          return_5d_pct: number | null
+          updated_at: string
+        }
+        Insert: {
+          as_of: string
+          asset_id: string
+          avg_volume_20?: number | null
+          bars: number
+          current_price?: number | null
+          high_90?: number | null
+          latest_volume?: number | null
+          low_90?: number | null
+          ma20?: number | null
+          ma50?: number | null
+          relative_volume?: number | null
+          return_20d_pct?: number | null
+          return_5d_pct?: number | null
+          updated_at?: string
+        }
+        Update: {
+          as_of?: string
+          asset_id?: string
+          avg_volume_20?: number | null
+          bars?: number
+          current_price?: number | null
+          high_90?: number | null
+          latest_volume?: number | null
+          low_90?: number | null
+          ma20?: number | null
+          ma50?: number | null
+          relative_volume?: number | null
+          return_20d_pct?: number | null
+          return_5d_pct?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equity_technical_screen_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: true
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_definitions: {
         Row: {
           category: string | null
@@ -2144,6 +2233,257 @@ export type Database = {
         }
         Relationships: []
       }
+      swing_monitor_runs: {
+        Row: {
+          captured: number
+          deep_scanned: number
+          error: string | null
+          evaluated: number
+          failures: Json
+          finished_at: string | null
+          id: string
+          providers: Json
+          quotes_updated: number
+          screened: number
+          source: string
+          started_at: string
+          status: string
+          surfaced: number
+          workspace_as_of: string | null
+        }
+        Insert: {
+          captured?: number
+          deep_scanned?: number
+          error?: string | null
+          evaluated?: number
+          failures?: Json
+          finished_at?: string | null
+          id?: string
+          providers?: Json
+          quotes_updated?: number
+          screened?: number
+          source?: string
+          started_at?: string
+          status?: string
+          surfaced?: number
+          workspace_as_of?: string | null
+        }
+        Update: {
+          captured?: number
+          deep_scanned?: number
+          error?: string | null
+          evaluated?: number
+          failures?: Json
+          finished_at?: string | null
+          id?: string
+          providers?: Json
+          quotes_updated?: number
+          screened?: number
+          source?: string
+          started_at?: string
+          status?: string
+          surfaced?: number
+          workspace_as_of?: string | null
+        }
+        Relationships: []
+      }
+      swing_trade_price_snapshots: {
+        Row: {
+          asset_id: string
+          created_at: string
+          day_high: number | null
+          day_low: number | null
+          id: number
+          observed_at: string
+          price: number
+          provider: string
+          setup_id: string
+          source_kind: string
+          volume: number | null
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          day_high?: number | null
+          day_low?: number | null
+          id?: number
+          observed_at?: string
+          price: number
+          provider: string
+          setup_id: string
+          source_kind?: string
+          volume?: number | null
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          day_high?: number | null
+          day_low?: number | null
+          id?: number
+          observed_at?: string
+          price?: number
+          provider?: string
+          setup_id?: string
+          source_kind?: string
+          volume?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "swing_trade_price_snapshots_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swing_trade_price_snapshots_setup_id_fkey"
+            columns: ["setup_id"]
+            isOneToOne: false
+            referencedRelation: "swing_trade_setups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      swing_trade_setups: {
+        Row: {
+          asset_id: string
+          atr14: number | null
+          calibration_eligible: boolean
+          components: Json
+          created_at: string
+          entry_high: number
+          entry_low: number
+          entry_mid: number
+          evidence_coverage: number
+          high_conviction: boolean
+          horizon_sessions: number
+          id: string
+          invalidation: number
+          last_evaluated_at: string | null
+          latest_return_pct: number | null
+          max_adverse_pct: number | null
+          max_favourable_pct: number | null
+          max_price: number | null
+          metrics: Json
+          min_price: number | null
+          model_version: string
+          outcome_status: string
+          price_as_of: string
+          reasons: Json
+          resolved_at: string | null
+          reward_risk: number
+          risks: Json
+          sessions_observed: number
+          setup_label: string
+          setup_score: number
+          setup_type: string
+          signal_at: string
+          signal_price: number
+          signal_state: string
+          stop_hit_at: string | null
+          target: number
+          target_behaviour: string
+          target_hit_at: string | null
+          target_overshoot_pct: number | null
+          target_shortfall_pct: number | null
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          atr14?: number | null
+          calibration_eligible?: boolean
+          components?: Json
+          created_at?: string
+          entry_high: number
+          entry_low: number
+          entry_mid: number
+          evidence_coverage: number
+          high_conviction?: boolean
+          horizon_sessions?: number
+          id?: string
+          invalidation: number
+          last_evaluated_at?: string | null
+          latest_return_pct?: number | null
+          max_adverse_pct?: number | null
+          max_favourable_pct?: number | null
+          max_price?: number | null
+          metrics?: Json
+          min_price?: number | null
+          model_version: string
+          outcome_status?: string
+          price_as_of: string
+          reasons?: Json
+          resolved_at?: string | null
+          reward_risk: number
+          risks?: Json
+          sessions_observed?: number
+          setup_label: string
+          setup_score: number
+          setup_type: string
+          signal_at?: string
+          signal_price: number
+          signal_state: string
+          stop_hit_at?: string | null
+          target: number
+          target_behaviour?: string
+          target_hit_at?: string | null
+          target_overshoot_pct?: number | null
+          target_shortfall_pct?: number | null
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          atr14?: number | null
+          calibration_eligible?: boolean
+          components?: Json
+          created_at?: string
+          entry_high?: number
+          entry_low?: number
+          entry_mid?: number
+          evidence_coverage?: number
+          high_conviction?: boolean
+          horizon_sessions?: number
+          id?: string
+          invalidation?: number
+          last_evaluated_at?: string | null
+          latest_return_pct?: number | null
+          max_adverse_pct?: number | null
+          max_favourable_pct?: number | null
+          max_price?: number | null
+          metrics?: Json
+          min_price?: number | null
+          model_version?: string
+          outcome_status?: string
+          price_as_of?: string
+          reasons?: Json
+          resolved_at?: string | null
+          reward_risk?: number
+          risks?: Json
+          sessions_observed?: number
+          setup_label?: string
+          setup_score?: number
+          setup_type?: string
+          signal_at?: string
+          signal_price?: number
+          signal_state?: string
+          stop_hit_at?: string | null
+          target?: number
+          target_behaviour?: string
+          target_hit_at?: string | null
+          target_overshoot_pct?: number | null
+          target_shortfall_pct?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "swing_trade_setups_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       theses: {
         Row: {
           created_at: string
@@ -2680,7 +3020,7 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      refresh_equity_technical_screen: { Args: never; Returns: number }
     }
     Enums: {
       alert_state: "pending" | "triggered" | "acknowledged" | "dismissed"
