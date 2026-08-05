@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { computeConfidence } from "@/lib/reliability/confidence";
+import {
+  markProviderSymbolVerified,
+  providerSymbolsForAsset,
+  type AssetProviderIdentity,
+} from "@/lib/ingestion/providers/asset-symbols.server";
 import { fetchWithFailover, crossVerifyLatest } from "@/lib/ingestion/providers/registry.server";
 import type { ProviderCode } from "@/lib/ingestion/providers/types";
 import { validateStooqBars, type QualityReport } from "@/lib/ingestion/stooq/quality";
@@ -10,6 +15,7 @@ export interface EquityIngestResult {
   runId: string;
   symbol: string;
   provider?: ProviderCode;
+  providerSymbol?: string;
   crossVerify?: { verifier: string | null; agrees: boolean; detail: string; delta?: number };
   attempts?: Array<{ provider: string; error: string }>;
   quality?: QualityReport;
@@ -41,29 +47,43 @@ async function sourceIdFor(providerCode: string): Promise<string | null> {
   return (data?.id as string) ?? null;
 }
 
-async function assetIdForSymbol(symbol: string): Promise<string | null> {
-  const { data } = await supabaseAdmin
+async function resolveUniqueAsset(symbol: string): Promise<AssetProviderIdentity> {
+  const { data, error } = await supabaseAdmin
     .from("assets")
-    .select("id")
-    .eq("symbol", symbol)
+    .select("id,symbol,exchange")
+    .eq("symbol", symbol.toUpperCase())
     .eq("active", true)
-    .limit(1)
-    .maybeSingle();
-  return (data?.id as string) ?? null;
+    .eq("asset_class", "equity")
+    .limit(2);
+  if (error) throw error;
+  if (!data?.length) throw new Error(`Asset ${symbol} not in universe`);
+  if (data.length > 1) {
+    throw new Error(`Asset ticker ${symbol} is ambiguous across active exchanges; resolve by asset id.`);
+  }
+  return {
+    id: String(data[0].id),
+    symbol: String(data[0].symbol),
+    exchange: data[0].exchange ? String(data[0].exchange) : null,
+  };
 }
 
 /**
- * Multi-provider equity ingester. Uses the reliability-pool `fetchWithFailover`
- * (Tiingo → Twelve Data → FMP → Alpha Vantage) and cross-verifies the latest
- * close against a second provider. Writes append-only into `prices_daily` and
- * records the run under whichever provider actually served the data.
+ * Multi-provider equity ingester. The internal asset id is canonical; each
+ * provider receives its own exchange-aware symbol mapping. Uses the reliability
+ * pool (Tiingo → Twelve Data → FMP → Alpha Vantage) and cross-verifies the latest
+ * close against a second provider.
  */
 export async function runEquityIngest(symbol: string): Promise<EquityIngestResult> {
-  const assetId = await assetIdForSymbol(symbol);
-  if (!assetId) throw new Error(`Asset ${symbol} not in universe`);
+  return runEquityIngestForAsset(await resolveUniqueAsset(symbol));
+}
+
+async function runEquityIngestForAsset(asset: AssetProviderIdentity): Promise<EquityIngestResult> {
+  const assetId = asset.id;
+  const symbol = asset.symbol;
+  const providerSymbols = await providerSymbolsForAsset(asset);
 
   // Record the run against the Stooq source row for continuity with existing
-  // Data Health views; the actual serving provider is captured in `details.provider`.
+  // Data Health views; the actual serving provider is captured in details.provider.
   const bookkeepingSourceId = (await sourceIdFor("stooq")) ?? (await sourceIdFor("tiingo"));
   if (!bookkeepingSourceId) throw new Error("No equity data source registered");
 
@@ -73,7 +93,7 @@ export async function runEquityIngest(symbol: string): Promise<EquityIngestResul
       source_id: bookkeepingSourceId,
       data_category: "price_daily",
       status: "running",
-      details: { symbol },
+      details: { symbol, exchange: asset.exchange },
     })
     .select("id")
     .single();
@@ -94,7 +114,11 @@ export async function runEquityIngest(symbol: string): Promise<EquityIngestResul
       : new Date(Date.now() - 3 * 365 * 86400_000).toISOString().slice(0, 10);
     const to = new Date().toISOString().slice(0, 10);
 
-    const { provider, bars, attempts } = await fetchWithFailover(symbol, { from, to });
+    const { provider, providerSymbol, bars, attempts } = await fetchWithFailover(
+      symbol,
+      { from, to },
+      providerSymbols,
+    );
     const servedSourceId = (await sourceIdFor(provider)) ?? bookkeepingSourceId;
 
     // Reuse Stooq quality gate — the shape (open/high/low/close/volume/date) is identical.
@@ -122,7 +146,7 @@ export async function runEquityIngest(symbol: string): Promise<EquityIngestResul
             .map((i) => i.code)
             .join(", ")}`,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          details: { symbol, provider, quality, attempts } as any,
+          details: { symbol, exchange: asset.exchange, provider, providerSymbol, quality, attempts } as any,
         })
         .eq("id", runId);
       return {
@@ -131,6 +155,7 @@ export async function runEquityIngest(symbol: string): Promise<EquityIngestResul
         runId,
         symbol,
         provider,
+        providerSymbol,
         quality,
         attempts,
         error: "quality_gate_blocked",
@@ -161,11 +186,20 @@ export async function runEquityIngest(symbol: string): Promise<EquityIngestResul
       }
     }
 
-    // Cross-verify the latest close against a second provider.
+    await markProviderSymbolVerified(asset, provider, providerSymbol);
+
+    // Cross-verify the latest close against a second provider using that
+    // provider's exchange-qualified symbol rather than reusing the first one.
     let crossVerify: EquityIngestResult["crossVerify"];
     const latest = fresh[fresh.length - 1];
     if (latest) {
-      const cv = await crossVerifyLatest(symbol, provider, latest.close, latest.date);
+      const cv = await crossVerifyLatest(
+        symbol,
+        provider,
+        latest.close,
+        latest.date,
+        providerSymbols,
+      );
       crossVerify = {
         verifier: cv.verifier,
         agrees: cv.agrees,
@@ -191,7 +225,7 @@ export async function runEquityIngest(symbol: string): Promise<EquityIngestResul
         finished_at: new Date().toISOString(),
         rows_ingested: inserted,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        details: { symbol, provider, quality, attempts, crossVerify } as any,
+        details: { symbol, exchange: asset.exchange, provider, providerSymbol, quality, attempts, crossVerify } as any,
       })
       .eq("id", runId);
 
@@ -211,6 +245,7 @@ export async function runEquityIngest(symbol: string): Promise<EquityIngestResul
       runId,
       symbol,
       provider,
+      providerSymbol,
       quality,
       attempts,
       crossVerify,
@@ -266,24 +301,29 @@ export async function runEquityIngestBatch(
   const end = Math.min(totalActiveEquities - 1, offset + requested - 1);
   const { data: assets, error } = await supabaseAdmin
     .from("assets")
-    .select("symbol")
+    .select("id,symbol,exchange")
     .eq("active", true)
     .eq("asset_class", "equity")
     .order("symbol", { ascending: true })
+    .order("exchange", { ascending: true })
     .range(offset, end);
   if (error) throw error;
 
   const out: EquityIngestResult[] = [];
-  for (const asset of assets ?? []) {
-    const symbol = String(asset.symbol);
+  for (const row of assets ?? []) {
+    const asset: AssetProviderIdentity = {
+      id: String(row.id),
+      symbol: String(row.symbol),
+      exchange: row.exchange ? String(row.exchange) : null,
+    };
     try {
-      out.push(await runEquityIngest(symbol));
+      out.push(await runEquityIngestForAsset(asset));
     } catch (e) {
       out.push({
         status: "failed",
         rowsInserted: 0,
         runId: "",
-        symbol,
+        symbol: asset.symbol,
         error: (e as Error).message,
       });
     }
