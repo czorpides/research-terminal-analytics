@@ -30,7 +30,7 @@ export const Route = createFileRoute("/api/public/ingest/fundamentals")({
             limit: integerParam(url, "limit"),
             offset: integerParam(url, "offset"),
           });
-          const results = await runAllFundamentalsIngest({ symbols: batch.symbols });
+          const results = await runAllFundamentalsIngest({ assetIds: batch.assetIds });
 
           // Valuation, quality, Piotroski and Magic Formula scores are relative
           // to the currently populated universe. Refresh them once per batch,
@@ -44,9 +44,9 @@ export const Route = createFileRoute("/api/public/ingest/fundamentals")({
             totalActiveEquities: batch.totalActiveEquities,
             offset: batch.offset,
             requested: batch.requested,
-            processed: batch.symbols.length,
+            processed: batch.assetIds.length,
             nextOffset: batch.nextOffset,
-            completeUniversePass: batch.symbols.length >= batch.totalActiveEquities,
+            completeUniversePass: batch.assetIds.length >= batch.totalActiveEquities,
             scoreRefresh,
           });
         } catch (e) {
@@ -61,7 +61,7 @@ async function selectFundamentalBatch(options: {
   limit?: number;
   offset?: number;
 }): Promise<{
-  symbols: string[];
+  assetIds: string[];
   totalActiveEquities: number;
   offset: number;
   requested: number;
@@ -78,7 +78,7 @@ async function selectFundamentalBatch(options: {
 
   const totalActiveEquities = count ?? 0;
   if (totalActiveEquities === 0) {
-    return { symbols: [], totalActiveEquities: 0, offset: 0, requested, nextOffset: 0 };
+    return { assetIds: [], totalActiveEquities: 0, offset: 0, requested, nextOffset: 0 };
   }
 
   const offset = normalizeOffset(
@@ -88,20 +88,21 @@ async function selectFundamentalBatch(options: {
   const end = Math.min(totalActiveEquities - 1, offset + requested - 1);
   const { data, error } = await supabaseAdmin
     .from("assets")
-    .select("symbol")
+    .select("id,symbol,exchange")
     .eq("active", true)
     .eq("asset_class", "equity")
     .order("symbol", { ascending: true })
+    .order("exchange", { ascending: true })
     .range(offset, end);
   if (error) throw error;
 
-  const symbols = (data ?? []).map((asset) => String(asset.symbol));
+  const assetIds = (data ?? []).map((asset) => String(asset.id));
   return {
-    symbols,
+    assetIds,
     totalActiveEquities,
     offset,
     requested,
-    nextOffset: symbols.length === 0 ? offset : (offset + symbols.length) % totalActiveEquities,
+    nextOffset: assetIds.length === 0 ? offset : (offset + assetIds.length) % totalActiveEquities,
   };
 }
 
