@@ -28,8 +28,14 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
         const bulkEod = url.searchParams.get("bulkEod") === "1";
         const bulkBackfill = url.searchParams.get("bulkBackfill") === "1";
         const refreshScreen = url.searchParams.get("refreshScreen") === "1";
+        const diagnostics = url.searchParams.get("diagnostics") === "1";
 
         try {
+          if (diagnostics) {
+            const { runSwingRuntimeDiagnostics } = await import("@/lib/swing/diagnostics.server");
+            return Response.json(await runSwingRuntimeDiagnostics(url));
+          }
+
           if (swingMonitor) {
             const { runScheduledSwingMonitor } = await import("@/lib/swing/monitor.server");
             return Response.json(await runScheduledSwingMonitor("scheduled"));
