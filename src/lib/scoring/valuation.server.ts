@@ -4,14 +4,19 @@ import {
   VALUATION_LOWER_IS_BETTER,
   QUALITY_METRICS,
 } from "@/lib/ingestion/fundamentals/metrics";
+import {
+  FUNDAMENTAL_FRESH_DAYS,
+  FUNDAMENTAL_STALE_DAYS,
+} from "@/lib/opportunity/evidence-freshness";
 
-export const VALUATION_CALC_VERSION = "score.valuation.v0.2";
-export const QUALITY_CALC_VERSION = "score.quality.v0.2";
+export const VALUATION_CALC_VERSION = "score.valuation.v0.3";
+export const QUALITY_CALC_VERSION = "score.quality.v0.3";
 
-/** For each fundamentals metric_code, latest value per asset. */
+/** For each fundamentals metric_code, latest non-stale value per asset. */
 export interface LatestByMetric {
   // metric_code -> asset_id -> { value, asOf }
   byMetric: Map<string, Map<string, { value: number; asOf: string }>>;
+  /** Oldest contributing current-fundamental timestamp for each asset. */
   fundAsOfByAsset: Map<string, string>;
 }
 
@@ -34,18 +39,24 @@ export async function loadLatestFundamentals(assetIds: string[]): Promise<Latest
     data.push(...(page ?? []));
   }
 
+  const staleCutoffMs = Date.now() - FUNDAMENTAL_STALE_DAYS * 86_400_000;
   const byMetric = new Map<string, Map<string, { value: number; asOf: string }>>();
   const fundAsOfByAsset = new Map<string, string>();
   for (const row of data) {
     const metric = row.metric_code as string;
     const asset = row.subject_id as string;
-    if (row.value_num === null) continue;
+    if (row.value_num === null || !row.as_of) continue;
+    const asOf = String(row.as_of);
+    const asOfMs = Date.parse(asOf);
+    if (!Number.isFinite(asOfMs) || asOfMs < staleCutoffMs) continue;
+
     const bag = byMetric.get(metric) ?? new Map();
-    if (!bag.has(asset))
-      bag.set(asset, { value: Number(row.value_num), asOf: row.as_of as string });
+    if (!bag.has(asset)) bag.set(asset, { value: Number(row.value_num), asOf });
     byMetric.set(metric, bag);
-    const cur = fundAsOfByAsset.get(asset);
-    if (!cur || (row.as_of as string) > cur) fundAsOfByAsset.set(asset, row.as_of as string);
+
+    // A composite is only as fresh as its oldest contributing current input.
+    const current = fundAsOfByAsset.get(asset);
+    if (!current || asOf < current) fundAsOfByAsset.set(asset, asOf);
   }
   return { byMetric, fundAsOfByAsset };
 }
@@ -148,10 +159,7 @@ function composite(
     const peerValues: number[] = [];
     for (const p of peerPool) {
       const pv = bag?.get(p.id)?.value;
-      if (
-        typeof pv === "number" &&
-        isUsableFundamentalValue(kind, metric.code, pv)
-      ) {
+      if (typeof pv === "number" && isUsableFundamentalValue(kind, metric.code, pv)) {
         peerValues.push(pv);
       }
     }
@@ -203,7 +211,7 @@ function composite(
     });
   }
 
-  // Confidence — start at 90 and dock for missing/invalid metrics, thin peers and stale data.
+  // Confidence — start at 90 and dock for missing/invalid metrics, thin peers and ageing data.
   let confidence = 90;
   const missing = definition.length - contributing;
   if (missing > 0) {
@@ -226,14 +234,28 @@ function composite(
   const ageSec = asOf
     ? Math.max(0, Math.floor((Date.now() - new Date(asOf).getTime()) / 1000))
     : null;
-  if (ageSec !== null && ageSec > 60 * 60 * 24 * 120) {
+  const ageDays = ageSec === null ? null : ageSec / 86_400;
+  const freshnessState = ageDays === null
+    ? "missing"
+    : ageDays <= FUNDAMENTAL_FRESH_DAYS
+      ? "fresh"
+      : ageDays <= FUNDAMENTAL_STALE_DAYS
+        ? "warning"
+        : "stale";
+
+  if (freshnessState === "warning") {
     confidence -= 15;
-    deductions.push({ id: `${kind}-stale`, label: `Fundamentals older than 120 days` });
+    deductions.push({
+      id: `${kind}-age-warning`,
+      label: `Fundamentals are older than ${FUNDAMENTAL_FRESH_DAYS} days`,
+      detail: `Current evidence remains usable until ${FUNDAMENTAL_STALE_DAYS} days, but confidence is reduced.`,
+    });
   }
 
   inputs["_peers"] = peerPool.length;
   inputs["_industry_peers"] = industryPeers.length;
   inputs["_as_of"] = asOf;
+  inputs["_freshness_state"] = freshnessState;
   inputs["_contributing_metrics"] = contributing;
   inputs["_invalid_metrics"] = invalid;
   inputs["_positive_fcf_yield"] = kind === "valuation" ? (positiveFcfYield ? 1 : 0) : null;
