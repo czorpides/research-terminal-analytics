@@ -207,7 +207,7 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
       {
         key: "universe",
         label: "Managed universe",
-        state: active >= MIN_ACTIVE_EQUITIES ? "pass" : active > 0 ? "fail" : "fail",
+        state: active >= MIN_ACTIVE_EQUITIES ? "pass" : "fail",
         value: `${active.toLocaleString()} / ${TARGET_EQUITIES.toLocaleString()}`,
         detail: active >= MIN_ACTIVE_EQUITIES
           ? "The deployed database contains the intended managed population."
@@ -217,12 +217,7 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
       {
         key: "technical_coverage",
         label: "Fresh 90-bar technical coverage",
-        state:
-          active >= MIN_ACTIVE_EQUITIES && readyCoveragePct >= MIN_READY_COVERAGE * 100
-            ? "pass"
-            : readyWith90Bars > 0
-              ? "fail"
-              : "fail",
+        state: active >= MIN_ACTIVE_EQUITIES && readyCoveragePct >= MIN_READY_COVERAGE * 100 ? "pass" : "fail",
         value: `${readyWith90Bars.toLocaleString()} (${readyCoveragePct.toFixed(1)}%)`,
         detail: screenError
           ? `Technical-screen table unavailable: ${screenError}`
@@ -242,12 +237,7 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
       {
         key: "monitor_heartbeat",
         label: "Swing monitor heartbeat",
-        state:
-          lastSuccessAgeMinutes !== null && lastSuccessAgeMinutes <= monitorLimit
-            ? "pass"
-            : lastSuccessAgeMinutes !== null
-              ? "fail"
-              : "fail",
+        state: lastSuccessAgeMinutes !== null && lastSuccessAgeMinutes <= monitorLimit ? "pass" : "fail",
         value: lastSuccessAt ? formatAge(lastSuccessAgeMinutes) : "never succeeded",
         detail: monitorTableError
           ? `Runtime heartbeat table unavailable: ${monitorTableError}`
@@ -285,10 +275,11 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
         state:
           lastEod?.status === "success" && lastEodAgeMinutes !== null && lastEodAgeMinutes <= eodLimit
             ? "pass"
-            : lastEod
-              ? "fail"
-              : "fail",
-        value: lastEodAt ? `${lastEod.status} · ${formatAge(lastEodAgeMinutes)}` : "no successful bulk run yet",
+            : "fail",
+        value:
+          lastEod && lastEodAt
+            ? `${lastEod.status} · ${formatAge(lastEodAgeMinutes)}`
+            : "no successful bulk run yet",
         detail: lastEod?.error
           ? `Latest bulk EOD error: ${lastEod.error}`
           : "Bulk EOD is the scalable daily OHLCV path for keeping thousands of equities current without thousands of per-symbol API calls.",
@@ -297,7 +288,7 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
       {
         key: "backfill",
         label: "Historical bootstrap",
-        state: pendingBackfillDates === 0 && failedBackfillDates === 0 ? "pass" : failedBackfillDates > 0 ? "warn" : "warn",
+        state: pendingBackfillDates === 0 && failedBackfillDates === 0 ? "pass" : "warn",
         value: `${pendingBackfillDates} pending · ${failedBackfillDates} failed`,
         detail: "Backfill progress is informational once the fresh 90-bar coverage gate has passed; until then it explains why coverage is still building.",
         required: false,
