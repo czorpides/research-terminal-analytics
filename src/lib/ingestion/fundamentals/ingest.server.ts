@@ -102,6 +102,13 @@ class FmpQuotaError extends Error {
   }
 }
 
+class FmpEntitlementError extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = "FmpEntitlementError";
+  }
+}
+
 async function fmp<T>(
   endpoint: string,
   symbol: string,
@@ -111,11 +118,22 @@ async function fmp<T>(
   const query = new URLSearchParams({ symbol, ...params, apikey: apiKey });
   const url = `https://financialmodelingprep.com/stable/${endpoint}?${query.toString()}`;
   const res = await fetch(url);
-  if (res.status === 429 || res.status === 402) {
-    await recordCall("fmp", "rate_limit", `${endpoint} HTTP ${res.status}`);
-    throw new FmpQuotaError(`FMP quota exhausted (${res.status})`);
+  if (res.status === 402) {
+    await recordCall("fmp", "entitlement", `${endpoint} HTTP 402`);
+    throw new FmpEntitlementError(`FMP ${endpoint} entitlement unavailable (HTTP 402)`);
   }
-  if (!res.ok) throw new Error(`FMP ${endpoint} HTTP ${res.status}`);
+  if (res.status === 429) {
+    await recordCall("fmp", "rate_limit", `${endpoint} HTTP 429`);
+    throw new FmpQuotaError("FMP quota/rate limit reached (HTTP 429)");
+  }
+  if (res.status === 401 || res.status === 403) {
+    await recordCall("fmp", "auth", `${endpoint} HTTP ${res.status}`);
+    throw new Error(`FMP ${endpoint} authentication failed (HTTP ${res.status})`);
+  }
+  if (!res.ok) {
+    await recordCall("fmp", "error", `${endpoint} HTTP ${res.status}`);
+    throw new Error(`FMP ${endpoint} HTTP ${res.status}`);
+  }
   await recordCall("fmp", "ok");
   const j = (await res.json()) as unknown;
   if (!Array.isArray(j)) return null;
@@ -149,9 +167,6 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
   const sourceId = (source?.id as string | undefined) ?? null;
   if (!sourceId) throw new Error("FMP data source is not configured");
 
-  // Preserve the existing current-fundamentals path first. Statement history
-  // has its own three-call gate below, so a missing table, provider entitlement
-  // or exhausted backfill quota cannot disable the current Radar evidence.
   const gate = await canUse("fmp", 250, 3);
   if (!gate.ok) {
     return { status: "skipped", symbol, runId: "", rowsInserted: 0, reason: gate.reason };
@@ -170,7 +185,6 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
   const runId = run!.id as string;
 
   try {
-    // Serialize — the free tier rate-limits parallel calls aggressively.
     const km = await fmp<FmpKeyMetrics>("key-metrics-ttm", symbol, apiKey);
     const ra = await fmp<FmpRatios>("ratios-ttm", symbol, apiKey);
     const pr = await fmp<FmpProfile>("profile", symbol, apiKey);
@@ -197,7 +211,6 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
       [FUNDAMENTAL_METRICS.beta]: num(p.beta),
     };
 
-    // Quality gate — reject negative values where they are impossible.
     const negativeImpossible = new Set<string>([
       FUNDAMENTAL_METRICS.grossMargin,
       FUNDAMENTAL_METRICS.currentRatio,
@@ -228,12 +241,7 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
     const { error } = await supabaseAdmin.from("data_points").insert(rows as any);
     if (error) throw error;
 
-    const statements = await refreshAnnualStatementHistory({
-      assetId,
-      symbol,
-      sourceId,
-      apiKey,
-    });
+    const statements = await refreshAnnualStatementHistory({ assetId, symbol, sourceId, apiKey });
     const rowsInserted = rows.length + statements.factsInserted;
 
     await supabaseAdmin
@@ -263,27 +271,23 @@ export async function runFundamentalsIngest(symbol: string): Promise<Fundamental
       values,
     };
   } catch (e) {
-    if (e instanceof FmpQuotaError) {
-      // Convert to skipped — this isn't a data failure, it's the free tier resetting tomorrow.
+    if (e instanceof FmpQuotaError || e instanceof FmpEntitlementError) {
       await supabaseAdmin
         .from("ingestion_runs")
         .update({
           status: "skipped" as unknown as "failed",
           finished_at: new Date().toISOString(),
-          error: (e as Error).message,
+          error: e.message,
         })
         .eq("id", runId);
-      return { status: "skipped", symbol, runId, rowsInserted: 0, reason: (e as Error).message };
+      return { status: "skipped", symbol, runId, rowsInserted: 0, reason: e.message };
     }
+    const message = failureMessage(e);
     await supabaseAdmin
       .from("ingestion_runs")
-      .update({
-        status: "failed",
-        finished_at: new Date().toISOString(),
-        error: (e as Error).message,
-      })
+      .update({ status: "failed", finished_at: new Date().toISOString(), error: message })
       .eq("id", runId);
-    return { status: "failed", symbol, runId, rowsInserted: 0, error: (e as Error).message };
+    return { status: "failed", symbol, runId, rowsInserted: 0, error: message };
   }
 }
 
@@ -296,27 +300,31 @@ export async function runAllFundamentalsIngest(
     syms = (data ?? []).map((a) => a.symbol as string);
   }
   const out: FundamentalsIngestResult[] = [];
-  for (const s of syms) {
-    // Short-circuit the whole run once FMP quota is exhausted.
+  for (let index = 0; index < syms.length; index += 1) {
+    const s = syms[index];
     const gate = await canUse("fmp", 250, 3);
     if (!gate.ok) {
       out.push({ status: "skipped", symbol: s, runId: "", rowsInserted: 0, reason: gate.reason });
       continue;
     }
     try {
-      out.push(await runFundamentalsIngest(s));
+      const result = await runFundamentalsIngest(s);
+      out.push(result);
+      if (result.status === "skipped" && result.reason?.toLowerCase().includes("entitlement unavailable")) {
+        for (const remaining of syms.slice(index + 1)) {
+          out.push({
+            status: "skipped",
+            symbol: remaining,
+            runId: "",
+            rowsInserted: 0,
+            reason: "FMP fundamentals entitlement unavailable; remaining symbols were not requested.",
+          });
+        }
+        break;
+      }
     } catch (e) {
-      out.push({
-        status: "failed",
-        symbol: s,
-        runId: "",
-        rowsInserted: 0,
-        error: (e as Error).message,
-      });
+      out.push({ status: "failed", symbol: s, runId: "", rowsInserted: 0, error: failureMessage(e) });
     }
-    // Free tier throttles hard. This path is deliberately serial and paced.
-    // Fresh statement histories use only the original three current calls;
-    // incomplete or stale histories use three additional backfill calls.
     await new Promise((r) => setTimeout(r, 1250));
   }
   return out;
@@ -338,10 +346,7 @@ async function refreshAnnualStatementHistory(input: {
       .order("ingested_at", { ascending: false })
       .limit(20);
     if (error) {
-      return emptyStatementResult(
-        "failed",
-        `Point-in-time statement storage is unavailable: ${error.message}`,
-      );
+      return emptyStatementResult("failed", `Point-in-time statement storage is unavailable: ${error.message}`);
     }
     const distinctPeriods = new Set((existing ?? []).map((row) => row.period_end));
     const latestIngestedAt = existing?.[0]?.ingested_at ?? null;
@@ -356,51 +361,36 @@ async function refreshAnnualStatementHistory(input: {
     }
 
     const gate = await canUse("fmp", 250, 3);
-    if (!gate.ok) {
-      return emptyStatementResult("skipped", gate.reason ?? "FMP statement quota unavailable");
-    }
+    if (!gate.ok) return emptyStatementResult("skipped", gate.reason ?? "FMP statement quota unavailable");
+
     try {
       const income = await fmp<FmpIncomeStatement>("income-statement", input.symbol, input.apiKey, {
         period: "annual",
         limit: "4",
       });
-      const balance = await fmp<FmpBalanceSheet>(
-        "balance-sheet-statement",
-        input.symbol,
-        input.apiKey,
-        {
-          period: "annual",
-          limit: "4",
-        },
-      );
-      const cashFlow = await fmp<FmpCashFlowStatement>(
-        "cash-flow-statement",
-        input.symbol,
-        input.apiKey,
-        {
-          period: "annual",
-          limit: "4",
-        },
-      );
+      const balance = await fmp<FmpBalanceSheet>("balance-sheet-statement", input.symbol, input.apiKey, {
+        period: "annual",
+        limit: "4",
+      });
+      const cashFlow = await fmp<FmpCashFlowStatement>("cash-flow-statement", input.symbol, input.apiKey, {
+        period: "annual",
+        limit: "4",
+      });
       const stored = await storeAnnualStatementHistory({
         assetId: input.assetId,
         symbol: input.symbol,
         sourceId: input.sourceId,
-        bundle: {
-          income: income ?? [],
-          balance: balance ?? [],
-          cashFlow: cashFlow ?? [],
-        },
+        bundle: { income: income ?? [], balance: balance ?? [], cashFlow: cashFlow ?? [] },
       });
       return { status: "success", ...stored };
     } catch (error) {
       return emptyStatementResult(
-        error instanceof FmpQuotaError ? "skipped" : "failed",
-        (error as Error).message,
+        error instanceof FmpQuotaError || error instanceof FmpEntitlementError ? "skipped" : "failed",
+        failureMessage(error),
       );
     }
   } catch (error) {
-    return emptyStatementResult("failed", (error as Error).message);
+    return emptyStatementResult("failed", failureMessage(error));
   }
 }
 
@@ -408,13 +398,7 @@ function emptyStatementResult(
   status: StatementIngestResult["status"],
   reason: string,
 ): StatementIngestResult {
-  return {
-    status,
-    reason,
-    filingsInserted: 0,
-    factsInserted: 0,
-    filingsUnchanged: 0,
-  };
+  return { status, reason, filingsInserted: 0, factsInserted: 0, filingsUnchanged: 0 };
 }
 
 async function storeAnnualStatementHistory(input: {
@@ -454,13 +438,7 @@ async function storeAnnualStatementHistory(input: {
       cashFlow?.filingDate,
     ]);
     const sourceFilingId =
-      income?.finalLink ??
-      income?.link ??
-      balance?.finalLink ??
-      balance?.link ??
-      cashFlow?.finalLink ??
-      cashFlow?.link ??
-      `${input.symbol}:${periodEnd}:FY`;
+      income?.finalLink ?? income?.link ?? balance?.finalLink ?? balance?.link ?? cashFlow?.finalLink ?? cashFlow?.link ?? `${input.symbol}:${periodEnd}:FY`;
     const { data: previous, error: previousError } = await supabaseAdmin
       .from("fundamental_filings")
       .select("id,content_hash,revision_no,known_at,is_restatement")
@@ -495,18 +473,8 @@ async function storeAnnualStatementHistory(input: {
 
     const revisionNo = previous ? previous.revision_no + 1 : 1;
     const isRestatement = Boolean(previous);
-    // FMP's normalized historical endpoint may contain later restatements.
-    // Publication time is retained for audit context, but the platform first
-    // "knows" a backfilled value only when this ingestion actually observes it.
-    // This prevents the future backtest from treating today's normalized
-    // history as if it had been available at the original filing date.
     const knownAt = new Date().toISOString();
-    const raw = {
-      symbol: input.symbol,
-      income: income ?? null,
-      balance: balance ?? null,
-      cashFlow: cashFlow ?? null,
-    };
+    const raw = { symbol: input.symbol, income: income ?? null, balance: balance ?? null, cashFlow: cashFlow ?? null };
     const { data: filing, error: filingError } = await supabaseAdmin
       .from("fundamental_filings")
       .insert({
@@ -519,11 +487,7 @@ async function storeAnnualStatementHistory(input: {
         fiscal_period: "FY",
         published_at: publishedAt,
         known_at: knownAt,
-        reported_currency:
-          income?.reportedCurrency ??
-          balance?.reportedCurrency ??
-          cashFlow?.reportedCurrency ??
-          null,
+        reported_currency: income?.reportedCurrency ?? balance?.reportedCurrency ?? cashFlow?.reportedCurrency ?? null,
         revision_no: revisionNo,
         is_restatement: isRestatement,
         supersedes_filing_id: previous?.id ?? null,
@@ -577,44 +541,20 @@ function statementFacts(
       unit: "currency",
     },
     { metricCode: STATEMENT_METRICS.totalAssets, value: balance?.totalAssets, unit: "currency" },
-    {
-      metricCode: STATEMENT_METRICS.longTermDebt,
-      value: balance?.longTermDebt ?? balance?.totalNonCurrentDebt,
-      unit: "currency",
-    },
-    {
-      metricCode: STATEMENT_METRICS.currentAssets,
-      value: balance?.totalCurrentAssets,
-      unit: "currency",
-    },
-    {
-      metricCode: STATEMENT_METRICS.currentLiabilities,
-      value: balance?.totalCurrentLiabilities,
-      unit: "currency",
-    },
-    {
-      metricCode: STATEMENT_METRICS.sharesOutstanding,
-      value: income?.weightedAverageShsOut,
-      unit: "shares",
-    },
+    { metricCode: STATEMENT_METRICS.longTermDebt, value: balance?.longTermDebt ?? balance?.totalNonCurrentDebt, unit: "currency" },
+    { metricCode: STATEMENT_METRICS.currentAssets, value: balance?.totalCurrentAssets, unit: "currency" },
+    { metricCode: STATEMENT_METRICS.currentLiabilities, value: balance?.totalCurrentLiabilities, unit: "currency" },
+    { metricCode: STATEMENT_METRICS.sharesOutstanding, value: income?.weightedAverageShsOut, unit: "shares" },
     { metricCode: STATEMENT_METRICS.revenue, value: income?.revenue, unit: "currency" },
     { metricCode: STATEMENT_METRICS.grossProfit, value: income?.grossProfit, unit: "currency" },
-    {
-      metricCode: STATEMENT_METRICS.ebit,
-      value: income?.ebit ?? income?.operatingIncome,
-      unit: "currency",
-    },
+    { metricCode: STATEMENT_METRICS.ebit, value: income?.ebit ?? income?.operatingIncome, unit: "currency" },
     {
       metricCode: STATEMENT_METRICS.cashAndEquivalents,
       value: balance?.cashAndCashEquivalents ?? balance?.cashAndShortTermInvestments,
       unit: "currency",
     },
     { metricCode: STATEMENT_METRICS.totalDebt, value: balance?.totalDebt, unit: "currency" },
-    {
-      metricCode: STATEMENT_METRICS.netFixedAssets,
-      value: balance?.propertyPlantEquipmentNet,
-      unit: "currency",
-    },
+    { metricCode: STATEMENT_METRICS.netFixedAssets, value: balance?.propertyPlantEquipmentNet, unit: "currency" },
   ];
   return candidates.flatMap((candidate) => {
     const value = num(candidate.value);
@@ -645,6 +585,19 @@ function buildFactRows(input: {
     is_restatement: input.isRestatement,
     raw: null,
   }));
+}
+
+function failureMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts = [record.code, record.message, record.details, record.hint]
+      .filter((value) => value !== null && value !== undefined && String(value).trim())
+      .map(String);
+    if (parts.length) return parts.join(" · ");
+    try { return JSON.stringify(record); } catch { return String(error); }
+  }
+  return String(error);
 }
 
 function isIsoDate(value: string): boolean {
