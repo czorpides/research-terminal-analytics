@@ -319,11 +319,11 @@ function normalizeBar(raw: FmpBulkEodRow, expectedDate: string) {
   const high = positive(raw.high);
   const low = positive(raw.low);
   const close = positive(raw.close);
-  const adjClose = positive(raw.adjClose) ?? close;
+  const adjClose = positive(raw.adjClose);
   const volume = nonNegative(raw.volume);
   if (!symbol || date !== expectedDate || open === null || high === null || low === null || close === null) return null;
   if (high < Math.max(open, close, low) || low > Math.min(open, close, high)) return null;
-  return { open, high, low, close, adjClose, volume };
+  return { open, high, low, close, adjClose: adjClose ?? close, volume };
 }
 
 async function loadActiveAssets(): Promise<ActiveAssetRow[]> {
