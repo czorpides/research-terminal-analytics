@@ -6,6 +6,7 @@ import { AlertTriangle, Crosshair, Radar as RadarIcon } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { OpportunityRadarDiscoveryView } from "@/components/research/OpportunityRadarDiscoveryView";
+import { OpportunityRadarEvidenceFreshness } from "@/components/research/OpportunityRadarEvidenceFreshness";
 import { OpportunityRadarReadinessStatus } from "@/components/research/OpportunityRadarReadinessStatus";
 import { SwingExpectationsPanel } from "@/components/research/SwingExpectationsPanel";
 import { SwingOperationalStatus } from "@/components/research/SwingOperationalStatus";
@@ -208,6 +209,7 @@ function Radar() {
       {view === "opportunity" ? (
         <>
           <OpportunityRadarReadinessStatus health={opportunityHealthQuery.data ?? null} />
+          <OpportunityRadarEvidenceFreshness workspace={workspace} />
           <OpportunityRadarDiscoveryView
             workspace={workspace}
             institutionalWorkspace={institutionalWorkspace}
