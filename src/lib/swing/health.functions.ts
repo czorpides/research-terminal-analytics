@@ -71,8 +71,6 @@ const MIN_HISTORY_BARS = 90;
 export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handler(
   async (): Promise<SwingOperationalHealth> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // New runtime tables are intentionally accessed loosely until generated
-    // Supabase types refresh after deployment.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabaseAdmin as any;
     const now = new Date();
@@ -97,7 +95,7 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
       if (error) throw error;
       readyWith90Bars = count ?? 0;
     } catch (error) {
-      screenError = error instanceof Error ? error.message : String(error);
+      screenError = errorMessage(error);
     }
 
     let trackerSchemaAvailable = false;
@@ -108,16 +106,8 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
     try {
       const [trackedResult, activeResult, quoteResult] = await Promise.all([
         db.from("swing_trade_setups").select("id", { count: "exact", head: true }),
-        db
-          .from("swing_trade_setups")
-          .select("id", { count: "exact", head: true })
-          .eq("outcome_status", "active"),
-        db
-          .from("swing_trade_price_snapshots")
-          .select("observed_at")
-          .order("observed_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
+        db.from("swing_trade_setups").select("id", { count: "exact", head: true }).eq("outcome_status", "active"),
+        db.from("swing_trade_price_snapshots").select("observed_at").order("observed_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (trackedResult.error) throw trackedResult.error;
       if (activeResult.error) throw activeResult.error;
@@ -127,37 +117,28 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
       activeTracked = activeResult.count ?? 0;
       latestQuoteAt = quoteResult.data?.observed_at ? String(quoteResult.data.observed_at) : null;
     } catch (error) {
-      trackerError = error instanceof Error ? error.message : String(error);
+      trackerError = errorMessage(error);
     }
 
     let lastMonitor: MonitorRunRow | null = null;
     let lastSuccess: MonitorRunRow | null = null;
     let monitorTableError: string | null = null;
     try {
+      const fields = "source,status,started_at,finished_at,screened,deep_scanned,surfaced,quotes_updated,error";
       const [lastResult, successResult] = await Promise.all([
-        db
-          .from("swing_monitor_runs")
-          .select("source,status,started_at,finished_at,screened,deep_scanned,surfaced,quotes_updated,error")
-          .order("started_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        db
-          .from("swing_monitor_runs")
-          .select("source,status,started_at,finished_at,screened,deep_scanned,surfaced,quotes_updated,error")
-          .eq("status", "success")
-          .order("started_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
+        db.from("swing_monitor_runs").select(fields).order("started_at", { ascending: false }).limit(1).maybeSingle(),
+        db.from("swing_monitor_runs").select(fields).eq("status", "success").order("started_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (lastResult.error) throw lastResult.error;
       if (successResult.error) throw successResult.error;
       lastMonitor = lastResult.data as MonitorRunRow | null;
       lastSuccess = successResult.data as MonitorRunRow | null;
     } catch (error) {
-      monitorTableError = error instanceof Error ? error.message : String(error);
+      monitorTableError = errorMessage(error);
     }
 
     let lastEod: IngestionRunRow | null = null;
+    let eodTableError: string | null = null;
     try {
       const { data, error } = await db
         .from("ingestion_runs")
@@ -168,28 +149,24 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
         .maybeSingle();
       if (error) throw error;
       lastEod = data as IngestionRunRow | null;
-    } catch {
-      lastEod = null;
+    } catch (error) {
+      eodTableError = errorMessage(error);
     }
 
     let pendingBackfillDates = 0;
     let failedBackfillDates = 0;
+    let backfillError: string | null = null;
     try {
       const [pendingResult, failedResult] = await Promise.all([
-        db
-          .from("equity_eod_backfill_queue")
-          .select("market_date", { count: "exact", head: true })
-          .in("status", ["pending", "running"]),
-        db
-          .from("equity_eod_backfill_queue")
-          .select("market_date", { count: "exact", head: true })
-          .eq("status", "failed"),
+        db.from("equity_eod_backfill_queue").select("market_date", { count: "exact", head: true }).in("status", ["pending", "running"]),
+        db.from("equity_eod_backfill_queue").select("market_date", { count: "exact", head: true }).eq("status", "failed"),
       ]);
+      if (pendingResult.error) throw pendingResult.error;
+      if (failedResult.error) throw failedResult.error;
       pendingBackfillDates = pendingResult.count ?? 0;
       failedBackfillDates = failedResult.count ?? 0;
-    } catch {
-      pendingBackfillDates = 0;
-      failedBackfillDates = 0;
+    } catch (error) {
+      backfillError = errorMessage(error);
     }
 
     const providers = await loadProviderHealth(db, nowIso.slice(0, 10));
@@ -247,87 +224,65 @@ export const getSwingOperationalHealth = createServerFn({ method: "GET" }).handl
       {
         key: "intraday_quotes",
         label: "Tracked intraday quotes",
-        state:
-          activeTracked === 0
-            ? "pass"
-            : !insideMonitorWindow
-              ? "warn"
-              : latestQuoteAgeMinutes !== null && latestQuoteAgeMinutes <= 120
-                ? "pass"
-                : "fail",
-        value:
-          activeTracked === 0
-            ? "not required — no active tracked setups"
-            : latestQuoteAt
-              ? formatAge(latestQuoteAgeMinutes)
-              : "no quote observed",
-        detail:
-          activeTracked === 0
-            ? "No active frozen setup currently requires an intraday quote."
-            : insideMonitorWindow
-              ? "While the monitor window is open, active setups require a successful quote within two hours."
-              : "Markets/monitor window are closed, so stale intraday quotes do not by themselves make the engine untrusted.",
+        state: activeTracked === 0
+          ? "pass"
+          : !insideMonitorWindow
+            ? "warn"
+            : latestQuoteAgeMinutes !== null && latestQuoteAgeMinutes <= 120
+              ? "pass"
+              : "fail",
+        value: activeTracked === 0
+          ? "not required — no active tracked setups"
+          : latestQuoteAt
+            ? formatAge(latestQuoteAgeMinutes)
+            : "no quote observed",
+        detail: activeTracked === 0
+          ? "No active frozen setup currently requires an intraday quote."
+          : insideMonitorWindow
+            ? "While the monitor window is open, active setups require a successful quote within two hours."
+            : "Markets/monitor window are closed, so stale intraday quotes do not by themselves make the engine untrusted.",
         required: insideMonitorWindow && activeTracked > 0,
       },
       {
         key: "bulk_eod",
         label: "Full-universe EOD pipeline",
-        state:
-          lastEod?.status === "success" && lastEodAgeMinutes !== null && lastEodAgeMinutes <= eodLimit
-            ? "pass"
-            : "fail",
-        value:
-          lastEod && lastEodAt
-            ? `${lastEod.status} · ${formatAge(lastEodAgeMinutes)}`
-            : "no successful bulk run yet",
-        detail: lastEod?.error
-          ? `Latest bulk EOD error: ${lastEod.error}`
-          : "Bulk EOD is the scalable daily OHLCV path for keeping thousands of equities current without thousands of per-symbol API calls.",
+        state: lastEod?.status === "success" && lastEodAgeMinutes !== null && lastEodAgeMinutes <= eodLimit ? "pass" : "fail",
+        value: lastEod && lastEodAt ? `${lastEod.status} · ${formatAge(lastEodAgeMinutes)}` : "no successful bulk run yet",
+        detail: eodTableError
+          ? `Bulk-ingestion history unavailable: ${eodTableError}`
+          : lastEod?.error
+            ? `Latest bulk EOD error: ${lastEod.error}`
+            : "A provider-agnostic full-universe bulk EOD run must keep the managed population current.",
         required: true,
       },
       {
         key: "backfill",
         label: "Historical bootstrap",
-        state: pendingBackfillDates === 0 && failedBackfillDates === 0 ? "pass" : "warn",
-        value: `${pendingBackfillDates} pending · ${failedBackfillDates} failed`,
-        detail: "Backfill progress is informational once the fresh 90-bar coverage gate has passed; until then it explains why coverage is still building.",
+        state: backfillError ? "warn" : pendingBackfillDates === 0 && failedBackfillDates === 0 ? "pass" : "warn",
+        value: backfillError ? "unavailable" : `${pendingBackfillDates} pending · ${failedBackfillDates} failed`,
+        detail: backfillError
+          ? `Backfill queue unavailable: ${backfillError}`
+          : "Backfill progress is informational once the fresh 90-bar coverage gate has passed; until then it explains why coverage is still building.",
         required: false,
       },
     ];
 
     const requiredFailures = checks.filter((check) => check.required && check.state !== "pass");
     const offline = active === 0 || (readyWith90Bars === 0 && !trackerSchemaAvailable);
-    const state: SwingOperationalState = offline
-      ? "offline"
-      : requiredFailures.length === 0
-        ? "operational"
-        : "degraded";
+    const state: SwingOperationalState = offline ? "offline" : requiredFailures.length === 0 ? "operational" : "degraded";
 
     return {
       asOf: nowIso,
       state,
       trusted: state === "operational",
-      headline:
-        state === "operational"
-          ? "Operational: every required runtime and data-freshness gate is passing."
-          : state === "offline"
-            ? "Offline: the core data/runtime prerequisites are not available."
-            : `${requiredFailures.length} required operational gate${requiredFailures.length === 1 ? " is" : "s are"} failing. Signals remain visible for diagnosis but should not be treated as fully live.`,
+      headline: state === "operational"
+        ? "Operational: every required runtime and data-freshness gate is passing."
+        : state === "offline"
+          ? "Offline: the core data/runtime prerequisites are not available."
+          : `${requiredFailures.length} required operational gate${requiredFailures.length === 1 ? " is" : "s are"} failing. Signals remain visible for diagnosis but should not be treated as fully live.`,
       checks,
-      universe: {
-        target: TARGET_EQUITIES,
-        active,
-        readyWith90Bars,
-        readyCoveragePct,
-        latestRequiredDate,
-      },
-      tracker: {
-        schemaAvailable: trackerSchemaAvailable,
-        tracked,
-        active: activeTracked,
-        latestQuoteAt,
-        latestQuoteAgeMinutes,
-      },
+      universe: { target: TARGET_EQUITIES, active, readyWith90Bars, readyCoveragePct, latestRequiredDate },
+      tracker: { schemaAvailable: trackerSchemaAvailable, tracked, active: activeTracked, latestQuoteAt, latestQuoteAgeMinutes },
       monitor: {
         lastStatus: lastMonitor?.status ?? null,
         lastStartedAt: lastMonitor?.started_at ?? null,
@@ -383,7 +338,7 @@ async function loadProviderHealth(
       .from("provider_quotas")
       .select("provider_code,calls_made,daily_limit,last_status,last_call_at,last_error,disabled_until")
       .eq("quota_date", quotaDate)
-      .in("provider_code", ["fmp", "tiingo", "twelvedata", "alphavantage"]);
+      .in("provider_code", ["eodhd", "fmp", "tiingo", "twelvedata", "alphavantage"]);
     if (error) throw error;
     return (data ?? []).map((row: Record<string, unknown>) => ({
       code: String(row.provider_code ?? "unknown"),
@@ -397,6 +352,19 @@ async function loadProviderHealth(
   } catch {
     return [];
   }
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts = [record.code, record.message, record.details, record.hint]
+      .filter((value) => value !== null && value !== undefined && String(value).trim())
+      .map(String);
+    if (parts.length) return parts.join(" · ");
+    try { return JSON.stringify(record); } catch { return String(error); }
+  }
+  return String(error);
 }
 
 function ageMinutes(value: string | null, now: Date): number | null {
