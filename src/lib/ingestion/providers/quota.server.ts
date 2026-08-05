@@ -35,14 +35,25 @@ export async function ensureQuota(code: ProviderCode, dailyLimit: number): Promi
   return data as unknown as QuotaRow;
 }
 
-export async function recordCall(code: ProviderCode, status: "ok" | "rate_limit" | "auth" | "error", detail?: string): Promise<void> {
+/**
+ * Record provider consumption. `units` defaults to one request, but providers
+ * such as EODHD bill some endpoints in API units (an entire-exchange bulk EOD
+ * request costs 100). Keeping the accounting here means the governor can use
+ * the provider's real quota rather than HTTP request count.
+ */
+export async function recordCall(
+  code: ProviderCode,
+  status: "ok" | "rate_limit" | "auth" | "entitlement" | "error",
+  detail?: string,
+  units = 1,
+): Promise<void> {
   const row = await getQuota(code);
   if (!row) return;
   const disabled_until =
     status === "rate_limit" ? new Date(Date.now() + 60 * 60_000).toISOString() :
     status === "auth" ? new Date(Date.now() + 3600_000).toISOString() : row.disabled_until;
   await supabaseAdmin.from("provider_quotas").update({
-    calls_made: row.calls_made + 1,
+    calls_made: row.calls_made + Math.max(1, Math.floor(units)),
     last_call_at: new Date().toISOString(),
     last_status: status,
     last_error: detail ?? null,
