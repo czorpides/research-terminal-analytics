@@ -24,7 +24,8 @@ export async function providerSymbolForAsset(
       .eq("asset_id", asset.id)
       .eq("provider_code", provider)
       .maybeSingle();
-    if (!error && data?.provider_symbol && data.mapping_status !== "failed") {
+    if (!error && data?.provider_symbol) {
+      if (data.mapping_status === "failed") return null;
       return String(data.provider_symbol);
     }
   } catch {
