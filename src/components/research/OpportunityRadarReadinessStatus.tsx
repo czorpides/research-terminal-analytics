@@ -1,4 +1,12 @@
-import { Activity, AlertTriangle, CheckCircle2, Database, ShieldCheck, XCircle } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Database,
+  ShieldCheck,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type {
@@ -106,7 +114,7 @@ function Summary({
   label,
   value,
 }: {
-  icon: typeof Database;
+  icon: LucideIcon;
   label: string;
   value: string;
 }) {
