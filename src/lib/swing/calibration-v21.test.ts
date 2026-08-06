@@ -119,7 +119,7 @@ test("summarises expectancy by setup and score band while excluding ambiguity", 
 test("compares 0.50, 0.75 and 1.00 ATR floors on identical signals", () => {
   const cases = [{
     signal: signal(),
-    bars: bars(["2026-01-06", 110, 98.5, 109]),
+    bars: bars(["2026-01-06", 110, 97.5, 109]),
   }];
 
   const comparison = compareSwingV21StopFloors(cases, [0.5, 0.75, 1], 1);
