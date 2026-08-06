@@ -70,9 +70,17 @@ export async function fetchAlphaVantageEarningsCalendar(
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  if (lines.length < 2) return [];
+  if (lines.length < 2) {
+    throw new Error(
+      `Alpha Vantage earnings calendar returned no data rows ` +
+        `(lines=${lines.length}, chars=${text.length}, preview=${responseDetail(text) ?? "<empty>"})`,
+    );
+  }
 
-  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase());
+  // Downloadable CSVs can include a UTF-8 BOM before the first header. Strip it
+  // before schema matching so a valid `symbol` column cannot become invisible.
+  const headerLine = lines[0].replace(/^\uFEFF/, "");
+  const headers = parseCsvLine(headerLine).map((header) => header.toLowerCase());
   const indexOf = (name: string) => headers.indexOf(name.toLowerCase());
   const symbolIndex = indexOf("symbol");
   const nameIndex = indexOf("name");
@@ -81,10 +89,13 @@ export async function fetchAlphaVantageEarningsCalendar(
   const estimateIndex = indexOf("estimate");
   const currencyIndex = indexOf("currency");
   if (symbolIndex < 0 || reportDateIndex < 0) {
-    throw new Error("Alpha Vantage earnings calendar returned an unexpected CSV schema");
+    throw new Error(
+      `Alpha Vantage earnings calendar returned an unexpected CSV schema ` +
+        `(header=${headerLine.slice(0, 320)})`,
+    );
   }
 
-  return lines
+  const events = lines
     .slice(1)
     .map(parseCsvLine)
     .map((values): ProviderEarningsEvent => ({
@@ -101,6 +112,16 @@ export async function fetchAlphaVantageEarningsCalendar(
         /^\d{4}-\d{2}-\d{2}$/.test(event.reportDate) &&
         Number.isFinite(new Date(`${event.reportDate}T00:00:00Z`).getTime()),
     );
+
+  if (!events.length) {
+    const firstDataLine = lines[1]?.slice(0, 320) ?? "<none>";
+    throw new Error(
+      `Alpha Vantage earnings calendar contained ${lines.length - 1} raw data row(s) but 0 usable rows ` +
+        `(header=${headerLine.slice(0, 240)}, firstData=${firstDataLine})`,
+    );
+  }
+
+  return events;
 }
 
 /**
