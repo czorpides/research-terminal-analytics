@@ -34,7 +34,7 @@ export interface SwingV21ResolvedContext {
   source?: string;
 }
 
-export interface SwingV21ContextSnapshot extends SwingV21ResolvedContext {}
+export type SwingV21ContextSnapshot = SwingV21ResolvedContext;
 
 export type SwingV21ContextResolver = (
   assetId: string,
@@ -411,11 +411,16 @@ function applyHistoricalPresentationGuards(
     }
   }
 
-  const productionRewardRisk =
+  const rawProductionRewardRisk =
     executionStop !== null && executionStop > 0 && executionStop < current &&
     target !== null && target > current
       ? (target - current) / (current - executionStop)
       : null;
+  // Live workspace hardening rounds to two decimals before score contribution
+  // and downgrade checks. Historical replay must do exactly the same.
+  const productionRewardRisk = rawProductionRewardRisk === null
+    ? null
+    : round(rawProductionRewardRisk, 2);
 
   let entryState = candidate.entryState;
   let entryQuality = candidate.entryQuality;
@@ -460,7 +465,7 @@ function applyHistoricalPresentationGuards(
       rewardRiskDowngraded,
       reversalDowngraded,
       productionExecutionStop: executionStop === null ? null : round(executionStop, 6),
-      productionRewardRisk: productionRewardRisk === null ? null : round(productionRewardRisk, 4),
+      productionRewardRisk,
     },
   };
 }
