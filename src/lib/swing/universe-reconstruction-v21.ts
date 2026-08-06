@@ -1,6 +1,6 @@
-import type { SwingBar } from "./model";
-import type { SwingV2EntryState } from "./model-v21";
-import type { SwingV21BacktestCase } from "./calibration-v21";
+import type { SwingBar } from "./model.ts";
+import type { SwingV2EntryState } from "./model-v21.ts";
+import type { SwingV21BacktestCase } from "./calibration-v21.ts";
 import {
   reconstructSwingV21History,
   type SwingV21ContextResolver,
@@ -8,7 +8,7 @@ import {
   type SwingV21MissingContextPolicy,
   type SwingV21ReconstructedSignal,
   type SwingV21ReplayEmission,
-} from "./reconstruction-v21";
+} from "./reconstruction-v21.ts";
 
 export interface SwingV21HistoricalUniverseAsset extends SwingV21HistoricalAssetSeries {
   /** Inclusive first date on which the security belonged to the testable universe. */
