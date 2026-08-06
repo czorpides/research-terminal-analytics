@@ -107,6 +107,12 @@ function isUnknownSeriesRelease(error: unknown): boolean {
   if (!(error instanceof FredError)) return false;
   if (error.status !== 400 && error.status !== 404) return false;
   const text = `${error.message} ${error.body ?? ""}`.toLowerCase();
+
+  // FRED currently answers an unknown series/release lookup with the exact
+  // wording "Bad Request. The series does not exist." and does not include
+  // the literal parameter name `series_id`. Keep that specific response
+  // fail-soft, while malformed API-key/request errors still propagate.
+  if (text.includes("series does not exist")) return true;
   if (!text.includes("series_id")) return false;
   return [
     "invalid",
