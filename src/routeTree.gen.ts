@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedUndervaluationRouteImport } from './routes/_authenticated/undervaluation'
+import { Route as AuthenticatedSwingTradesRouteImport } from './routes/_authenticated/swing-trades'
 import { Route as AuthenticatedScreenersRouteImport } from './routes/_authenticated/screeners'
 import { Route as AuthenticatedRadarRouteImport } from './routes/_authenticated/radar'
 import { Route as AuthenticatedOvervaluationRouteImport } from './routes/_authenticated/overvaluation'
@@ -25,6 +26,7 @@ import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security.index'
 import { Route as AuthenticatedMacroIndexRouteImport } from './routes/_authenticated/macro.index'
 import { Route as AuthenticatedSecuritySymbolRouteImport } from './routes/_authenticated/security.$symbol'
+import { Route as AuthenticatedResearchAssetIdRouteImport } from './routes/_authenticated/research.$assetId'
 import { Route as AuthenticatedMacroRegimeRouteImport } from './routes/_authenticated/macro.regime'
 import { Route as AuthenticatedMacroModelHealthRouteImport } from './routes/_authenticated/macro.model-health'
 import { Route as AuthenticatedMacroMarketRouteImport } from './routes/_authenticated/macro.market'
@@ -56,6 +58,7 @@ import { Route as ApiPublicIngestUsLiquidityFredRouteImport } from './routes/api
 import { Route as ApiPublicIngestUsLabourFredRouteImport } from './routes/api/public/ingest/us-labour-fred'
 import { Route as ApiPublicIngestUsInflationFredRouteImport } from './routes/api/public/ingest/us-inflation-fred'
 import { Route as ApiPublicIngestUsGrowthFredRouteImport } from './routes/api/public/ingest/us-growth-fred'
+import { Route as ApiPublicIngestSwingMetalsRouteImport } from './routes/api/public/ingest/swing-metals'
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
 import { Route as ApiPublicIngestMacroNativeRouteImport } from './routes/api/public/ingest/macro-native'
 import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
@@ -85,6 +88,12 @@ const AuthenticatedUndervaluationRoute =
   AuthenticatedUndervaluationRouteImport.update({
     id: '/undervaluation',
     path: '/undervaluation',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSwingTradesRoute =
+  AuthenticatedSwingTradesRouteImport.update({
+    id: '/swing-trades',
+    path: '/swing-trades',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedScreenersRoute = AuthenticatedScreenersRouteImport.update({
@@ -148,6 +157,12 @@ const AuthenticatedSecuritySymbolRoute =
   AuthenticatedSecuritySymbolRouteImport.update({
     id: '/security/$symbol',
     path: '/security/$symbol',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedResearchAssetIdRoute =
+  AuthenticatedResearchAssetIdRouteImport.update({
+    id: '/research/$assetId',
+    path: '/research/$assetId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedMacroRegimeRoute =
@@ -331,6 +346,12 @@ const ApiPublicIngestUsGrowthFredRoute =
     path: '/api/public/ingest/us-growth-fred',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicIngestSwingMetalsRoute =
+  ApiPublicIngestSwingMetalsRouteImport.update({
+    id: '/api/public/ingest/swing-metals',
+    path: '/api/public/ingest/swing-metals',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
   id: '/api/public/ingest/stooq',
   path: '/api/public/ingest/stooq',
@@ -399,6 +420,7 @@ export interface FileRoutesByFullPath {
   '/overvaluation': typeof AuthenticatedOvervaluationRoute
   '/radar': typeof AuthenticatedRadarRoute
   '/screeners': typeof AuthenticatedScreenersRoute
+  '/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
@@ -422,6 +444,7 @@ export interface FileRoutesByFullPath {
   '/macro/market': typeof AuthenticatedMacroMarketRoute
   '/macro/model-health': typeof AuthenticatedMacroModelHealthRoute
   '/macro/regime': typeof AuthenticatedMacroRegimeRoute
+  '/research/$assetId': typeof AuthenticatedResearchAssetIdRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/macro/': typeof AuthenticatedMacroIndexRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
@@ -434,6 +457,7 @@ export interface FileRoutesByFullPath {
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/ingest/swing-metals': typeof ApiPublicIngestSwingMetalsRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/ingest/us-inflation-fred': typeof ApiPublicIngestUsInflationFredRoute
   '/api/public/ingest/us-labour-fred': typeof ApiPublicIngestUsLabourFredRoute
@@ -455,6 +479,7 @@ export interface FileRoutesByTo {
   '/overvaluation': typeof AuthenticatedOvervaluationRoute
   '/radar': typeof AuthenticatedRadarRoute
   '/screeners': typeof AuthenticatedScreenersRoute
+  '/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/': typeof AuthenticatedIndexRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
@@ -479,6 +504,7 @@ export interface FileRoutesByTo {
   '/macro/market': typeof AuthenticatedMacroMarketRoute
   '/macro/model-health': typeof AuthenticatedMacroModelHealthRoute
   '/macro/regime': typeof AuthenticatedMacroRegimeRoute
+  '/research/$assetId': typeof AuthenticatedResearchAssetIdRoute
   '/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/macro': typeof AuthenticatedMacroIndexRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
@@ -491,6 +517,7 @@ export interface FileRoutesByTo {
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/ingest/swing-metals': typeof ApiPublicIngestSwingMetalsRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/ingest/us-inflation-fred': typeof ApiPublicIngestUsInflationFredRoute
   '/api/public/ingest/us-labour-fred': typeof ApiPublicIngestUsLabourFredRoute
@@ -515,6 +542,7 @@ export interface FileRoutesById {
   '/_authenticated/overvaluation': typeof AuthenticatedOvervaluationRoute
   '/_authenticated/radar': typeof AuthenticatedRadarRoute
   '/_authenticated/screeners': typeof AuthenticatedScreenersRoute
+  '/_authenticated/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/_authenticated/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/alt-data/$': typeof AuthenticatedAltDataSplatRoute
@@ -539,6 +567,7 @@ export interface FileRoutesById {
   '/_authenticated/macro/market': typeof AuthenticatedMacroMarketRoute
   '/_authenticated/macro/model-health': typeof AuthenticatedMacroModelHealthRoute
   '/_authenticated/macro/regime': typeof AuthenticatedMacroRegimeRoute
+  '/_authenticated/research/$assetId': typeof AuthenticatedResearchAssetIdRoute
   '/_authenticated/security/$symbol': typeof AuthenticatedSecuritySymbolRoute
   '/_authenticated/macro/': typeof AuthenticatedMacroIndexRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
@@ -551,6 +580,7 @@ export interface FileRoutesById {
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
+  '/api/public/ingest/swing-metals': typeof ApiPublicIngestSwingMetalsRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
   '/api/public/ingest/us-inflation-fred': typeof ApiPublicIngestUsInflationFredRoute
   '/api/public/ingest/us-labour-fred': typeof ApiPublicIngestUsLabourFredRoute
@@ -576,6 +606,7 @@ export interface FileRouteTypes {
     | '/overvaluation'
     | '/radar'
     | '/screeners'
+    | '/swing-trades'
     | '/undervaluation'
     | '/alt-data/$'
     | '/alt-data/anomalies'
@@ -599,6 +630,7 @@ export interface FileRouteTypes {
     | '/macro/market'
     | '/macro/model-health'
     | '/macro/regime'
+    | '/research/$assetId'
     | '/security/$symbol'
     | '/macro/'
     | '/security/'
@@ -611,6 +643,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
+    | '/api/public/ingest/swing-metals'
     | '/api/public/ingest/us-growth-fred'
     | '/api/public/ingest/us-inflation-fred'
     | '/api/public/ingest/us-labour-fred'
@@ -632,6 +665,7 @@ export interface FileRouteTypes {
     | '/overvaluation'
     | '/radar'
     | '/screeners'
+    | '/swing-trades'
     | '/undervaluation'
     | '/'
     | '/alt-data/$'
@@ -656,6 +690,7 @@ export interface FileRouteTypes {
     | '/macro/market'
     | '/macro/model-health'
     | '/macro/regime'
+    | '/research/$assetId'
     | '/security/$symbol'
     | '/macro'
     | '/security'
@@ -668,6 +703,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
+    | '/api/public/ingest/swing-metals'
     | '/api/public/ingest/us-growth-fred'
     | '/api/public/ingest/us-inflation-fred'
     | '/api/public/ingest/us-labour-fred'
@@ -691,6 +727,7 @@ export interface FileRouteTypes {
     | '/_authenticated/overvaluation'
     | '/_authenticated/radar'
     | '/_authenticated/screeners'
+    | '/_authenticated/swing-trades'
     | '/_authenticated/undervaluation'
     | '/_authenticated/'
     | '/_authenticated/alt-data/$'
@@ -715,6 +752,7 @@ export interface FileRouteTypes {
     | '/_authenticated/macro/market'
     | '/_authenticated/macro/model-health'
     | '/_authenticated/macro/regime'
+    | '/_authenticated/research/$assetId'
     | '/_authenticated/security/$symbol'
     | '/_authenticated/macro/'
     | '/_authenticated/security/'
@@ -727,6 +765,7 @@ export interface FileRouteTypes {
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
     | '/api/public/ingest/stooq'
+    | '/api/public/ingest/swing-metals'
     | '/api/public/ingest/us-growth-fred'
     | '/api/public/ingest/us-inflation-fred'
     | '/api/public/ingest/us-labour-fred'
@@ -751,6 +790,7 @@ export interface RootRouteChildren {
   ApiPublicIngestFundamentalsRoute: typeof ApiPublicIngestFundamentalsRoute
   ApiPublicIngestMacroNativeRoute: typeof ApiPublicIngestMacroNativeRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
+  ApiPublicIngestSwingMetalsRoute: typeof ApiPublicIngestSwingMetalsRoute
   ApiPublicIngestUsGrowthFredRoute: typeof ApiPublicIngestUsGrowthFredRoute
   ApiPublicIngestUsInflationFredRoute: typeof ApiPublicIngestUsInflationFredRoute
   ApiPublicIngestUsLabourFredRoute: typeof ApiPublicIngestUsLabourFredRoute
@@ -791,6 +831,13 @@ declare module '@tanstack/react-router' {
       path: '/undervaluation'
       fullPath: '/undervaluation'
       preLoaderRoute: typeof AuthenticatedUndervaluationRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/swing-trades': {
+      id: '/_authenticated/swing-trades'
+      path: '/swing-trades'
+      fullPath: '/swing-trades'
+      preLoaderRoute: typeof AuthenticatedSwingTradesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/screeners': {
@@ -875,6 +922,13 @@ declare module '@tanstack/react-router' {
       path: '/security/$symbol'
       fullPath: '/security/$symbol'
       preLoaderRoute: typeof AuthenticatedSecuritySymbolRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/research/$assetId': {
+      id: '/_authenticated/research/$assetId'
+      path: '/research/$assetId'
+      fullPath: '/research/$assetId'
+      preLoaderRoute: typeof AuthenticatedResearchAssetIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/macro/regime': {
@@ -1094,6 +1148,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicIngestUsGrowthFredRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/swing-metals': {
+      id: '/api/public/ingest/swing-metals'
+      path: '/api/public/ingest/swing-metals'
+      fullPath: '/api/public/ingest/swing-metals'
+      preLoaderRoute: typeof ApiPublicIngestSwingMetalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/stooq': {
       id: '/api/public/ingest/stooq'
       path: '/api/public/ingest/stooq'
@@ -1251,8 +1312,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedOvervaluationRoute: typeof AuthenticatedOvervaluationRoute
   AuthenticatedRadarRoute: typeof AuthenticatedRadarRoute
   AuthenticatedScreenersRoute: typeof AuthenticatedScreenersRoute
+  AuthenticatedSwingTradesRoute: typeof AuthenticatedSwingTradesRoute
   AuthenticatedUndervaluationRoute: typeof AuthenticatedUndervaluationRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedResearchAssetIdRoute: typeof AuthenticatedResearchAssetIdRoute
   AuthenticatedSecuritySymbolRoute: typeof AuthenticatedSecuritySymbolRoute
   AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
 }
@@ -1267,8 +1330,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedOvervaluationRoute: AuthenticatedOvervaluationRoute,
   AuthenticatedRadarRoute: AuthenticatedRadarRoute,
   AuthenticatedScreenersRoute: AuthenticatedScreenersRoute,
+  AuthenticatedSwingTradesRoute: AuthenticatedSwingTradesRoute,
   AuthenticatedUndervaluationRoute: AuthenticatedUndervaluationRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedResearchAssetIdRoute: AuthenticatedResearchAssetIdRoute,
   AuthenticatedSecuritySymbolRoute: AuthenticatedSecuritySymbolRoute,
   AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
 }
@@ -1288,6 +1353,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicIngestFundamentalsRoute: ApiPublicIngestFundamentalsRoute,
   ApiPublicIngestMacroNativeRoute: ApiPublicIngestMacroNativeRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
+  ApiPublicIngestSwingMetalsRoute: ApiPublicIngestSwingMetalsRoute,
   ApiPublicIngestUsGrowthFredRoute: ApiPublicIngestUsGrowthFredRoute,
   ApiPublicIngestUsInflationFredRoute: ApiPublicIngestUsInflationFredRoute,
   ApiPublicIngestUsLabourFredRoute: ApiPublicIngestUsLabourFredRoute,
