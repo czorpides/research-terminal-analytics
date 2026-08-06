@@ -1,16 +1,16 @@
-import type { SwingBar } from "./model";
+import type { SwingBar } from "./model.ts";
 import {
   computeSwingTradeV2,
   type SwingV2Candidate,
   type SwingV2Context,
   type SwingV2EntryState,
   type SwingV2SetupType,
-} from "./model-v21";
-import type { SwingOutcomeBar } from "./outcomes";
+} from "./model-v21.ts";
+import type { SwingOutcomeBar } from "./outcomes.ts";
 import type {
   SwingV21BacktestCase,
   SwingV21CalibrationSignal,
-} from "./calibration-v21";
+} from "./calibration-v21.ts";
 
 export type SwingV21ReplayEmission = "state_transition" | "daily_snapshot";
 export type SwingV21MissingContextPolicy = "technical_only" | "skip";
