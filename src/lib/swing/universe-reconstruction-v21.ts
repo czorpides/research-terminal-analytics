@@ -30,6 +30,7 @@ export type SwingV21BroadScoreResolver = (
 
 export interface SwingV21HistoricalScreenRow {
   assetId: string;
+  symbol: string;
   asOf: string;
   bars: number;
   current: number | null;
@@ -47,8 +48,15 @@ export interface SwingV21HistoricalScreenRow {
 
 export interface SwingV21NominationDay {
   asOf: string;
+  /** All historically active supplied instruments on this date. */
   activeMembers: number;
+  activeEquities: number;
+  activeCommodities: number;
+  /** Equity rows with enough history to enter the live-style broad screen. */
   screenEligible: number;
+  selectedEquities: string[];
+  selectedCommodities: string[];
+  /** Equity deep-scan selections followed by separately selected XAU/XAG assets. */
   selected: string[];
   scoreContextResolved: number;
   scoreContextUnknown: number;
@@ -57,6 +65,7 @@ export interface SwingV21NominationDay {
 export interface SwingV21NominationCalendar {
   startDate: string;
   endDate: string;
+  /** Applies to equities only, matching the live workspace. */
   deepScanCap: number;
   dates: SwingV21NominationDay[];
   warnings: string[];
@@ -91,6 +100,7 @@ export interface SwingV21UniverseReplayReport {
 
 const LIVE_DEEP_SCAN_CAP = 220;
 const MIN_MODEL_HISTORY = 45;
+const LIVE_METAL_SYMBOLS = new Set(["XAUUSD", "XAGUSD"]);
 
 /**
  * Rebuild the live broad-screen nomination step from historical bars.
@@ -100,7 +110,9 @@ const MIN_MODEL_HISTORY = 45;
  * - 5/20-session returns use the close 5/20 sessions ago;
  * - MA20/MA50 and 90-session high/low include the current bar;
  * - relative volume is latest volume divided by the prior 20 sessions;
- * - nomination buckets preserve the live insertion order before the 220 cap.
+ * - nomination buckets preserve the live symbol-order tie behaviour before the
+ *   220-equity cap;
+ * - XAUUSD/XAGUSD are selected separately and do not consume equity slots.
  *
  * Optional momentum/trend scores must carry their own `availableAt`; future
  * scores are rejected rather than silently used.
@@ -115,24 +127,47 @@ export function buildSwingV21HistoricalNominationCalendar(
 ): SwingV21NominationCalendar {
   validateDate(options.startDate, "startDate");
   validateDate(options.endDate, "endDate");
-  if (options.endDate < options.startDate) throw new Error("Swing v2.1 universe replay endDate precedes startDate");
+  if (options.endDate < options.startDate) {
+    throw new Error("Swing v2.1 universe replay endDate precedes startDate");
+  }
 
   const deepScanCap = clampInt(options.deepScanCap ?? LIVE_DEEP_SCAN_CAP, 1, LIVE_DEEP_SCAN_CAP);
-  const minimumHistoryBars = clampInt(options.minimumHistoryBars ?? MIN_MODEL_HISTORY, MIN_MODEL_HISTORY, 500);
+  const minimumHistoryBars = clampInt(
+    options.minimumHistoryBars ?? MIN_MODEL_HISTORY,
+    MIN_MODEL_HISTORY,
+    500,
+  );
   const allowSameDayScores = options.allowSameDayBroadScores ?? false;
-  const prepared = universe.map(prepareUniverseAsset);
+  // The live active-equity loader orders by symbol before selectDeepScanV2.
+  // Keep the same ordering so stable-sort ties are historically reproducible.
+  const prepared = universe
+    .map(prepareUniverseAsset)
+    .sort((left, right) => left.symbol.localeCompare(right.symbol) || left.assetId.localeCompare(right.assetId));
   const dates = unionDates(prepared, options.startDate, options.endDate);
   const output: SwingV21NominationDay[] = [];
 
   for (const asOf of dates) {
     const rows: SwingV21HistoricalScreenRow[] = [];
+    const selectedCommodities: string[] = [];
     let activeMembers = 0;
+    let activeEquities = 0;
+    let activeCommodities = 0;
     let scoreContextResolved = 0;
     let scoreContextUnknown = 0;
 
     for (const asset of prepared) {
       if (!isActiveMember(asset, asOf)) continue;
       activeMembers += 1;
+
+      if (asset.instrumentType === "commodity") {
+        activeCommodities += 1;
+        if (LIVE_METAL_SYMBOLS.has(asset.symbol.toUpperCase())) {
+          selectedCommodities.push(asset.assetId);
+        }
+        continue;
+      }
+
+      activeEquities += 1;
       const visible = barsThroughDate(asset.bars, asOf);
       if (visible.length < minimumHistoryBars) continue;
       const score = broadScoreResolver?.(asset.assetId, asOf) ?? null;
@@ -142,15 +177,20 @@ export function buildSwingV21HistoricalNominationCalendar(
       } else {
         scoreContextUnknown += 1;
       }
-      rows.push(screenRow(asset.assetId, visible, score));
+      rows.push(screenRow(asset.assetId, asset.symbol, visible, score));
     }
 
-    const selected = selectHistoricalDeepScan(rows, deepScanCap);
+    const selectedEquitySet = selectHistoricalDeepScan(rows, deepScanCap);
+    const selectedEquities = [...selectedEquitySet];
     output.push({
       asOf,
       activeMembers,
+      activeEquities,
+      activeCommodities,
       screenEligible: rows.length,
-      selected: [...selected],
+      selectedEquities,
+      selectedCommodities,
+      selected: [...selectedEquities, ...selectedCommodities],
       scoreContextResolved,
       scoreContextUnknown,
     });
@@ -160,6 +200,11 @@ export function buildSwingV21HistoricalNominationCalendar(
   if (!broadScoreResolver) {
     warnings.push(
       "Historical nomination used bar-derived broad-screen evidence only. Stored momentum/trend score context was not supplied; the small legacy trend-score tie-break contribution is therefore absent.",
+    );
+  }
+  if (prepared.some((asset) => asset.instrumentType === "commodity" && !LIVE_METAL_SYMBOLS.has(asset.symbol.toUpperCase()))) {
+    warnings.push(
+      "Only XAUUSD/XAGUSD commodities are admitted outside the 220-equity cap, matching the live Swing v2.1 workspace; other supplied commodities are ignored by nomination.",
     );
   }
   warnings.push(
@@ -206,7 +251,7 @@ export function reconstructSwingV21NominatedUniverse(
     nominatedAssetSessions += day.selected.length;
 
     // A gap in nomination ends the prior episode. If the name later re-enters
-    // the 220-name deep scan, the next qualifying state is a new opportunity.
+    // the deep scan, the next qualifying state is a new opportunity.
     for (const assetId of [...previousEpisode.keys()]) {
       if (!selected.has(assetId)) previousEpisode.delete(assetId);
     }
@@ -260,7 +305,7 @@ export function reconstructSwingV21NominatedUniverse(
   }));
   const warnings = [
     ...nominationCalendar.warnings,
-    "The historical 220-name deep-scan cap is reproduced. The live 140-card display cap is deliberately excluded from calibration and should not be treated as a portfolio-construction rule.",
+    "The historical 220-name equity deep-scan cap is reproduced while XAUUSD/XAGUSD remain separate, matching live nomination. The live 140-card display cap is deliberately excluded from calibration and should not be treated as a portfolio-construction rule.",
     "A survivorship-safe run requires historically correct activeFrom/activeTo membership for every supplied security, including delisted names.",
   ];
 
@@ -283,15 +328,19 @@ export function selectHistoricalDeepScan(
   rows: SwingV21HistoricalScreenRow[],
   cap = LIVE_DEEP_SCAN_CAP,
 ): Set<string> {
+  // Live input is symbol-sorted; enforce the same order here before stable sorts.
+  const orderedRows = [...rows].sort(
+    (left, right) => left.symbol.localeCompare(right.symbol) || left.assetId.localeCompare(right.assetId),
+  );
   const selected = new Set<string>();
 
   // Depression / location buckets dominate v2.1 nomination.
-  addTop(selected, rows, (row) => row.rangeLocation90 ?? 2, 42, false);
-  addTop(selected, rows, (row) => row.drawdown90 ?? 1, 42, false);
-  addTop(selected, rows, (row) => row.return20 ?? 999, 34, false);
+  addTop(selected, orderedRows, (row) => row.rangeLocation90 ?? 2, 42, false);
+  addTop(selected, orderedRows, (row) => row.drawdown90 ?? 1, 42, false);
+  addTop(selected, orderedRows, (row) => row.return20 ?? 999, 34, false);
   addTop(
     selected,
-    rows.filter((row) => (row.return20 ?? 0) < -2 && (row.return5 ?? -999) > 0),
+    orderedRows.filter((row) => (row.return20 ?? 0) < -2 && (row.return5 ?? -999) > 0),
     (row) => row.return5 ?? -999,
     34,
     true,
@@ -300,14 +349,16 @@ export function selectHistoricalDeepScan(
   // 200SMA and shorter moving-average mean reversion.
   addTop(
     selected,
-    rows.filter((row) => row.distanceMa200 !== null && row.distanceMa200 >= -0.18 && row.distanceMa200 <= 0.05),
+    orderedRows.filter(
+      (row) => row.distanceMa200 !== null && row.distanceMa200 >= -0.18 && row.distanceMa200 <= 0.05,
+    ),
     (row) => Math.abs(row.distanceMa200 ?? 99),
     34,
     false,
   );
   addTop(
     selected,
-    rows.filter((row) =>
+    orderedRows.filter((row) =>
       [row.distanceMa20, row.distanceMa50].some(
         (distance) => distance !== null && distance <= 0.02 && distance >= -0.1,
       ),
@@ -320,7 +371,7 @@ export function selectHistoricalDeepScan(
   // Damaged/stabilising names and volume-driven reversals.
   addTop(
     selected,
-    rows.filter((row) =>
+    orderedRows.filter((row) =>
       (row.drawdown90 ?? 0) <= -0.08 &&
       ((row.return5 ?? -999) > -3 || (row.relativeVolume ?? 0) >= 1.15),
     ),
@@ -333,7 +384,7 @@ export function selectHistoricalDeepScan(
   );
   addTop(
     selected,
-    rows.filter((row) => (row.drawdown90 ?? 0) <= -0.05),
+    orderedRows.filter((row) => (row.drawdown90 ?? 0) <= -0.05),
     (row) => row.relativeVolume ?? -1,
     24,
     true,
@@ -342,7 +393,7 @@ export function selectHistoricalDeepScan(
   // Small clean-trend/base-breakout discovery lane.
   addTop(
     selected,
-    rows.filter((row) =>
+    orderedRows.filter((row) =>
       (row.rangeLocation90 ?? 0) >= 0.72 &&
       (row.rangeLocation90 ?? 1) <= 1.02 &&
       (row.return20 ?? 0) <= 12 &&
@@ -376,6 +427,7 @@ function prepareUniverseAsset(asset: SwingV21HistoricalUniverseAsset): PreparedU
 
 function screenRow(
   assetId: string,
+  symbol: string,
   visibleBars: SwingBar[],
   score: SwingV21HistoricalBroadScore | null,
 ): SwingV21HistoricalScreenRow {
@@ -385,6 +437,8 @@ function screenRow(
   const low90 = min(visibleBars.slice(-90).map((bar) => bar.low));
   const ma20 = average(closes.slice(-20));
   const ma50 = closes.length >= 50 ? average(closes.slice(-50)) : null;
+  // Historical replay derives MA200 directly from the same adjusted-price bars.
+  // Live nomination usually reads the equivalent value from trend-score inputs.
   const ma200 = closes.length >= 200 ? average(closes.slice(-200)) : null;
   const close5 = closes.length >= 6 ? closes.at(-6)! : null;
   const close20 = closes.length >= 21 ? closes.at(-21)! : null;
@@ -401,6 +455,7 @@ function screenRow(
 
   return {
     assetId,
+    symbol,
     asOf: latest.date,
     bars: visibleBars.length,
     current,
@@ -427,10 +482,11 @@ function addTop(
   count: number,
   descending: boolean,
 ): void {
+  // Modern JS sort is stable. Because rows arrive symbol-sorted, exact ties keep
+  // the same order as the live workspace rather than using UUID order.
   const ordered = [...rows].sort((left, right) => {
     const delta = score(left) - score(right);
-    if (delta !== 0) return descending ? -delta : delta;
-    return left.assetId.localeCompare(right.assetId);
+    return delta === 0 ? 0 : descending ? -delta : delta;
   });
   for (const row of ordered.slice(0, count)) selected.add(row.assetId);
 }
