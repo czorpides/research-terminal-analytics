@@ -52,12 +52,24 @@ async function fredFetch(
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(url.toString(), { signal });
     if (res.status === 429 || res.status >= 500) {
-      lastErr = new FredError(`FRED transient ${res.status}`, res.status, await safeText(res));
+      const body = await safeText(res);
+      const detail = fredErrorDetail(body);
+      lastErr = new FredError(
+        `FRED transient ${res.status}${detail ? `: ${detail}` : ""}`,
+        res.status,
+        body,
+      );
       await sleep(400 * (attempt + 1));
       continue;
     }
     if (!res.ok) {
-      throw new FredError(`FRED ${res.status}`, res.status, await safeText(res));
+      const body = await safeText(res);
+      const detail = fredErrorDetail(body);
+      throw new FredError(
+        `FRED ${res.status}${detail ? `: ${detail}` : ""}`,
+        res.status,
+        body,
+      );
     }
     return await res.json();
   }
@@ -70,6 +82,39 @@ async function safeText(res: Response): Promise<string> {
   } catch {
     return "";
   }
+}
+
+function fredErrorDetail(body: string): string | null {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      error_message?: unknown;
+      message?: unknown;
+    };
+    const detail = parsed.error_message ?? parsed.message;
+    if (detail !== null && detail !== undefined && String(detail).trim()) {
+      return String(detail).replace(/\s+/g, " ").trim().slice(0, 320);
+    }
+  } catch {
+    // FRED can return XML/plain text even when JSON was requested.
+  }
+  const xmlMessage = trimmed.match(/message=["']([^"']+)["']/i)?.[1];
+  return (xmlMessage ?? trimmed).replace(/\s+/g, " ").trim().slice(0, 320) || null;
+}
+
+function isUnknownSeriesRelease(error: unknown): boolean {
+  if (!(error instanceof FredError)) return false;
+  if (error.status !== 400 && error.status !== 404) return false;
+  const text = `${error.message} ${error.body ?? ""}`.toLowerCase();
+  if (!text.includes("series_id")) return false;
+  return [
+    "invalid",
+    "not found",
+    "does not exist",
+    "no series",
+    "unknown",
+  ].some((token) => text.includes(token));
 }
 
 function sleep(ms: number): Promise<void> {
@@ -140,15 +185,28 @@ export interface FredReleaseDate {
   date: string;
 }
 
-/** Official FRED release associated with a tracked series. */
+/**
+ * Official FRED release associated with a tracked series.
+ *
+ * The indicator registry can contain provider-native series that are not FRED
+ * identifiers. A single such row should not abort the entire release calendar,
+ * so only FRED's explicit "unknown/invalid series_id" response is treated as a
+ * missing mapping. Authentication, quota, malformed-request and server errors
+ * still propagate normally.
+ */
 export async function fetchSeriesRelease(
   seriesId: string,
   signal?: AbortSignal,
 ): Promise<FredRelease | null> {
-  const raw = (await fredFetch("/series/release", { series_id: seriesId }, signal)) as {
-    releases?: FredRelease[];
-  };
-  return raw.releases?.[0] ?? null;
+  try {
+    const raw = (await fredFetch("/series/release", { series_id: seriesId }, signal)) as {
+      releases?: FredRelease[];
+    };
+    return raw.releases?.[0] ?? null;
+  } catch (error) {
+    if (isUnknownSeriesRelease(error)) return null;
+    throw error;
+  }
 }
 
 /**
