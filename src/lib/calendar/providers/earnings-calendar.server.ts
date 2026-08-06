@@ -16,6 +16,8 @@ export interface ProviderReportedEarnings {
   surprisePercent: number | null;
 }
 
+type AlphaVantageResponseFormat = "csv" | "json";
+
 function parseCsvLine(line: string): string[] {
   const values: string[] = [];
   let current = "";
@@ -62,7 +64,7 @@ export async function fetchAlphaVantageEarningsCalendar(
   url.searchParams.set("apikey", apiKey);
 
   await reserveAlphaVantageCall();
-  const text = await alphaVantageText(url, "text/csv", "earnings calendar");
+  const text = await alphaVantageText(url, "csv", "earnings calendar");
 
   const lines = text
     .split(/\r?\n/)
@@ -118,7 +120,7 @@ export async function fetchAlphaVantageReportedEarnings(
   url.searchParams.set("apikey", apiKey);
 
   await reserveAlphaVantageCall();
-  const text = await alphaVantageText(url, "application/json", "reported earnings");
+  const text = await alphaVantageText(url, "json", "reported earnings");
   const payload = JSON.parse(text) as {
     symbol?: string;
     quarterlyEarnings?: Array<Record<string, string | undefined>>;
@@ -158,27 +160,36 @@ async function reserveAlphaVantageCall(): Promise<void> {
   if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
 }
 
-async function alphaVantageText(url: URL, accept: string, label: string): Promise<string> {
+async function alphaVantageText(
+  url: URL,
+  format: AlphaVantageResponseFormat,
+  label: string,
+): Promise<string> {
   try {
+    // Do not send an explicit Accept header. The earnings-calendar endpoint is
+    // CSV-only and the live server runtime was rejected with HTTP 406 when it
+    // advertised `Accept: text/csv`, while the same URL succeeds with normal
+    // provider defaults outside the app runtime.
     const response = await fetch(url, {
-      headers: { Accept: accept },
       signal: AbortSignal.timeout(30_000),
     });
     const text = await response.text();
     if (!response.ok) {
       const rateLimited = response.status === 429;
+      const detail = responseDetail(text);
+      const statusMessage = `${label} HTTP ${response.status}${detail ? `: ${detail}` : ""}`;
       await recordCall(
         "alphavantage",
         rateLimited ? "rate_limit" : "error",
-        `${label} HTTP ${response.status}`,
+        statusMessage.slice(0, 320),
       );
-      throw new Error(`Alpha Vantage ${label} HTTP ${response.status}`);
+      throw new Error(`Alpha Vantage ${statusMessage}`);
     }
     if (/^(information|note|error message)/i.test(text.trim())) {
       await recordCall("alphavantage", "rate_limit", text.trim().slice(0, 240));
       throw new Error(`Alpha Vantage ${label}: ${text.trim().slice(0, 240)}`);
     }
-    if (accept.includes("json")) {
+    if (format === "json") {
       try {
         const messagePayload = JSON.parse(text) as {
           Information?: string;
@@ -209,6 +220,11 @@ async function alphaVantageText(url: URL, accept: string, label: string): Promis
     }
     throw error;
   }
+}
+
+function responseDetail(text: string): string | null {
+  const detail = text.replace(/\s+/g, " ").trim();
+  return detail ? detail.slice(0, 240) : null;
 }
 
 function providerNumber(value: string | undefined): number | null {
