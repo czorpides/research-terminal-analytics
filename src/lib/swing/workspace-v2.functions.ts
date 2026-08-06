@@ -16,6 +16,7 @@ import type { SwingBar } from "./model";
 import type { SwingExpectationSignal } from "./expectations";
 
 const MAX_UNIVERSE = 3_000;
+const UNIVERSE_PAGE_SIZE = 1_000;
 const DEEP_SCAN_CAP = 220;
 const BAR_LOOKBACK = 280;
 const PRICE_HISTORY_DAYS = 620;
@@ -128,16 +129,9 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
       .eq("active", true)
       .eq("asset_class", "equity");
 
-    const { data: assetData, error: assetError } = await supabaseAdmin
-      .from("assets")
-      .select("id,symbol,name,exchange,currency,country_id,industry_id")
-      .eq("active", true)
-      .eq("asset_class", "equity")
-      .order("symbol", { ascending: true })
-      .limit(MAX_UNIVERSE);
-    if (assetError) throw assetError;
-    const equities = (assetData ?? []) as AssetRow[];
-    if (!equities.length) return emptyWorkspace(activeEquities ?? 0, ["No active equities are loaded."]);
+    const equities = await loadActiveEquities();
+    const expectedActiveEquities = activeEquities ?? equities.length;
+    if (!equities.length) return emptyWorkspace(expectedActiveEquities, ["No active equities are loaded."]);
 
     const equityIds = equities.map((asset) => asset.id);
     const [scorePages, screenRows, metalResult] = await Promise.all([
@@ -250,10 +244,22 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
     const metalMacro = await loadPreciousMetalMacroContexts();
 
     const warnings: string[] = [];
-    const technicalScreenCoverage = equities.length > 0 ? screenRows.length / equities.length * 100 : 0;
+    const loadedUniverseCoverage = expectedActiveEquities > 0 ? equities.length / expectedActiveEquities * 100 : 0;
+    const technicalScreenCoverage = expectedActiveEquities > 0 ? screenRows.length / expectedActiveEquities * 100 : 0;
+    const scoreScreenCoverage = expectedActiveEquities > 0 ? scoreScreened / expectedActiveEquities * 100 : 0;
+    if (loadedUniverseCoverage < 90) {
+      warnings.push(
+        `Swing v2 loaded ${equities.length.toLocaleString()} of ${expectedActiveEquities.toLocaleString()} active equities (${loadedUniverseCoverage.toFixed(1)}%). Full-universe nomination is incomplete.`,
+      );
+    }
     if (technicalScreenCoverage < 90) {
       warnings.push(
-        `Broad technical screen loaded ${screenRows.length.toLocaleString()} of ${equities.length.toLocaleString()} active equities (${technicalScreenCoverage.toFixed(1)}%). Deep-scan nomination is incomplete until this recovers.`,
+        `Broad technical screen loaded ${screenRows.length.toLocaleString()} of ${expectedActiveEquities.toLocaleString()} active equities (${technicalScreenCoverage.toFixed(1)}%). Deep-scan nomination is incomplete until this recovers.`,
+      );
+    }
+    if (scoreScreenCoverage < 90) {
+      warnings.push(
+        `Swing v2 score-screened ${scoreScreened.toLocaleString()} of ${expectedActiveEquities.toLocaleString()} active equities (${scoreScreenCoverage.toFixed(1)}%). Candidate rankings are incomplete.`,
       );
     }
     if (!metals.length) warnings.push("Gold/silver assets are not loaded yet; apply the v2 metals rollout and run its EODHD history ingest.");
@@ -344,7 +350,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
           "v2.1 keeps the multi-strategy shadow model but makes tradeability, price structure, trigger evidence and structural reward/risk the entry discipline. Long-term valuation and quality no longer create positive Swing points or nominate candidates. Thresholds remain hypotheses until point-in-time outcomes support them; v1 stays the control tracker.",
       },
       universe: {
-        activeEquities: activeEquities ?? equities.length,
+        activeEquities: expectedActiveEquities,
         scoreScreened,
         equityDeepScanned: selectedEquities.length,
         commodityDeepScanned: metals.length,
@@ -471,6 +477,26 @@ function selectDeepScanV2(
     true,
   );
   return new Set([...selected].slice(0, DEEP_SCAN_CAP));
+}
+
+async function loadActiveEquities(): Promise<AssetRow[]> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const rows: AssetRow[] = [];
+  for (let start = 0; start < MAX_UNIVERSE; start += UNIVERSE_PAGE_SIZE) {
+    const end = Math.min(MAX_UNIVERSE - 1, start + UNIVERSE_PAGE_SIZE - 1);
+    const { data, error } = await supabaseAdmin
+      .from("assets")
+      .select("id,symbol,name,exchange,currency,country_id,industry_id")
+      .eq("active", true)
+      .eq("asset_class", "equity")
+      .order("symbol", { ascending: true })
+      .range(start, end);
+    if (error) throw error;
+    const page = (data ?? []) as unknown as AssetRow[];
+    rows.push(...page);
+    if (page.length < end - start + 1) break;
+  }
+  return rows.slice(0, MAX_UNIVERSE);
 }
 
 async function loadTechnicalScreen(assetIds: string[]): Promise<TechnicalScreenRow[]> {
