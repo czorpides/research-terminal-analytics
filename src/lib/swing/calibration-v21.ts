@@ -2,8 +2,8 @@ import {
   evaluateSwingOutcome,
   type SwingOutcomeBar,
   type SwingOutcomeEvaluation,
-} from "./outcomes";
-import type { SwingV2EntryState, SwingV2SetupType } from "./model-v2";
+} from "./outcomes.ts";
+import type { SwingV2EntryState, SwingV2SetupType } from "./model-v2.ts";
 
 export type SwingV21StopFloorAtr = 0.5 | 0.75 | 1;
 

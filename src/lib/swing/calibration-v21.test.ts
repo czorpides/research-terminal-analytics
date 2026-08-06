@@ -6,8 +6,8 @@ import {
   evaluateSwingV21CalibrationSignal,
   summarizeSwingV21Calibration,
   type SwingV21CalibrationSignal,
-} from "./calibration-v21";
-import type { SwingOutcomeBar } from "./outcomes";
+} from "./calibration-v21.ts";
+import type { SwingOutcomeBar } from "./outcomes.ts";
 
 function signal(overrides: Partial<SwingV21CalibrationSignal> = {}): SwingV21CalibrationSignal {
   return {
