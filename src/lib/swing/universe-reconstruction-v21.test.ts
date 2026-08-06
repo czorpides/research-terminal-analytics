@@ -72,9 +72,13 @@ function pullbackBars(): SwingBar[] {
   });
 }
 
-function screenRow(assetId: string, overrides: Partial<SwingV21HistoricalScreenRow> = {}): SwingV21HistoricalScreenRow {
+function screenRow(
+  assetId: string,
+  overrides: Partial<SwingV21HistoricalScreenRow> = {},
+): SwingV21HistoricalScreenRow {
   return {
     assetId,
+    symbol: assetId.toUpperCase(),
     asOf: "2025-01-02",
     bars: 252,
     current: 100,
@@ -97,18 +101,19 @@ function universeAsset(
   bars: SwingBar[],
   activeFrom = bars[0].date,
   activeTo: string | null = null,
+  options: { symbol?: string; instrumentType?: "equity" | "commodity" } = {},
 ): SwingV21HistoricalUniverseAsset {
   return {
     assetId,
-    symbol: assetId.toUpperCase(),
-    instrumentType: "equity",
+    symbol: options.symbol ?? assetId.toUpperCase(),
+    instrumentType: options.instrumentType ?? "equity",
     bars,
     activeFrom,
     activeTo,
   };
 }
 
-test("historical deep scan never exceeds the live 220-name cap", () => {
+test("historical equity deep scan never exceeds the live 220-name cap", () => {
   const rows = Array.from({ length: 300 }, (_, index) =>
     screenRow(`asset-${String(index).padStart(3, "0")}`, {
       rangeLocation90: index / 299,
@@ -137,8 +142,9 @@ test("nomination calendar respects explicit historical membership boundaries", (
 
   assert.equal(calendar.dates.length, 2);
   assert.equal(calendar.dates[0].activeMembers, 2);
+  assert.equal(calendar.dates[0].activeEquities, 2);
   assert.equal(calendar.dates[1].activeMembers, 1);
-  assert.ok(calendar.dates[0].selected.includes("delisted"));
+  assert.ok(calendar.dates[0].selectedEquities.includes("delisted"));
   assert.ok(!calendar.dates[1].selected.includes("delisted"));
 });
 
@@ -191,6 +197,15 @@ test("same-day broad score evidence is conservative by default", () => {
   assert.equal(allowed.dates[0].scoreContextResolved, 1);
 });
 
+test("equal nomination scores preserve the live symbol-order tie behaviour", () => {
+  const selected = selectHistoricalDeepScan([
+    screenRow("uuid-z", { symbol: "AAA" }),
+    screenRow("uuid-a", { symbol: "ZZZ" }),
+  ], 1);
+
+  assert.deepEqual([...selected], ["uuid-z"]);
+});
+
 test("cross-sectional nomination keeps the depressed/location lane ahead of a clean high when capped to one", () => {
   const selected = selectHistoricalDeepScan([
     screenRow("depressed", {
@@ -210,6 +225,53 @@ test("cross-sectional nomination keeps the depressed/location lane ahead of a cl
   ], 1);
 
   assert.deepEqual([...selected], ["depressed"]);
+});
+
+test("XAUUSD and XAGUSD sit outside the 220-equity nomination cap", () => {
+  const bars = businessBars(70);
+  const finalDate = bars.at(-1)!.date;
+  const equities = Array.from({ length: 300 }, (_, index) =>
+    universeAsset(`equity-${String(index).padStart(3, "0")}`, bars),
+  );
+  const gold = universeAsset("gold", bars, bars[0].date, null, {
+    symbol: "XAUUSD",
+    instrumentType: "commodity",
+  });
+  const silver = universeAsset("silver", bars, bars[0].date, null, {
+    symbol: "XAGUSD",
+    instrumentType: "commodity",
+  });
+
+  const calendar = buildSwingV21HistoricalNominationCalendar(
+    [...equities, gold, silver],
+    undefined,
+    { startDate: finalDate, endDate: finalDate, deepScanCap: 220 },
+  );
+  const day = calendar.dates[0];
+
+  assert.equal(day.selectedEquities.length, 220);
+  assert.deepEqual(day.selectedCommodities, ["gold", "silver"]);
+  assert.equal(day.selected.length, 222);
+  assert.equal(day.activeEquities, 300);
+  assert.equal(day.activeCommodities, 2);
+});
+
+test("other commodities do not enter the live metals lane", () => {
+  const bars = businessBars(70);
+  const finalDate = bars.at(-1)!.date;
+  const oil = universeAsset("oil", bars, bars[0].date, null, {
+    symbol: "WTIUSD",
+    instrumentType: "commodity",
+  });
+
+  const calendar = buildSwingV21HistoricalNominationCalendar(
+    [oil],
+    undefined,
+    { startDate: finalDate, endDate: finalDate },
+  );
+
+  assert.deepEqual(calendar.dates[0].selectedCommodities, []);
+  assert.ok(calendar.warnings.some((warning) => warning.includes("XAUUSD/XAGUSD")));
 });
 
 test("nominated-universe replay evaluates only selected historical asset sessions", () => {
