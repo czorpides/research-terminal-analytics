@@ -14,12 +14,13 @@ import { getSwingExpectationsWorkspace } from "@/lib/swing/expectations.function
 import { getSwingOperationalHealth } from "@/lib/swing/health.functions";
 import { refreshSwingTradesNow } from "@/lib/swing/refresh.functions";
 import { getSwingTrackerWorkspace } from "@/lib/swing/tracker.functions";
+import { hardenSwingV2Workspace } from "@/lib/swing/workspace-v21-hardening";
 import { getSwingTradesV2Workspace } from "@/lib/swing/workspace-v2.functions";
 import { getSwingTradesWorkspace } from "@/lib/swing/workspace.functions";
 
 const swingV2QueryOptions = queryOptions({
-  queryKey: ["swing-trades", "workspace-v2-shadow-multistrategy"],
-  queryFn: () => getSwingTradesV2Workspace(),
+  queryKey: ["swing-trades", "workspace-v2-shadow-multistrategy-hardened"],
+  queryFn: async () => hardenSwingV2Workspace(await getSwingTradesV2Workspace()),
   staleTime: 5 * 60 * 1000,
   refetchInterval: 5 * 60 * 1000,
   refetchOnWindowFocus: true,
