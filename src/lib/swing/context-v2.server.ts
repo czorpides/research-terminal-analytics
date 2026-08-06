@@ -3,6 +3,7 @@ import type { SwingExpectationSignal } from "./expectations";
 import type { SwingV2CatalystContext, SwingV2MacroContext } from "./model-v2";
 
 export interface SwingV2EarningsEvent {
+  [key: string]: unknown;
   scheduled_at: string;
   surprise_pct: number | null;
   actual_eps: number | null;
@@ -10,6 +11,7 @@ export interface SwingV2EarningsEvent {
 }
 
 export interface SwingV2NewsItem {
+  [key: string]: unknown;
   headline: string;
   published_at: string;
   sentiment: number | null;
