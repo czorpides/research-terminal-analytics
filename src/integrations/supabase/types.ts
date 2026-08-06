@@ -2023,6 +2023,45 @@ export type Database = {
         }
         Relationships: []
       }
+      release_series_mappings: {
+        Row: {
+          created_at: string
+          engines: string[]
+          id: string
+          provider_code: string
+          provider_release_id: string
+          region_codes: string[]
+          release_link: string | null
+          release_name: string
+          source_series: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          engines?: string[]
+          id?: string
+          provider_code: string
+          provider_release_id: string
+          region_codes?: string[]
+          release_link?: string | null
+          release_name: string
+          source_series: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          engines?: string[]
+          id?: string
+          provider_code?: string
+          provider_release_id?: string
+          region_codes?: string[]
+          release_link?: string | null
+          release_name?: string
+          source_series?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       research_notes: {
         Row: {
           body: string | null
@@ -2056,6 +2095,104 @@ export type Database = {
           tags?: string[]
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      scheduled_data_events: {
+        Row: {
+          asset_id: string | null
+          attempt_count: number
+          created_at: string
+          engines: string[]
+          event_key: string
+          event_type: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          metadata: Json
+          next_retry_at: string | null
+          provider_code: string
+          provider_event_id: string | null
+          region_code: string | null
+          scheduled_at: string
+          series_codes: string[]
+          status: string
+          symbol: string | null
+          title: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          attempt_count?: number
+          created_at?: string
+          engines?: string[]
+          event_key: string
+          event_type: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          metadata?: Json
+          next_retry_at?: string | null
+          provider_code: string
+          provider_event_id?: string | null
+          region_code?: string | null
+          scheduled_at: string
+          series_codes?: string[]
+          status?: string
+          symbol?: string | null
+          title: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          attempt_count?: number
+          created_at?: string
+          engines?: string[]
+          event_key?: string
+          event_type?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          metadata?: Json
+          next_retry_at?: string | null
+          provider_code?: string
+          provider_event_id?: string | null
+          region_code?: string | null
+          scheduled_at?: string
+          series_codes?: string[]
+          status?: string
+          symbol?: string | null
+          title?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_data_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduler_credentials: {
+        Row: {
+          created_at: string
+          name: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          name: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          name?: string
+          token?: string
         }
         Relationships: []
       }
