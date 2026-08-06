@@ -11,6 +11,9 @@ import { FRED_SERIES } from "@/lib/ingestion/fred/series";
 import { fetchAlphaVantageEarningsCalendar } from "./providers/earnings-calendar.server";
 import type { CalendarSyncSummary } from "./types";
 
+const ACTIVE_ASSET_PAGE_SIZE = 1_000;
+const MAX_ACTIVE_EQUITIES = 5_000;
+
 interface TrackedSeries {
   seriesCode: string;
   engines: string[];
@@ -24,6 +27,12 @@ interface ReleaseMapping {
   release_link: string | null;
   engines: string[];
   region_codes: string[];
+}
+
+interface ActiveCalendarAsset {
+  id: string;
+  symbol: string;
+  name: string;
 }
 
 export async function syncReleaseCalendar(): Promise<CalendarSyncSummary> {
@@ -224,21 +233,20 @@ async function syncEarningsEvents(): Promise<{
   providerRows: number;
   trackedEventsUpserted: number;
 }> {
-  const [providerEvents, assetsResult, sourceResult] = await Promise.all([
+  const [providerEvents, activeAssets, sourceResult] = await Promise.all([
     fetchAlphaVantageEarningsCalendar("3month"),
-    supabaseAdmin.from("assets").select("id,symbol,name").eq("active", true),
+    loadActiveEquityAssets(),
     supabaseAdmin
       .from("data_sources")
       .select("id")
       .eq("provider_code", "alphavantage")
       .maybeSingle(),
   ]);
-  if (assetsResult.error) throw assetsResult.error;
   if (sourceResult.error) throw sourceResult.error;
   const assets = new Map(
-    ((assetsResult.data ?? []) as any[]).map((asset: any) => [
-      String(asset.symbol).toUpperCase(),
-      { id: String(asset.id), name: String(asset.name) } as { id: string; name: string },
+    activeAssets.map((asset) => [
+      asset.symbol.toUpperCase(),
+      { id: asset.id, name: asset.name } as { id: string; name: string },
     ]),
   );
 
@@ -308,6 +316,25 @@ async function syncEarningsEvents(): Promise<{
     if (writeError) throw writeError;
   }
   return { providerRows: providerEvents.length, trackedEventsUpserted: tracked.length };
+}
+
+async function loadActiveEquityAssets(): Promise<ActiveCalendarAsset[]> {
+  const rows: ActiveCalendarAsset[] = [];
+  for (let start = 0; start < MAX_ACTIVE_EQUITIES; start += ACTIVE_ASSET_PAGE_SIZE) {
+    const end = Math.min(MAX_ACTIVE_EQUITIES - 1, start + ACTIVE_ASSET_PAGE_SIZE - 1);
+    const { data, error } = await supabaseAdmin
+      .from("assets")
+      .select("id,symbol,name")
+      .eq("active", true)
+      .eq("asset_class", "equity")
+      .order("symbol", { ascending: true })
+      .range(start, end);
+    if (error) throw error;
+    const page = (data ?? []) as ActiveCalendarAsset[];
+    rows.push(...page);
+    if (page.length < end - start + 1) break;
+  }
+  return rows;
 }
 
 async function syncSafetyEvents(): Promise<number> {
