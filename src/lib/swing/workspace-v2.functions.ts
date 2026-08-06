@@ -11,7 +11,7 @@ import {
   SWING_V2_MODEL_VERSION,
   type SwingV2Candidate,
   type SwingV2CatalystContext,
-} from "./model-v2";
+} from "./model-v21";
 import type { SwingBar } from "./model";
 import type { SwingExpectationSignal } from "./expectations";
 
@@ -22,7 +22,7 @@ const PRICE_HISTORY_DAYS = 620;
 const TECHNICAL_SCREEN_BATCH = 75;
 const METAL_SYMBOLS = ["XAUUSD", "XAGUSD"] as const;
 
-type ScoreType = "momentum" | "trend" | "volatility" | "quality" | "valuation";
+type ScoreType = "momentum" | "trend" | "volatility";
 
 interface AssetRow {
   id: string;
@@ -118,7 +118,7 @@ export interface SwingV2Workspace {
 export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handler(
   async (): Promise<SwingV2Workspace> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // v2 reads optional/new data surfaces fail-soft while it remains shadow.
+    // v2.1 reads optional/new evidence fail-soft while it remains shadow.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabaseAdmin as any;
 
@@ -147,8 +147,8 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
             .from("latest_asset_scores")
             .select("subject_id,score_type,value,confidence,inputs,computed_at")
             .in("subject_id", batch)
-            .in("score_type", ["momentum", "trend", "volatility", "quality", "valuation"])
-            .limit(batch.length * 5),
+            .in("score_type", ["momentum", "trend", "volatility"])
+            .limit(batch.length * 3),
         ),
       ),
       loadTechnicalScreen(equityIds),
@@ -285,8 +285,8 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
       const setup = computeSwingTradeV2(bars, {
         existingMomentum: finite(bag.momentum?.value),
         existingTrend: finite(bag.trend?.value),
-        quality: finite(bag.quality?.value),
-        valuation: finite(bag.valuation?.value),
+        quality: null,
+        valuation: null,
         catalyst,
         macro,
         instrumentType: isMetal ? "commodity" : "equity",
@@ -341,7 +341,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
       calibration: {
         status: "shadow_unvalidated",
         note:
-          "v2 separates setup quality from entry quality and intentionally favours pullbacks, mean reversion, 200SMA bounces and catalyst repricing over simple proximity to a high. Thresholds are hypotheses until point-in-time outcomes support them; v1 remains the control tracker during shadow validation.",
+          "v2.1 keeps the multi-strategy shadow model but makes tradeability, price structure, trigger evidence and structural reward/risk the entry discipline. Long-term valuation and quality no longer create positive Swing points or nominate candidates. Thresholds remain hypotheses until point-in-time outcomes support them; v1 stays the control tracker.",
       },
       universe: {
         activeEquities: activeEquities ?? equities.length,
@@ -357,7 +357,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
       },
       candidates: surfaced,
       methodology:
-        "Swing v2 is a multi-strategy shadow engine. The broad screen deliberately allocates deep-scan capacity to 3-6 month lows, drawdowns, negative-to-positive momentum transitions, value/quality dislocations and 200SMA candidates; only a small bucket is reserved for clean base breakouts. Deep analysis then combines RSI, MACD, 20/50/200SMA location, 3/6/12-month range position, z-scores, ATR, volume, structural reward/risk, earnings timing and validated analyst estimate/target revisions. Gold and silver use the same technical framework with a separate macro overlay based on real yields, the broad dollar and volatility.",
+        "Swing v2.1 is a multi-strategy shadow engine built around tradeability, structure, location, trigger, catalyst and risk/reward. The broad screen allocates deep-scan capacity to 3-6 month lows, drawdowns, negative-to-positive momentum transitions, 200SMA/20SMA/50SMA locations, stabilising damaged names, volume-driven reversals and a smaller clean-breakout lane. Deep analysis combines RSI/MACD, bullish divergence, ADX regime, daily/weekly moving-average confluence, volume contraction then reversal expansion, rejection/engulfing/liquidity-sweep candles, first breakout retests, ATR, structural targets/stops, earnings timing and validated estimate/target revisions. Long-term valuation does not add Swing score. Gold and silver use technical structure plus real yields, the broad dollar and volatility; spot volume is not treated as centralised institutional flow.",
       warnings: unique(warnings).slice(0, 20),
     };
   },
@@ -381,8 +381,6 @@ function selectDeepScanV2(
     const return5 = finite(screen?.return_5d_pct);
     const return20 = finite(screen?.return_20d_pct);
     const relativeVolume = finite(screen?.relative_volume);
-    const quality = finite(bag.quality?.value);
-    const valuation = finite(bag.valuation?.value);
     const drawdown90 = current !== null && high90 !== null && high90 > 0 ? current / high90 - 1 : null;
     const rangeLocation90 = current !== null && high90 !== null && low90 !== null && high90 > low90
       ? (current - low90) / (high90 - low90)
@@ -395,8 +393,6 @@ function selectDeepScanV2(
       return5,
       return20,
       relativeVolume,
-      quality,
-      valuation,
       drawdown90,
       rangeLocation90,
       distanceMa20,
@@ -410,7 +406,7 @@ function selectDeepScanV2(
   );
 
   const selected = new Set<string>();
-  // Depression / location buckets dominate v2 nomination.
+  // Depression / location buckets dominate v2.1 nomination.
   addTop(selected, rows, (row) => row.rangeLocation90 ?? 2, 42, false);
   addTop(selected, rows, (row) => row.drawdown90 ?? 1, 42, false);
   addTop(selected, rows, (row) => row.return20 ?? 999, 34, false);
@@ -438,13 +434,18 @@ function selectDeepScanV2(
     28,
     false,
   );
-  // Fundamentally supported damage gets a dedicated catalyst/repricing lane.
+  // Damaged names that are beginning to stabilise get a catalyst/repricing lane.
+  // Nomination is deliberately price/participation based; long-term valuation does not enter.
   addTop(
     selected,
     rows.filter((row) =>
-      (row.drawdown90 ?? 0) <= -0.08 && ((row.quality ?? 0) >= 55 || (row.valuation ?? 0) >= 58),
+      (row.drawdown90 ?? 0) <= -0.08 &&
+      ((row.return5 ?? -999) > -3 || (row.relativeVolume ?? 0) >= 1.15),
     ),
-    (row) => (row.quality ?? 0) + (row.valuation ?? 0) - (row.drawdown90 ?? 0) * 50,
+    (row) =>
+      (row.return5 ?? -10) +
+      Math.min(row.relativeVolume ?? 0, 3) * 5 -
+      (row.drawdown90 ?? 0) * 20,
     38,
     true,
   );
@@ -662,7 +663,7 @@ function emptyWorkspace(activeEquities: number, warnings: string[]): SwingV2Work
     shadow: true,
     calibration: {
       status: "shadow_unvalidated",
-      note: "Swing v2 is collecting evidence and is not a claimed probability of profit.",
+      note: "Swing v2.1 is collecting evidence and is not a claimed probability of profit.",
     },
     universe: {
       activeEquities,
@@ -677,7 +678,7 @@ function emptyWorkspace(activeEquities: number, warnings: string[]): SwingV2Work
       cap: DEEP_SCAN_CAP,
     },
     candidates: [],
-    methodology: "No v2 candidates can be evaluated until the managed market-data surface is available.",
+    methodology: "No v2.1 candidates can be evaluated until the managed market-data surface is available.",
     warnings,
   };
 }
