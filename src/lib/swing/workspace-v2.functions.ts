@@ -19,6 +19,7 @@ const MAX_UNIVERSE = 3_000;
 const DEEP_SCAN_CAP = 220;
 const BAR_LOOKBACK = 280;
 const PRICE_HISTORY_DAYS = 620;
+const TECHNICAL_SCREEN_BATCH = 75;
 const METAL_SYMBOLS = ["XAUUSD", "XAGUSD"] as const;
 
 type ScoreType = "momentum" | "trend" | "volatility" | "quality" | "valuation";
@@ -249,6 +250,12 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
     const metalMacro = await loadPreciousMetalMacroContexts();
 
     const warnings: string[] = [];
+    const technicalScreenCoverage = equities.length > 0 ? screenRows.length / equities.length * 100 : 0;
+    if (technicalScreenCoverage < 90) {
+      warnings.push(
+        `Broad technical screen loaded ${screenRows.length.toLocaleString()} of ${equities.length.toLocaleString()} active equities (${technicalScreenCoverage.toFixed(1)}%). Deep-scan nomination is incomplete until this recovers.`,
+      );
+    }
     if (!metals.length) warnings.push("Gold/silver assets are not loaded yet; apply the v2 metals rollout and run its EODHD history ingest.");
     if (metalResult.error) warnings.push(`Metal asset lookup failed: ${errorMessage(metalResult.error)}`);
 
@@ -471,7 +478,7 @@ async function loadTechnicalScreen(assetIds: string[]): Promise<TechnicalScreenR
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabaseAdmin as any;
     const pages = await Promise.all(
-      chunk(assetIds, 400).map((batch) =>
+      chunk(assetIds, TECHNICAL_SCREEN_BATCH).map((batch) =>
         db
           .from("equity_technical_screen")
           .select("asset_id,as_of,bars,current_price,return_5d_pct,return_20d_pct,ma20,ma50,high_90,low_90,latest_volume,avg_volume_20,relative_volume")
@@ -479,9 +486,12 @@ async function loadTechnicalScreen(assetIds: string[]): Promise<TechnicalScreenR
           .limit(batch.length),
       ),
     );
-    const error = pages.find((page: { error?: unknown }) => page.error)?.error;
-    if (error) return [];
-    return pages.flatMap((page: { data?: TechnicalScreenRow[] }) => page.data ?? []);
+    // A single failed PostgREST page must not erase every successful broad-screen page.
+    // The workspace emits an explicit coverage warning when partial rows remain below the
+    // expected managed-universe threshold.
+    return pages
+      .filter((page: { error?: unknown }) => !page.error)
+      .flatMap((page: { data?: TechnicalScreenRow[] }) => page.data ?? []);
   } catch {
     return [];
   }
