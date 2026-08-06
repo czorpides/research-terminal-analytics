@@ -1,11 +1,11 @@
-import type { SwingBar } from "./model";
+import type { SwingBar } from "./model.ts";
 import {
   computeSwingTradeV2 as computeBaseSwingTradeV2,
   type SwingV2Candidate as BaseSwingV2Candidate,
   type SwingV2Context,
   type SwingV2EntryState,
   type SwingV2SetupType,
-} from "./model-v2";
+} from "./model-v2.ts";
 
 export type {
   SwingV2CatalystContext,
@@ -13,7 +13,7 @@ export type {
   SwingV2EntryState,
   SwingV2MacroContext,
   SwingV2SetupType,
-} from "./model-v2";
+} from "./model-v2.ts";
 
 export const SWING_V2_MODEL_VERSION = "swing.setup.v2.1-shadow";
 
