@@ -1,0 +1,389 @@
+diff --git a/src/lib/ingestion/fundamentals/ingest.server.ts b/src/lib/ingestion/fundamentals/ingest.server.ts
+--- a/src/lib/ingestion/fundamentals/ingest.server.ts
++++ b/src/lib/ingestion/fundamentals/ingest.server.ts
+@@
+ interface FmpProfile {
+   marketCap?: number;
+   beta?: number;
+ }
+@@
+ interface FmpCashFlowStatement extends FmpStatementBase {
+   operatingCashFlow?: number;
+   netCashProvidedByOperatingActivities?: number;
+ }
++
++interface FmpHistoricalKeyMetrics extends FmpStatementBase {
++  marketCap?: number;
++  enterpriseValue?: number;
++  enterpriseValueOverEBITDA?: number;
++  evToEBITDA?: number;
++  evToSales?: number;
++  enterpriseValueOverRevenue?: number;
++  freeCashFlowYield?: number;
++  [key: string]: unknown;
++}
+ 
+ interface AnnualStatementBundle {
+   income: FmpIncomeStatement[];
+   balance: FmpBalanceSheet[];
+   cashFlow: FmpCashFlowStatement[];
++  keyMetrics: FmpHistoricalKeyMetrics[];
+ }
+@@
+-    if (distinctPeriods.size >= 3 && !stale) {
++    if (distinctPeriods.size >= 8 && !stale) {
+       return emptyStatementResult(
+         "skipped",
+-        "At least three annual periods are stored and the latest statement check is under 90 days old.",
++        "At least eight annual periods are stored and the latest statement check is under 90 days old.",
+       );
+     }
+ 
+-    const gate = await canUse("fmp", 250, 3);
++    const gate = await canUse("fmp", 250, 4);
+     if (!gate.ok) return emptyStatementResult("skipped", gate.reason ?? "FMP statement quota unavailable");
+@@
+       const income = await fmp<FmpIncomeStatement>("income-statement", input.symbol, input.apiKey, {
+         period: "annual",
+-        limit: "4",
++        limit: "10",
+       });
+       const balance = await fmp<FmpBalanceSheet>("balance-sheet-statement", input.symbol, input.apiKey, {
+         period: "annual",
+-        limit: "4",
++        limit: "10",
+       });
+       const cashFlow = await fmp<FmpCashFlowStatement>("cash-flow-statement", input.symbol, input.apiKey, {
+         period: "annual",
+-        limit: "4",
++        limit: "10",
+       });
++      let keyMetrics: FmpHistoricalKeyMetrics[] = [];
++      try {
++        keyMetrics =
++          (await fmp<FmpHistoricalKeyMetrics>("key-metrics", input.symbol, input.apiKey, {
++            period: "annual",
++            limit: "10",
++          })) ?? [];
++      } catch (error) {
++        // Historical valuation is additive evidence. A plan/quota limitation
++        // must not discard otherwise valid annual statements.
++        if (!(error instanceof FmpQuotaError) && !(error instanceof FmpEntitlementError)) throw error;
++      }
+       const stored = await storeAnnualStatementHistory({
+         assetId: input.assetId,
+         symbol: input.symbol,
+         sourceId: input.sourceId,
+-        bundle: { income: income ?? [], balance: balance ?? [], cashFlow: cashFlow ?? [] },
++        bundle: {
++          income: income ?? [],
++          balance: balance ?? [],
++          cashFlow: cashFlow ?? [],
++          keyMetrics,
++        },
+       });
+@@
+   const incomeByDate = statementMap(input.bundle.income);
+   const balanceByDate = statementMap(input.bundle.balance);
+   const cashByDate = statementMap(input.bundle.cashFlow);
++  const keyMetricsByDate = statementMap(input.bundle.keyMetrics);
+@@
+-    .slice(0, 4);
++    .slice(0, 10);
+@@
+     const income = incomeByDate.get(periodEnd);
+     const balance = balanceByDate.get(periodEnd);
+     const cashFlow = cashByDate.get(periodEnd);
++    const keyMetrics = historicalKeyMetricForPeriod(input.bundle.keyMetrics, keyMetricsByDate, periodEnd);
+     const facts = statementFacts(income, balance, cashFlow);
+     if (facts.length === 0) continue;
+ 
+-    const contentHash = createHash("sha256").update(JSON.stringify(facts)).digest("hex");
++    const contentHash = createHash("sha256")
++      .update(JSON.stringify({ facts, keyMetrics: keyMetrics ?? null }))
++      .digest("hex");
+@@
+-    const raw = { symbol: input.symbol, income: income ?? null, balance: balance ?? null, cashFlow: cashFlow ?? null };
++    const raw = {
++      symbol: input.symbol,
++      income: income ?? null,
++      balance: balance ?? null,
++      cashFlow: cashFlow ?? null,
++      keyMetrics: keyMetrics ?? null,
++    };
+@@
+ function statementMap<T extends FmpStatementBase>(rows: T[]): Map<string, T> {
+@@
+ }
++
++function historicalKeyMetricForPeriod(
++  rows: FmpHistoricalKeyMetrics[],
++  byDate: Map<string, FmpHistoricalKeyMetrics>,
++  periodEnd: string,
++): FmpHistoricalKeyMetrics | undefined {
++  const exact = byDate.get(periodEnd);
++  if (exact) return exact;
++  const year = periodEnd.slice(0, 4);
++  return rows.find((row) => row.calendarYear === year || row.date?.slice(0, 4) === year);
++}
+ 
+ function statementFacts(
+diff --git a/src/lib/opportunity/fundamental-history.server.ts b/src/lib/opportunity/fundamental-history.server.ts
+--- a/src/lib/opportunity/fundamental-history.server.ts
++++ b/src/lib/opportunity/fundamental-history.server.ts
+@@
+-      .limit(batch.length * 8);
++      .limit(batch.length * 12);
+diff --git a/src/lib/opportunity/institutional.functions.ts b/src/lib/opportunity/institutional.functions.ts
+--- a/src/lib/opportunity/institutional.functions.ts
++++ b/src/lib/opportunity/institutional.functions.ts
+@@
+-const MAX_PERIODS_PER_ASSET = 6;
++const MAX_PERIODS_PER_ASSET = 10;
+@@
+   const income = record(raw.income);
+   const balance = record(raw.balance);
+   const cashFlow = record(raw.cashFlow);
++  const keyMetrics = record(raw.keyMetrics);
+@@
+     incomeTaxExpense: readNumber(income, ["incomeTaxExpense"]),
+     netIncome: readNumber(income, ["netIncome"]),
++    netIncomeToCommon: readNumber(income, [
++      "netIncomeAvailableToCommonShareholders",
++      "netIncomeApplicableToCommonShares",
++      "netIncomeCommonStockholders",
++    ]),
+@@
+     totalEquity: readNumber(balance, ["totalStockholdersEquity", "totalEquity"]),
++    preferredStock: readNumber(balance, [
++      "preferredStock",
++      "preferredStockEquity",
++      "preferredStockAndOtherAdjustments",
++    ]),
+@@
+     sellingGeneralAdministrative: readNumber(income, [
+       "sellingGeneralAndAdministrativeExpenses",
+       "sellingAndMarketingExpenses",
+     ]),
++    historicalMarketCap: readNumber(keyMetrics, ["marketCap", "marketCapitalization"]),
++    historicalEnterpriseValue: readNumber(keyMetrics, ["enterpriseValue"]),
++    historicalEvEbitda: readNumber(keyMetrics, [
++      "enterpriseValueOverEBITDA",
++      "evToEBITDA",
++      "evToEbitda",
++    ]),
++    historicalEvRevenue: readNumber(keyMetrics, [
++      "evToSales",
++      "enterpriseValueOverRevenue",
++      "enterpriseValueToRevenue",
++    ]),
++    historicalFcfYield: readNumber(keyMetrics, ["freeCashFlowYield", "freeCashFlowYieldTTM"]),
+   };
+ }
+diff --git a/src/lib/opportunity/institutional-model.ts b/src/lib/opportunity/institutional-model.ts
+--- a/src/lib/opportunity/institutional-model.ts
++++ b/src/lib/opportunity/institutional-model.ts
+@@
+-export const INSTITUTIONAL_CALC_VERSION = "opportunity.institutional.v0.1";
++import { computeDeepValuationEvidence } from "./deep-valuation";
++
++export const INSTITUTIONAL_CALC_VERSION = "opportunity.institutional.v0.2";
+@@
+   incomeTaxExpense: number | null;
+   netIncome: number | null;
++  netIncomeToCommon: number | null;
+   dilutedShares: number | null;
+@@
+   totalEquity: number | null;
++  preferredStock: number | null;
+@@
+   sellingGeneralAdministrative: number | null;
++  historicalMarketCap: number | null;
++  historicalEnterpriseValue: number | null;
++  historicalEvEbitda: number | null;
++  historicalEvRevenue: number | null;
++  historicalFcfYield: number | null;
+ }
+@@
+   const enterpriseValue =
+     isNumber(marketCap) && isNumber(totalDebt) ? marketCap + totalDebt - cash : null;
++  const deepValuation = computeDeepValuationEvidence({
++    periods,
++    current: {
++      marketCap: input.fundamentals.marketCap,
++      evEbitda: input.fundamentals.evEbitda,
++      fcfYield: input.fundamentals.fcfYield,
++    },
++    currentEnterpriseValue: enterpriseValue,
++  });
+   const costOfCapital = estimateCostOfCapital({
+@@
+-  if (FINANCIAL_INDUSTRIES.has(input.industryCode ?? "")) {
+-    dataGaps.push("Financial companies use residual-income evidence, but regulatory capital, asset quality and funding-liquidity data are still required.");
+-  }
++  if (deepValuation.historyYears < 5) {
++    dataGaps.push("Fewer than five comparable annual valuation observations are stored, so the self-history valuation lens remains inactive.");
++  }
++  if (FINANCIAL_INDUSTRIES.has(input.industryCode ?? "")) {
++    if (!isNumber(deepValuation.priceToTangibleBook) || !isNumber(deepValuation.rotce)) {
++      dataGaps.push("Financial valuation still lacks a usable P/TBV–ROTCE pair.");
++    }
++    dataGaps.push("Financial companies still require regulatory capital, asset quality and funding-liquidity data for full sector risk coverage.");
++  }
++  if ((input.industryCode === "SEC_ENE" || input.industryCode === "SEC_MAT") && deepValuation.cycleHistoryYears < 7) {
++    dataGaps.push("Fewer than seven annual operating observations are stored, so normalized cyclical earnings remain provisional.");
++  }
+@@
+       beneishMScore: beneish.score,
+       misstatementRiskProxy,
++      historicalValuationYears: deepValuation.historyYears,
++      currentEvRevenue: deepValuation.currentEvRevenue,
++      selfEvEbitdaCheapness: deepValuation.selfEvEbitdaCheapness,
++      selfEvRevenueCheapness: deepValuation.selfEvRevenueCheapness,
++      selfFcfYieldCheapness: deepValuation.selfFcfYieldCheapness,
++      priceToTangibleBook: deepValuation.priceToTangibleBook,
++      rotce: deepValuation.rotce,
++      rotceToPtbv: deepValuation.rotceToPtbv,
++      rotceQuality: deepValuation.rotceQuality,
++      selfPtbvCheapness: deepValuation.selfPtbvCheapness,
++      normalizedEbitda: deepValuation.normalizedEbitda,
++      normalizedEvEbitda: deepValuation.normalizedEvEbitda,
++      normalizedFcf: deepValuation.normalizedFcf,
++      normalizedFcfYield: deepValuation.normalizedFcfYield,
++      cycleHistoryYears: deepValuation.cycleHistoryYears,
+     },
+   };
+diff --git a/src/lib/opportunity/fundamental-timing.ts b/src/lib/opportunity/fundamental-timing.ts
+--- a/src/lib/opportunity/fundamental-timing.ts
++++ b/src/lib/opportunity/fundamental-timing.ts
+@@
+ function valuationGate(
+   candidate: OpportunityCandidate,
+   institutional: InstitutionalAnalysis | null,
+ ): FundamentalGate {
+   const peerValuation = finite(candidate.evidence.valuationCompression?.value);
+   const fcfYield = metricValue(institutional, "valuation_expectations", "fcf_yield");
+   const evEbitda = metricValue(institutional, "valuation_expectations", "ev_ebitda");
+   const expectationGap = raw(institutional, "expectationGap");
+   const revenueGrowth = raw(institutional, "revenueGrowth");
+   const fcfMargin = raw(institutional, "fcfMargin");
+   const residualIncome = raw(institutional, "residualIncome");
++  const historyYears = raw(institutional, "historicalValuationYears");
++  const selfEvEbitda = raw(institutional, "selfEvEbitdaCheapness");
++  const selfEvRevenue = raw(institutional, "selfEvRevenueCheapness");
++  const selfFcfYield = raw(institutional, "selfFcfYieldCheapness");
++  const priceToTangibleBook = raw(institutional, "priceToTangibleBook");
++  const rotce = raw(institutional, "rotce");
++  const rotceToPtbv = raw(institutional, "rotceToPtbv");
++  const rotceQuality = raw(institutional, "rotceQuality");
++  const selfPtbv = raw(institutional, "selfPtbvCheapness");
++  const currentEvRevenue = raw(institutional, "currentEvRevenue");
++  const normalizedEvEbitda = raw(institutional, "normalizedEvEbitda");
++  const normalizedFcfYield = raw(institutional, "normalizedFcfYield");
++  const cycleHistoryYears = raw(institutional, "cycleHistoryYears");
+   const industry = candidate.industryCode ?? "";
+   const positives: string[] = [];
+-  const warnings: string[] = [
+-    "Historical self-multiple percentiles are not yet stored, so the expert dual-lens valuation test remains incomplete rather than being guessed.",
+-  ];
++  const warnings: string[] = [];
+   const parts: Array<{ value: number | null; weight: number }> = [];
+ 
+   if (peerValuation !== null) {
+-    parts.push({ value: peerValuation, weight: 35 });
++    parts.push({ value: peerValuation, weight: 25 });
+     if (peerValuation >= 62) positives.push("Current valuation is attractive relative to tracked peers.");
+   }
++  if ((historyYears ?? 0) < 5) {
++    warnings.push("Fewer than five annual self-valuation observations are available; the historical lens is not scored.");
++  }
+ 
+   if (industry === "SEC_FIN") {
+-    parts.push({ value: scaleHigher(residualIncome, -0.05, 0.12), weight: 30 });
+-    warnings.push(
+-      "Financials still need P/TBV versus ROTCE plus regulatory-capital and asset-quality inputs before sector valuation can fully pass.",
+-    );
++    parts.push({ value: scaleHigher(rotce, 0.05, 0.2), weight: 30 });
++    parts.push({ value: scaleHigher(rotceToPtbv, 0.05, 0.16), weight: 30 });
++    parts.push({ value: selfPtbv, weight: 15 });
++    parts.push({ value: scaleHigher(residualIncome, -0.05, 0.12), weight: 10 });
+     const score = weighted(parts);
++    const completePair = priceToTangibleBook !== null && rotce !== null && rotceToPtbv !== null;
++    const canPass = completePair && (rotceQuality ?? 0) >= 0.75 && rotce >= 0.1;
++    if (completePair) {
++      positives.push(`P/TBV is ${priceToTangibleBook.toFixed(2)}× against ROTCE of ${(rotce * 100).toFixed(1)}%.`);
++    } else {
++      warnings.push("A usable P/TBV–ROTCE pair is not yet available.");
++    }
++    warnings.push("Regulatory capital, asset quality and funding liquidity remain separate financial-sector risk requirements.");
+     return gate(
+       "valuation",
+       "Sector-appropriate valuation",
+-      score === null ? "missing" : score < 35 ? "fail" : "watch",
++      score === null ? "missing" : score < 35 ? "fail" : score >= 62 && canPass ? "pass" : "watch",
+       score,
+       parts,
+-      "Financial valuation remains provisional: peer pricing and residual-income evidence are visible, but the P/TBV–ROTCE lens is not complete.",
++      "Financials are judged on the return earned on tangible common equity relative to the price paid for that tangible book, not on low book value alone.",
+       positives,
+       warnings,
+     );
+   }
+ 
+   if (industry === "SEC_TECH") {
+     const ruleOf40 =
+       revenueGrowth !== null && fcfMargin !== null ? revenueGrowth + fcfMargin : null;
+-    parts.push({ value: scaleHigher(ruleOf40, 0, 0.4), weight: 35 });
+-    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 20 });
++    parts.push({ value: scaleHigher(ruleOf40, 0, 0.4), weight: 30 });
++    parts.push({ value: selfEvRevenue, weight: 25 });
++    parts.push({ value: scaleLower(currentEvRevenue, 12, 3), weight: 15 });
++    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 15 });
+     parts.push({ value: scaleHigher(expectationGap, -0.08, 0.1), weight: 10 });
+     if (ruleOf40 !== null && ruleOf40 >= 0.4) positives.push("Revenue growth plus FCF margin meets the Rule-of-40 threshold.");
+-    warnings.push("EV/revenue is not yet stored as a dedicated peer and historical series for software valuation.");
++    if (selfEvRevenue !== null && selfEvRevenue >= 70) positives.push("Current EV/revenue sits near the cheap end of the company's observed annual history.");
+   } else if (CYCLICAL_INDUSTRIES.has(industry)) {
+-    parts.push({ value: scaleHigher(fcfYield, 0, 0.1), weight: 35 });
+-    parts.push({ value: scaleHigher(expectationGap, -0.1, 0.1), weight: 20 });
+-    warnings.push(
+-      "Energy/materials still need a full-cycle normalized earnings series; current low peak-cycle multiples are not treated as proof of cheapness.",
+-    );
++    parts.push({ value: scaleLower(normalizedEvEbitda, 14, 6), weight: 40 });
++    parts.push({ value: scaleHigher(normalizedFcfYield, 0, 0.1), weight: 25 });
++    parts.push({ value: selfEvEbitda, weight: 15 });
++    parts.push({ value: scaleHigher(expectationGap, -0.1, 0.1), weight: 10 });
++    if ((cycleHistoryYears ?? 0) < 7) {
++      warnings.push("A seven-year operating history is not yet available, so low spot-cycle multiples cannot prove cheapness.");
++    } else if (normalizedEvEbitda !== null) {
++      positives.push(`Normalized EV/EBITDA is ${normalizedEvEbitda.toFixed(1)}× across the stored cycle rather than peak current earnings.`);
++    }
+   } else {
+-    parts.push({ value: scaleLower(evEbitda, 18, 7), weight: 35 });
+-    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 20 });
++    parts.push({ value: scaleLower(evEbitda, 18, 7), weight: 25 });
++    parts.push({ value: selfEvEbitda, weight: 20 });
++    parts.push({ value: selfFcfYield, weight: 15 });
++    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 15 });
+     parts.push({ value: scaleHigher(expectationGap, -0.08, 0.1), weight: 10 });
+     if (evEbitda !== null && evEbitda <= 8) positives.push("EV/EBITDA is below 8×.");
+     if (fcfYield !== null && fcfYield >= 0.06) positives.push("FCF yield provides cash-backed valuation support.");
++    if (selfEvEbitda !== null && selfEvEbitda >= 70) positives.push("EV/EBITDA is near the cheap end of the company's own observed history.");
+   }
+ 
+   const score = weighted(parts);
++  const sectorHistoryReady = !CYCLICAL_INDUSTRIES.has(industry) || (cycleHistoryYears ?? 0) >= 7;
+   const state =
+-    score === null ? "missing" : score >= 62 && parts.filter((part) => part.value !== null).length >= 2
++    score === null ? "missing" : score >= 62 && parts.filter((part) => part.value !== null).length >= 2 && sectorHistoryReady
+       ? "pass"
+       : score < 35
+         ? "fail"
+         : "watch";
+@@
+-    "Uses the best currently observed sector-relevant valuation evidence while keeping missing historical-self valuation explicit.",
++    "Combines peer-relative valuation with the company's own observed history and the sector-appropriate economic denominator.",
+     positives,
+     warnings,
+   );
+ }
