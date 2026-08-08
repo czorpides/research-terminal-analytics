@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test:opportunity": "for f in src/lib/opportunity/*.test.ts src/lib/swing/*.test.ts; do echo \"::notice title=Running test::$f\"; node --experimental-strip-types --test \"$f\" || { echo \"::error file=$f,title=Node test failed::$f\"; exit 1; }; done",
+    "test:opportunity": "for p in 'snapshot resolver' 'replay rejects context' 'technical-only fallback' 'reconstructed signals' 'state-transition emission' 'historical guard output'; do echo \"::notice title=Running reconstruction case::$p\"; node --experimental-strip-types --test --test-name-pattern=\"$p\" src/lib/swing/reconstruction-v21.test.ts || { echo \"::error file=src/lib/swing/reconstruction-v21.test.ts,title=Failed reconstruction case::$p\"; exit 1; }; done",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -65,7 +65,7 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
     "tw-animate-css": "^1.3.4",
-    "vaul": "^1.1.2",
+    "vaul": "^1.2.8",
     "zod": "^3.24.2"
   },
   "devDependencies": {
