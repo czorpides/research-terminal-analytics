@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test:opportunity": "node --test src/lib/opportunity/*.test.ts src/lib/swing/*.test.ts",
+    "test:opportunity": "node --experimental-strip-types --test src/lib/opportunity/*.test.ts src/lib/swing/*.test.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
