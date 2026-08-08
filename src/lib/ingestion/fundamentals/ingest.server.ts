@@ -12,6 +12,9 @@ import { canUse, recordCall } from "@/lib/ingestion/providers/quota.server";
 import { STATEMENT_METRICS, type StatementMetricCode } from "@/lib/opportunity/fundamental-models";
 import { FUNDAMENTAL_METRICS } from "./metrics";
 
+const TARGET_ANNUAL_PERIODS = 10;
+const ANNUAL_HISTORY_READY_PERIODS = 8;
+
 export interface FundamentalsIngestResult {
   status: "success" | "failed" | "skipped";
   symbol: string;
@@ -382,8 +385,6 @@ export async function runAllFundamentalsIngest(
       try {
         assetIds.push((await resolveUniqueAssetBySymbol(symbol)).id);
       } catch {
-        // Ambiguous symbols are deliberately not guessed. Add a failed result
-        // below by preserving a sentinel id that cannot resolve.
         assetIds.push(`symbol:${symbol}`);
       }
     }
@@ -472,7 +473,7 @@ async function refreshAnnualStatementHistory(input: {
       .eq("source_id", input.sourceId)
       .eq("fiscal_period", "FY")
       .order("ingested_at", { ascending: false })
-      .limit(20);
+      .limit(TARGET_ANNUAL_PERIODS * 2);
     if (error) {
       return emptyStatementResult("failed", `Point-in-time statement storage is unavailable: ${error.message}`);
     }
@@ -481,10 +482,10 @@ async function refreshAnnualStatementHistory(input: {
     const stale =
       !latestIngestedAt ||
       Date.now() - new Date(latestIngestedAt).getTime() > 90 * 24 * 60 * 60 * 1000;
-    if (distinctPeriods.size >= 3 && !stale) {
+    if (distinctPeriods.size >= ANNUAL_HISTORY_READY_PERIODS && !stale) {
       return emptyStatementResult(
         "skipped",
-        "At least three annual periods are stored and the latest statement check is under 90 days old.",
+        `At least ${ANNUAL_HISTORY_READY_PERIODS} annual periods are stored and the latest statement check is under 90 days old.`,
       );
     }
 
@@ -492,17 +493,18 @@ async function refreshAnnualStatementHistory(input: {
     if (!gate.ok) return emptyStatementResult("skipped", gate.reason ?? "FMP statement quota unavailable");
 
     try {
+      const annualLimit = String(TARGET_ANNUAL_PERIODS);
       const income = await fmp<FmpIncomeStatement>("income-statement", input.symbol, input.apiKey, {
         period: "annual",
-        limit: "4",
+        limit: annualLimit,
       });
       const balance = await fmp<FmpBalanceSheet>("balance-sheet-statement", input.symbol, input.apiKey, {
         period: "annual",
-        limit: "4",
+        limit: annualLimit,
       });
       const cashFlow = await fmp<FmpCashFlowStatement>("cash-flow-statement", input.symbol, input.apiKey, {
         period: "annual",
-        limit: "4",
+        limit: annualLimit,
       });
       const stored = await storeAnnualStatementHistory({
         assetId: input.assetId,
@@ -544,7 +546,7 @@ async function storeAnnualStatementHistory(input: {
     .filter(isIsoDate)
     .sort()
     .reverse()
-    .slice(0, 4);
+    .slice(0, TARGET_ANNUAL_PERIODS);
   let filingsInserted = 0;
   let factsInserted = 0;
   let filingsUnchanged = 0;
@@ -723,7 +725,11 @@ function failureMessage(error: unknown): string {
       .filter((value) => value !== null && value !== undefined && String(value).trim())
       .map(String);
     if (parts.length) return parts.join(" · ");
-    try { return JSON.stringify(record); } catch { return String(error); }
+    try {
+      return JSON.stringify(record);
+    } catch {
+      return String(error);
+    }
   }
   return String(error);
 }
