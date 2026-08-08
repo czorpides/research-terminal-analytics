@@ -50,7 +50,7 @@ function institutional(
   overrides: Partial<InstitutionalAnalysis> = {},
 ): InstitutionalAnalysis {
   return {
-    periodCount: 4,
+    periodCount: 6,
     hardRisks: [],
     warnings: [],
     researchCases: ["operational_inflection"],
@@ -68,6 +68,16 @@ function institutional(
       interestCoverage: 9,
       expectationGap: 0.07,
       residualIncome: 0.08,
+      historicalValuationPeriods: 6,
+      selfEvEbitdaPercentile: 84,
+      selfFcfYieldPercentile: 82,
+      selfEvRevenuePercentile: 80,
+      selfPtBvPercentile: null,
+      evRevenue: 4.5,
+      priceToTangibleBook: null,
+      rotce: null,
+      normalizedEvEbitda: null,
+      normalizedFcfYield: null,
     },
     lenses: [
       {
@@ -82,11 +92,15 @@ function institutional(
   } as InstitutionalAnalysis;
 }
 
-test("strong cash-backed economics qualify fundamentally without using technical recovery", () => {
+test("strong cash-backed economics qualify only when peer and own-history valuation agree", () => {
   const assessment = assessFundamentalOpportunity(candidate(), institutional());
 
   assert.equal(assessment.state, "qualified");
   assert.ok(assessment.score >= 60);
+  assert.equal(
+    assessment.gates.find((gate) => gate.key === "valuation")?.state,
+    "pass",
+  );
   assert.equal(
     assessment.gates.find((gate) => gate.key === "value_trap")?.state,
     "pass",
@@ -95,6 +109,24 @@ test("strong cash-backed economics qualify fundamentally without using technical
     assessment.gates.find((gate) => gate.key === "catalyst")?.state,
     "pass",
   );
+});
+
+test("missing own-history valuation leaves an otherwise attractive company on watch", () => {
+  const base = institutional();
+  const assessment = assessFundamentalOpportunity(
+    candidate(),
+    institutional({
+      rawMetrics: {
+        ...base.rawMetrics,
+        historicalValuationPeriods: 3,
+        selfEvEbitdaPercentile: null,
+        selfFcfYieldPercentile: null,
+      },
+    }),
+  );
+
+  assert.equal(assessment.state, "watch");
+  assert.equal(assessment.gates.find((gate) => gate.key === "valuation")?.state, "watch");
 });
 
 test("cheapness cannot rescue a deteriorating leveraged value trap", () => {
@@ -116,6 +148,9 @@ test("cheapness cannot rescue a deteriorating leveraged value trap", () => {
         interestCoverage: 1.1,
         expectationGap: 0.08,
         residualIncome: -0.08,
+        historicalValuationPeriods: 6,
+        selfEvEbitdaPercentile: 95,
+        selfFcfYieldPercentile: 95,
       },
     }),
   );
@@ -150,12 +185,49 @@ test("technical markdown blocks entry readiness without changing fundamental qua
   assert.equal(timing.entryReady, false);
 });
 
-test("constructive trend and momentum can confirm timing after fundamentals qualify", () => {
+test("constructive legacy trend and momentum remain a rollout fallback", () => {
   const timing = assessTechnicalTiming(candidate());
 
   assert.equal(timing.state, "confirmed");
   assert.equal(timing.entryReady, true);
   assert.equal(timing.invalidation, null);
+  assert.ok(timing.warnings.some((warning) => warning.includes("rollout fallback")));
+});
+
+test("persisted Stage-1 confirmation returns the observed base-low invalidation", () => {
+  const base = candidate() as OpportunityCandidate & {
+    technicalStructure: {
+      state: string;
+      score: number;
+      invalidation: number;
+      baseLow: number;
+      baseLowDate: string;
+      liquiditySweep: boolean;
+      chochConfirmed: boolean;
+      firstHigherLow: boolean;
+      ma50Reclaimed: boolean;
+      ma50Retest: boolean;
+    };
+  };
+  base.technicalStructure = {
+    state: "confirmed",
+    score: 78,
+    invalidation: 91.5,
+    baseLow: 91.5,
+    baseLowDate: "2026-07-14",
+    liquiditySweep: true,
+    chochConfirmed: true,
+    firstHigherLow: true,
+    ma50Reclaimed: true,
+    ma50Retest: true,
+  };
+
+  const timing = assessTechnicalTiming(base);
+
+  assert.equal(timing.state, "confirmed");
+  assert.equal(timing.entryReady, true);
+  assert.equal(timing.invalidation, 91.5);
+  assert.ok(timing.detail.includes("Stage-1"));
 });
 
 test("financial valuation remains provisional until P/TBV and ROTCE are connected", () => {
@@ -166,11 +238,50 @@ test("financial valuation remains provisional until P/TBV and ROTCE are connecte
       rawMetrics: {
         ...institutional().rawMetrics,
         residualIncome: 0.09,
+        selfPtBvPercentile: null,
+        priceToTangibleBook: null,
+        rotce: null,
       },
     }),
   );
   const valuation = assessment.gates.find((gate) => gate.key === "valuation");
 
   assert.equal(valuation?.state, "watch");
-  assert.ok(valuation?.warnings.some((warning) => warning.includes("P/TBV")));
+  assert.ok(valuation?.warnings.some((warning) => warning.includes("tangible common equity")));
+});
+
+test("financials can pass valuation when P/TBV, ROTCE, peers and own history agree", () => {
+  const assessment = assessFundamentalOpportunity(
+    candidate({ industryCode: "SEC_FIN" }),
+    institutional({
+      rawMetrics: {
+        ...institutional().rawMetrics,
+        priceToTangibleBook: 1.05,
+        rotce: 0.15,
+        selfPtBvPercentile: 82,
+        residualIncome: 0.09,
+      },
+    }),
+  );
+
+  assert.equal(assessment.gates.find((gate) => gate.key === "valuation")?.state, "pass");
+  assert.equal(assessment.gates.find((gate) => gate.key === "value_trap")?.state, "pass");
+  assert.equal(assessment.state, "qualified");
+});
+
+test("cyclicals can pass only on normalized rather than peak-cycle valuation", () => {
+  const assessment = assessFundamentalOpportunity(
+    candidate({ industryCode: "SEC_ENE" }),
+    institutional({
+      rawMetrics: {
+        ...institutional().rawMetrics,
+        normalizedEvEbitda: 6.8,
+        normalizedFcfYield: 0.075,
+        selfFcfYieldPercentile: 78,
+      },
+    }),
+  );
+
+  assert.equal(assessment.gates.find((gate) => gate.key === "valuation")?.state, "pass");
+  assert.equal(assessment.state, "qualified");
 });
