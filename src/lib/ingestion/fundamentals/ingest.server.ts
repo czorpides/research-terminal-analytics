@@ -85,10 +85,22 @@ interface FmpCashFlowStatement extends FmpStatementBase {
   netCashProvidedByOperatingActivities?: number;
 }
 
+interface FmpHistoricalKeyMetrics extends FmpStatementBase {
+  marketCap?: number;
+  enterpriseValue?: number;
+  enterpriseValueOverEBITDA?: number;
+  evToEBITDA?: number;
+  evToSales?: number;
+  enterpriseValueOverRevenue?: number;
+  freeCashFlowYield?: number;
+  [key: string]: unknown;
+}
+
 interface AnnualStatementBundle {
   income: FmpIncomeStatement[];
   balance: FmpBalanceSheet[];
   cashFlow: FmpCashFlowStatement[];
+  keyMetrics: FmpHistoricalKeyMetrics[];
 }
 
 interface StatementStoreResult {
@@ -481,34 +493,51 @@ async function refreshAnnualStatementHistory(input: {
     const stale =
       !latestIngestedAt ||
       Date.now() - new Date(latestIngestedAt).getTime() > 90 * 24 * 60 * 60 * 1000;
-    if (distinctPeriods.size >= 3 && !stale) {
+    if (distinctPeriods.size >= 8 && !stale) {
       return emptyStatementResult(
         "skipped",
-        "At least three annual periods are stored and the latest statement check is under 90 days old.",
+        "At least eight annual periods are stored and the latest statement check is under 90 days old.",
       );
     }
 
-    const gate = await canUse("fmp", 250, 3);
+    const gate = await canUse("fmp", 250, 4);
     if (!gate.ok) return emptyStatementResult("skipped", gate.reason ?? "FMP statement quota unavailable");
 
     try {
       const income = await fmp<FmpIncomeStatement>("income-statement", input.symbol, input.apiKey, {
         period: "annual",
-        limit: "4",
+        limit: "10",
       });
       const balance = await fmp<FmpBalanceSheet>("balance-sheet-statement", input.symbol, input.apiKey, {
         period: "annual",
-        limit: "4",
+        limit: "10",
       });
       const cashFlow = await fmp<FmpCashFlowStatement>("cash-flow-statement", input.symbol, input.apiKey, {
         period: "annual",
-        limit: "4",
+        limit: "10",
       });
+      let keyMetrics: FmpHistoricalKeyMetrics[] = [];
+      try {
+        keyMetrics =
+          (await fmp<FmpHistoricalKeyMetrics>("key-metrics", input.symbol, input.apiKey, {
+            period: "annual",
+            limit: "10",
+          })) ?? [];
+      } catch (error) {
+        // Historical valuation is additive evidence. A provider-plan or quota
+        // limitation must not discard otherwise valid annual statements.
+        if (!(error instanceof FmpQuotaError) && !(error instanceof FmpEntitlementError)) throw error;
+      }
       const stored = await storeAnnualStatementHistory({
         assetId: input.assetId,
         symbol: input.symbol,
         sourceId: input.sourceId,
-        bundle: { income: income ?? [], balance: balance ?? [], cashFlow: cashFlow ?? [] },
+        bundle: {
+          income: income ?? [],
+          balance: balance ?? [],
+          cashFlow: cashFlow ?? [],
+          keyMetrics,
+        },
       });
       return { status: "success", ...stored };
     } catch (error) {
@@ -538,13 +567,14 @@ async function storeAnnualStatementHistory(input: {
   const incomeByDate = statementMap(input.bundle.income);
   const balanceByDate = statementMap(input.bundle.balance);
   const cashByDate = statementMap(input.bundle.cashFlow);
+  const keyMetricsByDate = statementMap(input.bundle.keyMetrics);
   const dates = [
     ...new Set([...incomeByDate.keys(), ...balanceByDate.keys(), ...cashByDate.keys()]),
   ]
     .filter(isIsoDate)
     .sort()
     .reverse()
-    .slice(0, 4);
+    .slice(0, 10);
   let filingsInserted = 0;
   let factsInserted = 0;
   let filingsUnchanged = 0;
@@ -553,10 +583,13 @@ async function storeAnnualStatementHistory(input: {
     const income = incomeByDate.get(periodEnd);
     const balance = balanceByDate.get(periodEnd);
     const cashFlow = cashByDate.get(periodEnd);
+    const keyMetrics = historicalKeyMetricForPeriod(input.bundle.keyMetrics, keyMetricsByDate, periodEnd);
     const facts = statementFacts(income, balance, cashFlow);
     if (facts.length === 0) continue;
 
-    const contentHash = createHash("sha256").update(JSON.stringify(facts)).digest("hex");
+    const contentHash = createHash("sha256")
+      .update(JSON.stringify({ facts, keyMetrics: keyMetrics ?? null }))
+      .digest("hex");
     const publishedAt = latestTimestamp([
       income?.acceptedDate,
       income?.filingDate,
@@ -602,7 +635,13 @@ async function storeAnnualStatementHistory(input: {
     const revisionNo = previous ? previous.revision_no + 1 : 1;
     const isRestatement = Boolean(previous);
     const knownAt = new Date().toISOString();
-    const raw = { symbol: input.symbol, income: income ?? null, balance: balance ?? null, cashFlow: cashFlow ?? null };
+    const raw = {
+      symbol: input.symbol,
+      income: income ?? null,
+      balance: balance ?? null,
+      cashFlow: cashFlow ?? null,
+      keyMetrics: keyMetrics ?? null,
+    };
     const { data: filing, error: filingError } = await supabaseAdmin
       .from("fundamental_filings")
       .insert({
@@ -650,6 +689,17 @@ function statementMap<T extends FmpStatementBase>(rows: T[]): Map<string, T> {
     if (row.date && !result.has(row.date)) result.set(row.date, row);
   }
   return result;
+}
+
+function historicalKeyMetricForPeriod(
+  rows: FmpHistoricalKeyMetrics[],
+  byDate: Map<string, FmpHistoricalKeyMetrics>,
+  periodEnd: string,
+): FmpHistoricalKeyMetrics | undefined {
+  const exact = byDate.get(periodEnd);
+  if (exact) return exact;
+  const year = periodEnd.slice(0, 4);
+  return rows.find((row) => row.calendarYear === year || row.date?.slice(0, 4) === year);
 }
 
 function statementFacts(

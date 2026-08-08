@@ -11,7 +11,7 @@ import {
 } from "./institutional-model";
 
 const MAX_INSTITUTIONAL_UNIVERSE = 3_000;
-const MAX_PERIODS_PER_ASSET = 6;
+const MAX_PERIODS_PER_ASSET = 10;
 
 interface AssetRow {
   id: string;
@@ -267,6 +267,7 @@ function parseInstitutionalPeriod(row: FilingRow): InstitutionalPeriod | null {
   const income = record(raw.income);
   const balance = record(raw.balance);
   const cashFlow = record(raw.cashFlow);
+  const keyMetrics = record(raw.keyMetrics);
   if (!income && !balance && !cashFlow) return null;
 
   return {
@@ -283,6 +284,11 @@ function parseInstitutionalPeriod(row: FilingRow): InstitutionalPeriod | null {
     incomeBeforeTax: readNumber(income, ["incomeBeforeTax"]),
     incomeTaxExpense: readNumber(income, ["incomeTaxExpense"]),
     netIncome: readNumber(income, ["netIncome"]),
+    netIncomeToCommon: readNumber(income, [
+      "netIncomeAvailableToCommonShareholders",
+      "netIncomeApplicableToCommonShares",
+      "netIncomeCommonStockholders",
+    ]),
     dilutedShares: readNumber(income, ["weightedAverageShsOutDil", "weightedAverageShsOut"]),
     totalAssets: readNumber(balance, ["totalAssets"]),
     totalCurrentAssets: readNumber(balance, ["totalCurrentAssets"]),
@@ -296,6 +302,11 @@ function parseInstitutionalPeriod(row: FilingRow): InstitutionalPeriod | null {
     shortTermDebt: readNumber(balance, ["shortTermDebt", "shortTermBorrowings"]),
     longTermDebt: readNumber(balance, ["longTermDebt", "totalNonCurrentDebt"]),
     totalEquity: readNumber(balance, ["totalStockholdersEquity", "totalEquity"]),
+    preferredStock: readNumber(balance, [
+      "preferredStock",
+      "preferredStockEquity",
+      "preferredStockAndOtherAdjustments",
+    ]),
     totalLiabilities: readNumber(balance, ["totalLiabilities"]),
     receivables: readNumber(balance, ["netReceivables", "accountsReceivables"]),
     inventory: readNumber(balance, ["inventory"]),
@@ -333,6 +344,19 @@ function parseInstitutionalPeriod(row: FilingRow): InstitutionalPeriod | null {
       "sellingGeneralAndAdministrativeExpenses",
       "sellingAndMarketingExpenses",
     ]),
+    historicalMarketCap: readNumber(keyMetrics, ["marketCap", "marketCapitalization"]),
+    historicalEnterpriseValue: readNumber(keyMetrics, ["enterpriseValue"]),
+    historicalEvEbitda: readNumber(keyMetrics, [
+      "enterpriseValueOverEBITDA",
+      "evToEBITDA",
+      "evToEbitda",
+    ]),
+    historicalEvRevenue: readNumber(keyMetrics, [
+      "evToSales",
+      "enterpriseValueOverRevenue",
+      "enterpriseValueToRevenue",
+    ]),
+    historicalFcfYield: readNumber(keyMetrics, ["freeCashFlowYield", "freeCashFlowYieldTTM"]),
   };
 }
 
