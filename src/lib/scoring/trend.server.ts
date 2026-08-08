@@ -1,5 +1,5 @@
-import type { Bar } from "./series";
-import { movingAverage, maxOver } from "./series";
+import type { Bar } from "./series.ts";
+import { movingAverage, maxOver } from "./series.ts";
 
 export const TREND_CALC_VERSION = "score.trend.v0.2";
 
