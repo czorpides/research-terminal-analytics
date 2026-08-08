@@ -43,8 +43,14 @@ jobs:
       - name: Run TypeScript check against generated routes
         run: npx tsc --noEmit
 
-      - name: Run Opportunity Radar and fundamental model tests
-        run: npm run test:opportunity
+      - name: Run new Opportunity Radar regressions
+        run: node --test src/lib/opportunity/fundamental-timing.test.ts src/lib/opportunity/technical-recovery.test.ts
+
+      - name: Run legacy Opportunity Radar tests
+        run: node --test src/lib/opportunity/conviction-v2.test.ts src/lib/opportunity/conviction.test.ts src/lib/opportunity/discovery-routes.test.ts src/lib/opportunity/evidence-freshness.test.ts src/lib/opportunity/fundamental-models.test.ts src/lib/opportunity/institutional-model.test.ts src/lib/opportunity/model.test.ts src/lib/opportunity/swing-model.test.ts
+
+      - name: Run Swing model tests
+        run: node --test src/lib/swing/*.test.ts
 
   analytics:
     name: Python analytics tests
