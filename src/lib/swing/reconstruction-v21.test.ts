@@ -139,7 +139,7 @@ test("technical-only fallback is explicitly unknown rather than known-neutral ca
   assert.equal(report.sessionsEvaluated, 3);
   assert.equal(report.contextTechnicalOnly, 3);
   assert.equal(report.contextResolved, 0);
-  assert.ok(report.warnings.some((warning) => warning.includes("known-clear")));
+  assert.ok(report.warnings.some((warning) => warning.includes("unknown")));
 
   const context = technicalOnlyContext("equity");
   assert.equal(context.catalyst.score, null);
