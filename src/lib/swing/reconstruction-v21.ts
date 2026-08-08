@@ -254,7 +254,7 @@ export function reconstructSwingV21History(
 
   if (contextTechnicalOnly > 0) {
     warnings.push(
-      `${contextTechnicalOnly} replay session${contextTechnicalOnly === 1 ? "" : "s"} used technical-only context because no point-in-time catalyst/macro snapshot was supplied; these sessions must not be interpreted as known-clear catalyst evidence.`,
+      `${contextTechnicalOnly} replay session${contextTechnicalOnly === 1 ? "" : "s"} used technical-only context because no point-in-time catalyst/macro snapshot was supplied; catalyst/macro state is unknown, so these sessions must not be interpreted as known-clear catalyst evidence.`,
     );
   }
   if (contextSkipped > 0) {
