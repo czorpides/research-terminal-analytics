@@ -20,6 +20,8 @@ export interface SwingV21CalibrationSignal {
   entryQuality: number;
   confirmationCount: number;
   timeStopSessions: number;
+  /** Point-in-time research tags. They are bucketed for outcomes, never scored. */
+  patternKeys?: string[];
 }
 
 export interface SwingV21CalibrationResult {
@@ -65,6 +67,7 @@ export interface SwingV21CalibrationSummary {
   byRankingScore: SwingV21CalibrationBucket[];
   byEntryQuality: SwingV21CalibrationBucket[];
   byConfirmationCount: SwingV21CalibrationBucket[];
+  byPattern: SwingV21CalibrationBucket[];
 }
 
 export interface SwingV21BacktestCase {
@@ -163,6 +166,7 @@ export function summarizeSwingV21Calibration(
       (key) => `Confirmations ${key}`,
       minimumSample,
     ),
+    byPattern: patternBuckets(eligible, minimumSample),
   };
 }
 
@@ -281,6 +285,23 @@ function bucketGroups(
   }
   return [...groups.entries()]
     .map(([key, values]) => bucket(key, labelFor(key), values, minimumSample))
+    .sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function patternBuckets(
+  rows: SwingV21CalibrationResult[],
+  minimumSample: number,
+): SwingV21CalibrationBucket[] {
+  const groups = new Map<string, SwingV21CalibrationResult[]>();
+  for (const row of rows) {
+    for (const key of new Set((row.signal.patternKeys ?? []).filter(Boolean))) {
+      const group = groups.get(key) ?? [];
+      group.push(row);
+      groups.set(key, group);
+    }
+  }
+  return [...groups.entries()]
+    .map(([key, values]) => bucket(key, key, values, minimumSample))
     .sort((left, right) => left.key.localeCompare(right.key));
 }
 
