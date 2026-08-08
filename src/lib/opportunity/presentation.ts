@@ -6,6 +6,12 @@ import {
   assessDiscoveryRoutes,
   type DiscoveryProfile,
 } from "./discovery-routes";
+import {
+  assessFundamentalOpportunity,
+  assessTechnicalTiming,
+  type FundamentalOpportunityAssessment,
+  type TechnicalTimingAssessment,
+} from "./fundamental-timing";
 import type {
   InstitutionalAnalysis,
   InstitutionalTier,
@@ -17,6 +23,8 @@ export interface PresentedOpportunity {
   conviction: ConvictionV2Result;
   institutional: InstitutionalAnalysis | null;
   discovery: DiscoveryProfile;
+  fundamental: FundamentalOpportunityAssessment;
+  timing: TechnicalTimingAssessment;
   score: number;
   coverage: number;
   tier: InstitutionalTier;
@@ -30,28 +38,53 @@ export function presentOpportunityCandidate(
 ): PresentedOpportunity {
   const conviction = assessCandidate(candidate);
   const discovery = assessDiscoveryRoutes({ candidate, conviction, institutional });
-  const hardRisks = unique([...(institutional?.hardRisks ?? []), ...conviction.hardRisks]);
-  const warnings = unique([...(institutional?.warnings ?? []), ...conviction.warnings]);
-  const rawScore = institutional
-    ? institutional.score * 0.48 + conviction.score * 0.32 + discovery.routeScore * 0.2
-    : conviction.score * 0.55 + discovery.routeScore * 0.45;
-  const coverage = institutional
-    ? institutional.coverage * 0.55 + conviction.coverage * 0.45
-    : conviction.coverage * 0.45;
+  const fundamental = assessFundamentalOpportunity(candidate, institutional);
+  const timing = assessTechnicalTiming(candidate);
+  const hardRisks = unique([
+    ...(institutional?.hardRisks ?? []),
+    ...conviction.hardRisks,
+    ...fundamental.risks,
+  ]);
+  const warnings = unique([
+    ...(institutional?.warnings ?? []),
+    ...conviction.warnings,
+    ...fundamental.warnings,
+    ...timing.warnings,
+  ]);
+
+  // The displayed Radar score is now a fundamental-opportunity score. Technical
+  // confirmation controls *when* a qualified idea can be promoted, but cannot
+  // make a deteriorating or expensive company look fundamentally better.
+  const rawScore = fundamental.score;
+  const supportingCoverage = institutional?.coverage ?? candidate.horizons.one_to_three.dataConfidence;
+  const coverage = fundamental.coverage * 0.65 + supportingCoverage * 0.35;
 
   let tier: InstitutionalTier;
-  if (hardRisks.length) tier = "avoid";
-  else if (discovery.readiness === "ready") {
-    tier = rawScore >= 70 && coverage >= 40 ? "priority" : rawScore >= 58 ? "qualified" : "watch";
-  } else if (discovery.readiness === "emerging") tier = "watch";
-  else if (discovery.readiness === "coverage_gap") tier = "insufficient";
-  else tier = rawScore < 38 ? "avoid" : "insufficient";
+  if (hardRisks.length || fundamental.state === "risk") {
+    tier = "avoid";
+  } else if (fundamental.state === "insufficient") {
+    tier = "insufficient";
+  } else if (fundamental.state === "qualified") {
+    if (timing.state === "confirmed") {
+      tier = rawScore >= 70 && coverage >= 55 ? "priority" : "qualified";
+    } else {
+      // A cheap, durable company can remain on the research queue while the
+      // chart is still basing/markdown, but it is not promoted into an entry tier.
+      tier = "watch";
+    }
+  } else if (timing.state === "confirmed" || timing.state === "basing") {
+    tier = "watch";
+  } else {
+    tier = discovery.readiness === "coverage_gap" ? "insufficient" : "insufficient";
+  }
 
   return {
     candidate,
     conviction,
     institutional,
     discovery,
+    fundamental,
+    timing,
     score: round1(hardRisks.length ? Math.min(rawScore, 34) : rawScore),
     coverage: round1(coverage),
     tier,
