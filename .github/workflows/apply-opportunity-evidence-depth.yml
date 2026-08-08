@@ -1,0 +1,30 @@
+name: Apply Opportunity Evidence Depth
+
+on:
+  push:
+    branches:
+      - agent/opportunity-radar-evidence-depth
+    paths:
+      - .github/workflows/apply-opportunity-evidence-depth.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/opportunity-radar-evidence-depth
+      - name: Apply evidence-depth patch
+        run: |
+          git apply --check .github/opportunity-evidence-depth-phase-a.patch
+          git apply .github/opportunity-evidence-depth-phase-a.patch
+          rm .github/opportunity-evidence-depth-phase-a.patch
+          rm .github/workflows/apply-opportunity-evidence-depth.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Deepen Opportunity Radar fundamental evidence"
+          git push origin HEAD:agent/opportunity-radar-evidence-depth
