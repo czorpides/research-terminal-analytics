@@ -116,6 +116,36 @@ test("summarises expectancy by setup and score band while excluding ambiguity", 
   assert.equal(rank80?.averageRealisedR, 1);
 });
 
+test("event-conditioned pattern keys are tracked as outcome buckets without changing scores", () => {
+  const patternKey = "asset:XAUUSD|event:real_yield:falling_fast|setup:commodity_macro";
+  const win = evaluateSwingV21CalibrationSignal(
+    signal({
+      setup: "commodity_macro",
+      rankingScore: 61,
+      patternKeys: ["asset:XAUUSD", patternKey],
+    }),
+    bars(["2026-01-06", 110, 100, 109]),
+  );
+  const loss = evaluateSwingV21CalibrationSignal(
+    signal({
+      setup: "commodity_macro",
+      rankingScore: 44,
+      patternKeys: ["asset:XAUUSD", patternKey],
+    }),
+    bars(["2026-01-06", 101, 96, 97]),
+  );
+
+  const summary = summarizeSwingV21Calibration([win, loss], 2);
+  const eventBucket = summary.byPattern.find((bucket) => bucket.key === patternKey);
+
+  assert.equal(win.signal.rankingScore, 61);
+  assert.equal(loss.signal.rankingScore, 44);
+  assert.equal(eventBucket?.sampleSize, 2);
+  assert.equal(eventBucket?.targetHits, 1);
+  assert.equal(eventBucket?.stopHits, 1);
+  assert.equal(eventBucket?.validated, true);
+});
+
 test("compares 0.50, 0.75 and 1.00 ATR floors on identical signals", () => {
   const cases = [{
     signal: signal(),

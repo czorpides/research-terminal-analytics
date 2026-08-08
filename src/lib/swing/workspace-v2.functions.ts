@@ -14,6 +14,13 @@ import {
 } from "./model-v21";
 import type { SwingBar } from "./model";
 import type { SwingExpectationSignal } from "./expectations";
+import {
+  PERMANENT_SWING_PRIORITY_SYMBOLS,
+  isPermanentSwingPriorityAsset,
+  priorityPatternTracking,
+  surfaceWithPermanentPriority,
+  type SwingPriorityPatternTracking,
+} from "./priority-assets-v21";
 
 const MAX_UNIVERSE = 3_000;
 const UNIVERSE_PAGE_SIZE = 1_000;
@@ -21,7 +28,7 @@ const DEEP_SCAN_CAP = 220;
 const BAR_LOOKBACK = 280;
 const PRICE_HISTORY_DAYS = 620;
 const TECHNICAL_SCREEN_BATCH = 75;
-const METAL_SYMBOLS = ["XAUUSD", "XAGUSD"] as const;
+const METAL_SYMBOLS = PERMANENT_SWING_PRIORITY_SYMBOLS;
 
 type ScoreType = "momentum" | "trend" | "volatility";
 
@@ -89,6 +96,8 @@ export interface SwingV2WorkspaceCandidate {
   setup: SwingV2Candidate;
   catalyst: SwingV2CatalystContext;
   expectations: SwingExpectationSignal | null;
+  priorityAsset?: boolean;
+  patternTracking?: SwingPriorityPatternTracking | null;
 }
 
 export interface SwingV2Workspace {
@@ -262,19 +271,23 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
         `Swing v2 score-screened ${scoreScreened.toLocaleString()} of ${expectedActiveEquities.toLocaleString()} active equities (${scoreScreenCoverage.toFixed(1)}%). Candidate rankings are incomplete.`,
       );
     }
-    if (!metals.length) warnings.push("Gold/silver assets are not loaded yet; apply the v2 metals rollout and run its EODHD history ingest.");
+    const loadedMetalSymbols = new Set(metals.map((metal) => metal.symbol));
+    const missingPriorityMetals = METAL_SYMBOLS.filter((symbol) => !loadedMetalSymbols.has(symbol));
+    if (missingPriorityMetals.length) {
+      warnings.push(`Permanent metals priority is incomplete: ${missingPriorityMetals.join(", ")} ${missingPriorityMetals.length === 1 ? "is" : "are"} not loaded as active commodity assets.`);
+    }
     if (metalResult.error) warnings.push(`Metal asset lookup failed: ${errorMessage(metalResult.error)}`);
 
     const candidates: SwingV2WorkspaceCandidate[] = [];
     for (const asset of selectedAssets) {
       const bars = barsByAsset.get(asset.id) ?? [];
       if (bars.length < 45) {
-        if (METAL_SYMBOLS.includes(asset.symbol as (typeof METAL_SYMBOLS)[number])) {
-          warnings.push(`${asset.symbol} has only ${bars.length} usable OHLC bars; metals history ingest is not ready.`);
+        if (isPermanentSwingPriorityAsset(asset.symbol)) {
+          warnings.push(`${asset.symbol} has only ${bars.length} usable OHLC bars; permanent metals tracking is not ready.`);
         }
         continue;
       }
-      const isMetal = METAL_SYMBOLS.includes(asset.symbol as (typeof METAL_SYMBOLS)[number]);
+      const isMetal = isPermanentSwingPriorityAsset(asset.symbol);
       const bag = scores.get(asset.id) ?? {};
       const expectations = isMetal ? null : (expectationSignals[asset.id] ?? null);
       const catalyst = isMetal
@@ -286,7 +299,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
             now,
           );
       const macro = isMetal
-        ? metalMacro[asset.symbol as "XAUUSD" | "XAGUSD"]
+        ? metalMacro[asset.symbol]
         : null;
       const setup = computeSwingTradeV2(bars, {
         existingMomentum: finite(bag.momentum?.value),
@@ -297,7 +310,11 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
         macro,
         instrumentType: isMetal ? "commodity" : "equity",
       });
-      if (!setup || setup.rankingScore < 42 || setup.entryState === "invalidated") continue;
+      if (!setup) continue;
+      // Gold and silver are permanent research assets. Their model score remains
+      // untouched, but they are observed even when they sit below the ordinary
+      // 42-point surfacing floor or are currently invalidated.
+      if (!isMetal && (setup.rankingScore < 42 || setup.entryState === "invalidated")) continue;
       const latest = bars.at(-1)!;
       const ageDays = Math.max(0, (now.getTime() - new Date(`${latest.date}T21:00:00Z`).getTime()) / 86_400_000);
       if (ageDays > 7) {
@@ -326,6 +343,8 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
         setup,
         catalyst,
         expectations,
+        priorityAsset: isMetal,
+        patternTracking: priorityPatternTracking(asset.symbol, setup.setup, setup.entryState, macro),
       });
     }
 
@@ -339,7 +358,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
       (latest, candidate) => candidate.priceAsOf > latest ? candidate.priceAsOf : latest,
       "",
     );
-    const surfaced = candidates.slice(0, 140);
+    const surfaced = surfaceWithPermanentPriority(candidates, 140);
     return {
       asOf: latestDate || new Date().toISOString().slice(0, 10),
       modelVersion: SWING_V2_MODEL_VERSION,
@@ -363,7 +382,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
       },
       candidates: surfaced,
       methodology:
-        "Swing v2.1 is a multi-strategy shadow engine built around tradeability, structure, location, trigger, catalyst and risk/reward. The broad screen allocates deep-scan capacity to 3-6 month lows, drawdowns, negative-to-positive momentum transitions, 200SMA/20SMA/50SMA locations, stabilising damaged names, volume-driven reversals and a smaller clean-breakout lane. Deep analysis combines RSI/MACD, bullish divergence, ADX regime, daily/weekly moving-average confluence, volume contraction then reversal expansion, rejection/engulfing/liquidity-sweep candles, first breakout retests, ATR, structural targets/stops, earnings timing and validated estimate/target revisions. Long-term valuation does not add Swing score. Gold and silver use technical structure plus real yields, the broad dollar and volatility; spot volume is not treated as centralised institutional flow.",
+        "Swing v2.1 is a multi-strategy shadow engine built around tradeability, structure, location, trigger, catalyst and risk/reward. The broad screen allocates deep-scan capacity to 3-6 month lows, drawdowns, negative-to-positive momentum transitions, 200SMA/20SMA/50SMA locations, stabilising damaged names, volume-driven reversals and a smaller clean-breakout lane. Deep analysis combines RSI/MACD, bullish divergence, ADX regime, daily/weekly moving-average confluence, volume contraction then reversal expansion, rejection/engulfing/liquidity-sweep candles, first breakout retests, ATR, structural targets/stops, earnings timing and validated estimate/target revisions. Long-term valuation does not add Swing score. XAUUSD and XAGUSD are permanent priority research assets: they remain in the surfaced observation set without any artificial ranking bonus, and their setup outcomes are tagged against point-in-time real-yield, broad-dollar and volatility conditions. Spot volume is not treated as centralised institutional flow.",
       warnings: unique(warnings).slice(0, 20),
     };
   },
