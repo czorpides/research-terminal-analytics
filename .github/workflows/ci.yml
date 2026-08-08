@@ -44,21 +44,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Run Opportunity Radar and fundamental model tests
-        shell: bash
-        run: |
-          set +e
-          status=0
-          for file in src/lib/opportunity/*.test.ts src/lib/swing/*.test.ts; do
-            echo "::group::$file"
-            node --test "$file"
-            code=$?
-            echo "::endgroup::"
-            if [ $code -ne 0 ]; then
-              echo "::error file=$file::Model test file failed: $file"
-              status=1
-            fi
-          done
-          exit $status
+        run: npm run test:opportunity
 
   analytics:
     name: Python analytics tests
