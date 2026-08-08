@@ -7,6 +7,10 @@ import type {
 export const PERMANENT_SWING_PRIORITY_SYMBOLS = ["XAUUSD", "XAGUSD"] as const;
 export type PermanentSwingPrioritySymbol = (typeof PERMANENT_SWING_PRIORITY_SYMBOLS)[number];
 
+type EventConditionedMacroContext = SwingV2MacroContext & {
+  eventConditions?: string[];
+};
+
 export interface SwingPriorityPatternTracking {
   mode: "event_conditioned";
   symbol: PermanentSwingPrioritySymbol;
@@ -65,7 +69,7 @@ export function priorityPatternTracking(
   symbol: string,
   setup: SwingV2SetupType,
   entryState: SwingV2EntryState,
-  macro: SwingV2MacroContext | null | undefined,
+  macro: EventConditionedMacroContext | null | undefined,
 ): SwingPriorityPatternTracking | null {
   if (!isPermanentSwingPriorityAsset(symbol)) return null;
   const macroRegime = !macro?.available
