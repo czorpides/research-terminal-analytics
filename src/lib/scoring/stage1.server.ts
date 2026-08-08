@@ -1,4 +1,4 @@
-import type { Bar } from "./series";
+import type { Bar } from "./series.ts";
 
 export const STAGE1_CALC_VERSION = "score.stage1.v0.1";
 
