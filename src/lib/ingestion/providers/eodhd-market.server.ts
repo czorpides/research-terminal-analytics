@@ -5,6 +5,9 @@ const BASE_URL = "https://eodhd.com/api";
 export const EODHD_PAID_DAILY_LIMIT_UNITS = 100_000;
 export const EODHD_FREE_DAILY_LIMIT_UNITS = 20;
 export const EODHD_BULK_EXCHANGE_UNITS = 100;
+export const EODHD_TECHNICAL_UNITS = 5;
+export const EODHD_HISTORICAL_MARKET_CAP_UNITS = 10;
+export const EODHD_SYMBOL_CHANGE_UNITS = 5;
 
 export type ManagedMarket = "US" | "UK" | "EU";
 
@@ -67,6 +70,33 @@ export interface EodhdDailyRow {
   volume?: number | string | null;
 }
 
+/**
+ * Technical API `function=splitadjusted` response. OHLC is adjusted for splits
+ * only (not dividends), which is the price basis required by Swing replay.
+ */
+export interface EodhdSplitAdjustedRow {
+  date?: string;
+  open?: number | string | null;
+  high?: number | string | null;
+  low?: number | string | null;
+  close?: number | string | null;
+}
+
+/** US NYSE/NASDAQ only; EODHD samples equity market cap weekly from 2021-07-09. */
+export interface EodhdHistoricalMarketCapRow {
+  date?: string;
+  value?: number | string | null;
+}
+
+/** US symbol-change history begins 2022-07-22. */
+export interface EodhdSymbolChangeRow {
+  exchange?: string;
+  old_symbol?: string;
+  new_symbol?: string;
+  company_name?: string;
+  effective?: string;
+}
+
 export interface EodhdAccount {
   subscriptionType?: string;
   apiRequests?: number;
@@ -86,14 +116,32 @@ export async function fetchEodhdAccount(): Promise<EodhdAccount> {
     : {};
 }
 
-export async function fetchEodhdSymbolList(exchange: string): Promise<EodhdSymbolRow[]> {
+export async function fetchEodhdSymbolList(
+  exchange: string,
+  options: {
+    delisted?: boolean;
+    type?: "common_stock" | "preferred_stock" | "stock" | "etf" | "fund";
+  } = {},
+): Promise<EodhdSymbolRow[]> {
   const payload = await requestJson(
     `/exchange-symbol-list/${encodeURIComponent(exchange)}`,
-    { fmt: "json", type: "common_stock" },
+    {
+      fmt: "json",
+      type: options.type ?? "common_stock",
+      ...(options.delisted ? { delisted: "1" } : {}),
+    },
     1,
   );
   if (!Array.isArray(payload)) throw new ProviderError("EODHD symbol list returned a non-array payload", "bad_response");
   return payload as EodhdSymbolRow[];
+}
+
+/**
+ * Research-only discovery path for survivorship-safe backtests. This function
+ * is intentionally not wired into the live managed-universe refresh.
+ */
+export async function fetchEodhdDelistedSymbolList(exchange: string): Promise<EodhdSymbolRow[]> {
+  return fetchEodhdSymbolList(exchange, { delisted: true, type: "common_stock" });
 }
 
 export async function fetchEodhdBulkEod(
@@ -129,6 +177,85 @@ export async function fetchEodhdDaily(
   );
   if (!Array.isArray(payload)) throw new ProviderError("EODHD historical EOD returned a non-array payload", "bad_response");
   return payload as EodhdDailyRow[];
+}
+
+/**
+ * Retrieve split-adjusted (but not dividend-adjusted) OHLC for research. EODHD
+ * documents ordinary EOD OHLC as raw and its volume field as split-adjusted;
+ * callers should join volume by date from `fetchEodhdDaily`.
+ */
+export async function fetchEodhdSplitAdjustedDaily(
+  symbolWithExchange: string,
+  options: { from?: string; to?: string } = {},
+): Promise<EodhdSplitAdjustedRow[]> {
+  const payload = await requestJson(
+    `/technical/${encodeURIComponent(symbolWithExchange)}`,
+    {
+      fmt: "json",
+      function: "splitadjusted",
+      agg_period: "d",
+      order: "a",
+      ...(options.from ? { from: options.from } : {}),
+      ...(options.to ? { to: options.to } : {}),
+    },
+    EODHD_TECHNICAL_UNITS,
+  );
+  if (!Array.isArray(payload)) {
+    throw new ProviderError("EODHD split-adjusted history returned a non-array payload", "bad_response");
+  }
+  return payload as EodhdSplitAdjustedRow[];
+}
+
+/**
+ * Historical market capitalization is currently available for NYSE/NASDAQ
+ * equities only. The provider returns a JSON object keyed by sequential index,
+ * so normalize it to rows at the adapter boundary.
+ */
+export async function fetchEodhdHistoricalMarketCap(
+  symbolWithExchange: string,
+  options: { from?: string; to?: string } = {},
+): Promise<EodhdHistoricalMarketCapRow[]> {
+  const payload = await requestJson(
+    `/historical-market-cap/${encodeURIComponent(symbolWithExchange)}`,
+    {
+      fmt: "json",
+      ...(options.from ? { from: options.from } : {}),
+      ...(options.to ? { to: options.to } : {}),
+    },
+    EODHD_HISTORICAL_MARKET_CAP_UNITS,
+  );
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === "object"
+      ? Object.values(payload as Record<string, unknown>)
+      : null;
+  if (!rows) {
+    throw new ProviderError("EODHD historical market cap returned an invalid payload", "bad_response");
+  }
+  return rows.filter((row): row is EodhdHistoricalMarketCapRow => Boolean(row && typeof row === "object"));
+}
+
+/**
+ * Research identity bridge for US ticker renames. This does not mutate asset
+ * identity; the historical-universe layer decides how old/new symbols map.
+ */
+export async function fetchEodhdSymbolChangeHistory(
+  options: { from?: string; to?: string; exchange?: string } = {},
+): Promise<EodhdSymbolChangeRow[]> {
+  const payload = await requestJson(
+    "/symbol-change-history",
+    {
+      fmt: "json",
+      ...(options.from ? { from: options.from } : {}),
+      ...(options.to ? { to: options.to } : {}),
+      ...(options.exchange ? { ex: options.exchange } : {}),
+    },
+    EODHD_SYMBOL_CHANGE_UNITS,
+  );
+  if (!Array.isArray(payload)) {
+    throw new ProviderError("EODHD symbol-change history returned a non-array payload", "bad_response");
+  }
+  return payload as EodhdSymbolChangeRow[];
 }
 
 /** Translate an EODHD listing exchange into the MIC stored in `assets.exchange`. */
