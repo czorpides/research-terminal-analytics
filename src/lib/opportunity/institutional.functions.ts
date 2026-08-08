@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { FUNDAMENTAL_METRICS } from "@/lib/ingestion/fundamentals/metrics";
+import { withAdvancedValuationContext } from "./advanced-valuation";
+import { loadHistoricalValuationHistory } from "./historical-valuation.server";
 import {
   computeInstitutionalAnalysis,
   withInstitutionalPeerContext,
@@ -11,7 +13,7 @@ import {
 } from "./institutional-model";
 
 const MAX_INSTITUTIONAL_UNIVERSE = 3_000;
-const MAX_PERIODS_PER_ASSET = 6;
+const MAX_PERIODS_PER_ASSET = 10;
 
 interface AssetRow {
   id: string;
@@ -93,7 +95,7 @@ export const getInstitutionalOpportunityWorkspace = createServerFn({ method: "GE
     );
     const batches = chunkValues(assetIds, 60);
 
-    const [fundamentalPages, filingPages, industryResult] = await Promise.all([
+    const [fundamentalPages, filingPages, industryResult, historicalValuation] = await Promise.all([
       Promise.all(
         batches.map((batch) =>
           supabaseAdmin
@@ -119,6 +121,7 @@ export const getInstitutionalOpportunityWorkspace = createServerFn({ method: "GE
       industryIds.length
         ? supabaseAdmin.from("industries").select("id,code").in("id", industryIds)
         : Promise.resolve({ data: [], error: null }),
+      loadHistoricalValuationHistory(assetIds, MAX_PERIODS_PER_ASSET),
     ]);
 
     const fundamentalError = fundamentalPages.find((page) => page.error)?.error;
@@ -142,7 +145,7 @@ export const getInstitutionalOpportunityWorkspace = createServerFn({ method: "GE
       filingPages.flatMap((page) => page.data ?? []) as unknown as FilingRow[],
     );
 
-    const warnings: string[] = [];
+    const warnings: string[] = [...historicalValuation.warnings];
     const analyses: InstitutionalAnalysis[] = [];
     let assetsWithStatements = 0;
     let assetsWithTwoPeriods = 0;
@@ -150,18 +153,28 @@ export const getInstitutionalOpportunityWorkspace = createServerFn({ method: "GE
       const rows = filings.get(asset.id) ?? [];
       if (rows.length) assetsWithStatements++;
       if (rows.length >= 2) assetsWithTwoPeriods++;
-      const periods = rows.map(parseInstitutionalPeriod).filter((value): value is InstitutionalPeriod => Boolean(value));
+      const periods = rows
+        .map(parseInstitutionalPeriod)
+        .filter((value): value is InstitutionalPeriod => Boolean(value));
       if (!periods.length) continue;
       try {
+        const industryCode = asset.industry_id ? (industryCodes.get(asset.industry_id) ?? null) : null;
+        const assetFundamentals = fundamentals.get(asset.id) ?? emptyFundamentals();
+        const base = computeInstitutionalAnalysis({
+          assetId: asset.id,
+          industryId: asset.industry_id,
+          industryCode,
+          currency: asset.currency,
+          periods,
+          fundamentals: assetFundamentals,
+          assumptions: marketAssumptions(asset.currency, asset.exchange),
+        });
         analyses.push(
-          computeInstitutionalAnalysis({
-            assetId: asset.id,
-            industryId: asset.industry_id,
-            industryCode: asset.industry_id ? (industryCodes.get(asset.industry_id) ?? null) : null,
-            currency: asset.currency,
+          withAdvancedValuationContext(base, {
+            industryCode,
             periods,
-            fundamentals: fundamentals.get(asset.id) ?? emptyFundamentals(),
-            assumptions: marketAssumptions(asset.currency, asset.exchange),
+            fundamentals: assetFundamentals,
+            history: historicalValuation.byAsset.get(asset.id) ?? [],
           }),
         );
       } catch (error) {
@@ -205,7 +218,7 @@ export const getInstitutionalOpportunityWorkspace = createServerFn({ method: "GE
       counts,
       analyses: withPeers,
       modelNote:
-        "Seven institutional lenses are calculated from the full raw annual statements already stored by the fundamentals pipeline. Missing fields reduce lens coverage rather than being silently estimated. Existing valuation, Piotroski, Magic Formula, price-dislocation and recovery evidence remain separate and are combined in the Opportunity Radar UI.",
+        "The institutional statement model is augmented with observed own-history valuation, P/TBV-versus-ROTCE for Financials and median multi-year normalized earnings for Energy/Materials. Missing history remains explicit; no historical multiple or mid-cycle earnings point is synthesized.",
       warnings: unique(warnings).slice(0, 30),
     };
   },
