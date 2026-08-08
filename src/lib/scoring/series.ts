@@ -2,7 +2,14 @@
  * Shared numeric helpers used by every deterministic scorer.
  * Pure, no I/O.
  */
-export interface Bar { date: string; close: number; volume: number | null }
+export interface Bar {
+  date: string;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  close: number;
+  volume: number | null;
+}
 
 export function returns(bars: Bar[]): number[] {
   const r: number[] = [];
