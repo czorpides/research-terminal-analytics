@@ -92,7 +92,6 @@ export function assessFundamentalOpportunity(
     score >= 60 &&
     valuation.state !== "fail" &&
     trap.state === "pass" &&
-    quality.state !== "fail" &&
     catalyst.state === "pass"
   ) {
     state = "qualified";
