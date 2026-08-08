@@ -55,7 +55,9 @@ export function computeStage1(bars: Bar[]): Stage1Result {
   const weeklyBias = weeklyStructuralBias(bars);
 
   const preSweepStart = Math.max(0, bars.length - 90);
-  const sweepWindowStart = Math.max(preSweepStart + 30, bars.length - 18);
+  // Give a developing accumulation base roughly six trading weeks to retain
+  // its capitulation/sweep event while the subsequent ChoC and higher-low form.
+  const sweepWindowStart = Math.max(preSweepStart + 30, bars.length - 30);
   const preSweepBars = bars.slice(preSweepStart, sweepWindowStart);
   const priorBaseLow = preSweepBars.length
     ? Math.min(...preSweepBars.map(lowOf))
