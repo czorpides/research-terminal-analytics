@@ -177,72 +177,105 @@ function valuationGate(
   const revenueGrowth = raw(institutional, "revenueGrowth");
   const fcfMargin = raw(institutional, "fcfMargin");
   const residualIncome = raw(institutional, "residualIncome");
+  const historyYears = raw(institutional, "historicalValuationYears");
+  const selfEvEbitda = raw(institutional, "selfEvEbitdaCheapness");
+  const selfEvRevenue = raw(institutional, "selfEvRevenueCheapness");
+  const selfFcfYield = raw(institutional, "selfFcfYieldCheapness");
+  const priceToTangibleBook = raw(institutional, "priceToTangibleBook");
+  const rotce = raw(institutional, "rotce");
+  const rotceToPtbv = raw(institutional, "rotceToPtbv");
+  const rotceQuality = raw(institutional, "rotceQuality");
+  const selfPtbv = raw(institutional, "selfPtbvCheapness");
+  const currentEvRevenue = raw(institutional, "currentEvRevenue");
+  const normalizedEvEbitda = raw(institutional, "normalizedEvEbitda");
+  const normalizedFcfYield = raw(institutional, "normalizedFcfYield");
+  const cycleHistoryYears = raw(institutional, "cycleHistoryYears");
   const industry = candidate.industryCode ?? "";
   const positives: string[] = [];
-  const warnings: string[] = [
-    "Historical self-multiple percentiles are not yet stored, so the expert dual-lens valuation test remains incomplete rather than being guessed.",
-  ];
+  const warnings: string[] = [];
   const parts: Array<{ value: number | null; weight: number }> = [];
 
   if (peerValuation !== null) {
-    parts.push({ value: peerValuation, weight: 35 });
+    parts.push({ value: peerValuation, weight: 25 });
     if (peerValuation >= 62) positives.push("Current valuation is attractive relative to tracked peers.");
+  }
+  if ((historyYears ?? 0) < 5) {
+    warnings.push("Fewer than five annual self-valuation observations are available; the historical lens is not scored.");
   }
 
   if (industry === "SEC_FIN") {
-    parts.push({ value: scaleHigher(residualIncome, -0.05, 0.12), weight: 30 });
-    warnings.push(
-      "Financials still need P/TBV versus ROTCE plus regulatory-capital and asset-quality inputs before sector valuation can fully pass.",
-    );
+    parts.push({ value: scaleHigher(rotce, 0.05, 0.2), weight: 30 });
+    parts.push({ value: scaleHigher(rotceToPtbv, 0.05, 0.16), weight: 30 });
+    parts.push({ value: selfPtbv, weight: 15 });
+    parts.push({ value: scaleHigher(residualIncome, -0.05, 0.12), weight: 10 });
     const score = weighted(parts);
+    const completePair = priceToTangibleBook !== null && rotce !== null && rotceToPtbv !== null;
+    const canPass = completePair && (rotceQuality ?? 0) >= 0.75 && rotce >= 0.1;
+    if (completePair) {
+      positives.push(`P/TBV is ${priceToTangibleBook.toFixed(2)}× against ROTCE of ${(rotce * 100).toFixed(1)}%.`);
+    } else {
+      warnings.push("A usable P/TBV–ROTCE pair is not yet available.");
+    }
+    warnings.push("Regulatory capital, asset quality and funding liquidity remain separate financial-sector risk requirements.");
     return gate(
       "valuation",
       "Sector-appropriate valuation",
-      score === null ? "missing" : score < 35 ? "fail" : "watch",
+      score === null ? "missing" : score < 35 ? "fail" : score >= 62 && canPass ? "pass" : "watch",
       score,
       parts,
-      "Financial valuation remains provisional: peer pricing and residual-income evidence are visible, but the P/TBV–ROTCE lens is not complete.",
+      "Financials are judged on the return earned on tangible common equity relative to the price paid for that tangible book, not on low book value alone.",
       positives,
       warnings,
     );
   }
 
   if (industry === "SEC_TECH") {
-    const ruleOf40 =
-      revenueGrowth !== null && fcfMargin !== null ? revenueGrowth + fcfMargin : null;
-    parts.push({ value: scaleHigher(ruleOf40, 0, 0.4), weight: 35 });
-    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 20 });
+    const ruleOf40 = revenueGrowth !== null && fcfMargin !== null ? revenueGrowth + fcfMargin : null;
+    parts.push({ value: scaleHigher(ruleOf40, 0, 0.4), weight: 30 });
+    parts.push({ value: selfEvRevenue, weight: 25 });
+    parts.push({ value: scaleLower(currentEvRevenue, 12, 3), weight: 15 });
+    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 15 });
     parts.push({ value: scaleHigher(expectationGap, -0.08, 0.1), weight: 10 });
     if (ruleOf40 !== null && ruleOf40 >= 0.4) positives.push("Revenue growth plus FCF margin meets the Rule-of-40 threshold.");
-    warnings.push("EV/revenue is not yet stored as a dedicated peer and historical series for software valuation.");
+    if (selfEvRevenue !== null && selfEvRevenue >= 70) positives.push("Current EV/revenue sits near the cheap end of the company's observed annual history.");
   } else if (CYCLICAL_INDUSTRIES.has(industry)) {
-    parts.push({ value: scaleHigher(fcfYield, 0, 0.1), weight: 35 });
-    parts.push({ value: scaleHigher(expectationGap, -0.1, 0.1), weight: 20 });
-    warnings.push(
-      "Energy/materials still need a full-cycle normalized earnings series; current low peak-cycle multiples are not treated as proof of cheapness.",
-    );
+    parts.push({ value: scaleLower(normalizedEvEbitda, 14, 6), weight: 40 });
+    parts.push({ value: scaleHigher(normalizedFcfYield, 0, 0.1), weight: 25 });
+    parts.push({ value: selfEvEbitda, weight: 15 });
+    parts.push({ value: scaleHigher(expectationGap, -0.1, 0.1), weight: 10 });
+    if ((cycleHistoryYears ?? 0) < 7) {
+      warnings.push("A seven-year operating history is not yet available, so low spot-cycle multiples cannot prove cheapness.");
+    } else if (normalizedEvEbitda !== null) {
+      positives.push(`Normalized EV/EBITDA is ${normalizedEvEbitda.toFixed(1)}× across the stored cycle rather than peak current earnings.`);
+    }
   } else {
-    parts.push({ value: scaleLower(evEbitda, 18, 7), weight: 35 });
-    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 20 });
+    parts.push({ value: scaleLower(evEbitda, 18, 7), weight: 25 });
+    parts.push({ value: selfEvEbitda, weight: 20 });
+    parts.push({ value: selfFcfYield, weight: 15 });
+    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 15 });
     parts.push({ value: scaleHigher(expectationGap, -0.08, 0.1), weight: 10 });
     if (evEbitda !== null && evEbitda <= 8) positives.push("EV/EBITDA is below 8×.");
     if (fcfYield !== null && fcfYield >= 0.06) positives.push("FCF yield provides cash-backed valuation support.");
+    if (selfEvEbitda !== null && selfEvEbitda >= 70) positives.push("EV/EBITDA is near the cheap end of the company's own observed history.");
   }
 
   const score = weighted(parts);
+  const sectorHistoryReady = !CYCLICAL_INDUSTRIES.has(industry) || (cycleHistoryYears ?? 0) >= 7;
   const state =
-    score === null ? "missing" : score >= 62 && parts.filter((part) => part.value !== null).length >= 2
-      ? "pass"
-      : score < 35
-        ? "fail"
-        : "watch";
+    score === null
+      ? "missing"
+      : score >= 62 && parts.filter((part) => part.value !== null).length >= 2 && sectorHistoryReady
+        ? "pass"
+        : score < 35
+          ? "fail"
+          : "watch";
   return gate(
     "valuation",
     "Sector-appropriate valuation",
     state,
     score,
     parts,
-    "Uses the best currently observed sector-relevant valuation evidence while keeping missing historical-self valuation explicit.",
+    "Combines peer-relative valuation with the company's own observed history and the sector-appropriate economic denominator.",
     positives,
     warnings,
   );

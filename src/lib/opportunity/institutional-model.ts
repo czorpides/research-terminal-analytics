@@ -1,4 +1,6 @@
-export const INSTITUTIONAL_CALC_VERSION = "opportunity.institutional.v0.1";
+import { computeDeepValuationEvidence } from "./deep-valuation";
+
+export const INSTITUTIONAL_CALC_VERSION = "opportunity.institutional.v0.2";
 
 export type InstitutionalLensKey =
   | "valuation_expectations"
@@ -26,6 +28,7 @@ export interface InstitutionalPeriod {
   incomeBeforeTax: number | null;
   incomeTaxExpense: number | null;
   netIncome: number | null;
+  netIncomeToCommon: number | null;
   dilutedShares: number | null;
   totalAssets: number | null;
   totalCurrentAssets: number | null;
@@ -35,6 +38,7 @@ export interface InstitutionalPeriod {
   shortTermDebt: number | null;
   longTermDebt: number | null;
   totalEquity: number | null;
+  preferredStock: number | null;
   totalLiabilities: number | null;
   receivables: number | null;
   inventory: number | null;
@@ -55,6 +59,11 @@ export interface InstitutionalPeriod {
   debtIssuance: number | null;
   changeInWorkingCapital: number | null;
   sellingGeneralAdministrative: number | null;
+  historicalMarketCap: number | null;
+  historicalEnterpriseValue: number | null;
+  historicalEvEbitda: number | null;
+  historicalEvRevenue: number | null;
+  historicalFcfYield: number | null;
 }
 
 export interface InstitutionalFundamentals {
@@ -271,6 +280,15 @@ export function computeInstitutionalAnalysis(input: InstitutionalModelInput): In
   const cash = nonNegative(current?.cashAndInvestments) ?? 0;
   const enterpriseValue =
     isNumber(marketCap) && isNumber(totalDebt) ? marketCap + totalDebt - cash : null;
+  const deepValuation = computeDeepValuationEvidence({
+    periods,
+    current: {
+      marketCap: input.fundamentals.marketCap,
+      evEbitda: input.fundamentals.evEbitda,
+      fcfYield: input.fundamentals.fcfYield,
+    },
+    currentEnterpriseValue: enterpriseValue,
+  });
   const costOfCapital = estimateCostOfCapital({
     marketCap,
     debt: totalDebt,
@@ -876,8 +894,17 @@ export function computeInstitutionalAnalysis(input: InstitutionalModelInput): In
   }
   if (isNumber(shareCountChange) && shareCountChange > 0.25) hardRisks.push("Cumulative diluted-share growth exceeds 25% across the stored history.");
   if (isReit) dataGaps.push("REIT candidates still require FFO, AFFO, NAV and debt-maturity data before a high-conviction classification.");
+  if (deepValuation.historyYears < 5) {
+    dataGaps.push("Fewer than five comparable annual valuation observations are stored, so the self-history valuation lens remains inactive.");
+  }
   if (FINANCIAL_INDUSTRIES.has(input.industryCode ?? "")) {
-    dataGaps.push("Financial companies use residual-income evidence, but regulatory capital, asset quality and funding-liquidity data are still required.");
+    if (!isNumber(deepValuation.priceToTangibleBook) || !isNumber(deepValuation.rotce)) {
+      dataGaps.push("Financial valuation still lacks a usable P/TBV–ROTCE pair.");
+    }
+    dataGaps.push("Financial companies still require regulatory capital, asset quality and funding-liquidity data for full sector risk coverage.");
+  }
+  if ((input.industryCode === "SEC_ENE" || input.industryCode === "SEC_MAT") && deepValuation.cycleHistoryYears < 7) {
+    dataGaps.push("Fewer than seven annual operating observations are stored, so normalized cyclical earnings remain provisional.");
   }
 
   const warningPenalty = Math.min(unique(warnings).length * 1.5, 12);
@@ -1003,6 +1030,21 @@ export function computeInstitutionalAnalysis(input: InstitutionalModelInput): In
       goodwillToEquity,
       beneishMScore: beneish.score,
       misstatementRiskProxy,
+      historicalValuationYears: deepValuation.historyYears,
+      currentEvRevenue: deepValuation.currentEvRevenue,
+      selfEvEbitdaCheapness: deepValuation.selfEvEbitdaCheapness,
+      selfEvRevenueCheapness: deepValuation.selfEvRevenueCheapness,
+      selfFcfYieldCheapness: deepValuation.selfFcfYieldCheapness,
+      priceToTangibleBook: deepValuation.priceToTangibleBook,
+      rotce: deepValuation.rotce,
+      rotceToPtbv: deepValuation.rotceToPtbv,
+      rotceQuality: deepValuation.rotceQuality,
+      selfPtbvCheapness: deepValuation.selfPtbvCheapness,
+      normalizedEbitda: deepValuation.normalizedEbitda,
+      normalizedEvEbitda: deepValuation.normalizedEvEbitda,
+      normalizedFcf: deepValuation.normalizedFcf,
+      normalizedFcfYield: deepValuation.normalizedFcfYield,
+      cycleHistoryYears: deepValuation.cycleHistoryYears,
     },
   };
 }

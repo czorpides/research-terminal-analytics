@@ -46,7 +46,7 @@ export async function loadAnnualFinancialHistory(
       .eq("fiscal_period", "FY")
       .order("period_end", { ascending: false })
       .order("revision_no", { ascending: false })
-      .limit(batch.length * 8);
+      .limit(batch.length * 12);
     if (error) throw error;
     filingData.push(...((data ?? []) as FilingRow[]));
   }
