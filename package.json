@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test:opportunity": "node --test src/lib/opportunity/*.test.ts src/lib/swing/*.test.ts",
+    "test:opportunity": "node --test src/lib/opportunity/*.test.ts src/lib/scoring/stage1.test.ts src/lib/swing/*.test.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -79,7 +79,7 @@
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
-    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-hooks": "^6.1.1",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "prettier": "^3.7.3",
