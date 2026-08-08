@@ -1,7 +1,7 @@
 import type { InstitutionalAnalysis } from "./institutional-model";
 import type { OpportunityCandidate } from "./workspace.functions";
 
-export const FUNDAMENTAL_TIMING_CALC_VERSION = "opportunity.fundamental-timing.v0.1";
+export const FUNDAMENTAL_TIMING_CALC_VERSION = "opportunity.fundamental-timing.v0.2";
 
 export type FundamentalGateState = "pass" | "watch" | "fail" | "missing";
 export type FundamentalOpportunityState = "qualified" | "watch" | "risk" | "insufficient";
@@ -50,6 +50,19 @@ interface TrapCheck {
   severe?: boolean;
 }
 
+interface Stage1Structure {
+  state: TechnicalTimingState | null;
+  score: number | null;
+  invalidation: number | null;
+  baseLow: number | null;
+  baseLowDate: string | null;
+  liquiditySweep: boolean | null;
+  chochConfirmed: boolean | null;
+  firstHigherLow: boolean | null;
+  ma50Reclaimed: boolean | null;
+  ma50Retest: boolean | null;
+}
+
 const GENERIC_LEVERAGE_EXCLUSIONS = new Set(["SEC_FIN", "SEC_RE"]);
 const CYCLICAL_INDUSTRIES = new Set(["SEC_ENE", "SEC_MAT"]);
 
@@ -90,7 +103,7 @@ export function assessFundamentalOpportunity(
   else if (coverage < 40 || trap.state === "missing") state = "insufficient";
   else if (
     score >= 60 &&
-    valuation.state !== "fail" &&
+    valuation.state === "pass" &&
     trap.state === "pass" &&
     catalyst.state === "pass"
   ) {
@@ -111,16 +124,45 @@ export function assessFundamentalOpportunity(
 }
 
 /**
- * Timing stage of the Radar: answer "has selling pressure actually stopped?"
- * using the currently persisted trend/momentum confirmation. This deliberately
- * does not change the fundamental score.
- *
- * Exact Stage-1 structure (liquidity sweep, ChoC, first higher low, MA50 retest,
- * RSI/MACD divergence and base-low invalidation) is not yet persisted as a
- * dedicated Opportunity score, so this result is intentionally labelled as a
- * confirmation gate rather than an exact entry signal.
+ * Timing stage: prefer the persisted Stage-1 structure when the candidate
+ * workspace supplies it. The legacy trend/momentum blend remains a rollout
+ * fallback so a stale score batch cannot take the Radar offline.
  */
 export function assessTechnicalTiming(candidate: OpportunityCandidate): TechnicalTimingAssessment {
+  const stage1 = stage1Structure(candidate);
+  if (stage1.state && stage1.score !== null) {
+    const drawdown = finite(candidate.drawdownPct);
+    const state: TechnicalTimingState =
+      stage1.state === "confirmed" && drawdown !== null && drawdown > -8
+        ? "extended"
+        : stage1.state;
+    const detail =
+      state === "confirmed"
+        ? `Stage-1 structure is confirmed${stage1.baseLowDate ? ` from the base recorded on ${stage1.baseLowDate}` : ""}: change of character and a first higher low are persisted.`
+        : state === "basing"
+          ? "The persisted Stage-1 record shows basing evidence, but change-of-character / higher-low confirmation is incomplete."
+          : state === "extended"
+            ? "Stage-1 recovery is confirmed, but price is already close to its 52-week context; wait for a better risk/reward setup rather than chasing the recovery."
+            : "The persisted Stage-1 record still classifies price structure as markdown.";
+    const warnings = unique([
+      stage1.invalidation !== null
+        ? "The displayed invalidation is the observed accumulation-base low, not an execution stop; any trading buffer must be set separately."
+        : "No structural invalidation is shown while the persisted Stage-1 state remains markdown/insufficient.",
+      stage1.liquiditySweep === false
+        ? "No close-confirmed liquidity sweep is present in the current Stage-1 window."
+        : "",
+    ]);
+    return {
+      state,
+      score: round1(stage1.score),
+      entryReady: state === "confirmed",
+      invalidation: stage1.invalidation,
+      detail,
+      warnings,
+      calcVersion: FUNDAMENTAL_TIMING_CALC_VERSION,
+    };
+  }
+
   const recovery = finite(candidate.evidence.recoveryConfirmation?.value);
   if (recovery === null) {
     return {
@@ -128,10 +170,8 @@ export function assessTechnicalTiming(candidate: OpportunityCandidate): Technica
       score: null,
       entryReady: false,
       invalidation: null,
-      detail: "Trend and momentum confirmation is not available.",
-      warnings: [
-        "No base-low invalidation can be defined until the dedicated Stage-1 structure tracker is persisted.",
-      ],
+      detail: "Neither persisted Stage-1 structure nor trend/momentum confirmation is available.",
+      warnings: ["The timing gate cannot define a structural invalidation without a persisted Stage-1 record."],
       calcVersion: FUNDAMENTAL_TIMING_CALC_VERSION,
     };
   }
@@ -143,24 +183,21 @@ export function assessTechnicalTiming(candidate: OpportunityCandidate): Technica
   else if (recovery > 76 && drawdown !== null && drawdown > -8) state = "extended";
   else state = "confirmed";
 
-  const detail =
-    state === "markdown"
-      ? "Price trend/momentum still looks like markdown; fundamental cheapness is not an entry signal."
-      : state === "basing"
-        ? "Selling pressure is easing, but current persisted evidence is not strong enough to call the reversal confirmed."
-        : state === "extended"
-          ? "Technical recovery is strong, but price is already close to its 52-week context; avoid treating momentum strength as a cheap entry."
-          : "The existing daily trend/momentum evidence has turned constructive. Treat this as confirmation to investigate the entry, not as a substitute for a Stage-1 base retest.";
-
   return {
     state,
     score: round1(recovery),
     entryReady: state === "confirmed",
     invalidation: null,
-    detail,
+    detail:
+      state === "markdown"
+        ? "Legacy trend/momentum confirmation still looks like markdown; fundamental cheapness is not an entry signal."
+        : state === "basing"
+          ? "Legacy price evidence is basing, but the Stage-1 score has not yet refreshed."
+          : state === "extended"
+            ? "Legacy recovery evidence is strong but extended; wait for the persisted Stage-1 refresh before treating it as an entry."
+            : "Legacy trend/momentum evidence is constructive, but the dedicated Stage-1 score has not yet refreshed.",
     warnings: [
-      "Weekly structural bias, liquidity sweep, ChoC, first higher low, MA20/50 slope/retest, divergence and volume-footprint checks are not yet stored as one Opportunity timing record.",
-      "The accumulation-base low is not yet persisted, so the Radar does not invent an invalidation price.",
+      "This is a rollout fallback. Re-run technical scoring to populate the dedicated Stage-1 structure and its base-low invalidation.",
     ],
     calcVersion: FUNDAMENTAL_TIMING_CALC_VERSION,
   };
@@ -177,31 +214,57 @@ function valuationGate(
   const revenueGrowth = raw(institutional, "revenueGrowth");
   const fcfMargin = raw(institutional, "fcfMargin");
   const residualIncome = raw(institutional, "residualIncome");
+  const historicalPeriods = raw(institutional, "historicalValuationPeriods");
+  const selfEvEbitda = raw(institutional, "selfEvEbitdaPercentile");
+  const selfFcfYield = raw(institutional, "selfFcfYieldPercentile");
+  const selfEvRevenue = raw(institutional, "selfEvRevenuePercentile");
+  const selfPtBv = raw(institutional, "selfPtBvPercentile");
+  const evRevenue = raw(institutional, "evRevenue");
+  const ptbv = raw(institutional, "priceToTangibleBook");
+  const rotce = raw(institutional, "rotce");
+  const normalizedEvEbitda = raw(institutional, "normalizedEvEbitda");
+  const normalizedFcfYield = raw(institutional, "normalizedFcfYield");
   const industry = candidate.industryCode ?? "";
   const positives: string[] = [];
-  const warnings: string[] = [
-    "Historical self-multiple percentiles are not yet stored, so the expert dual-lens valuation test remains incomplete rather than being guessed.",
-  ];
+  const warnings: string[] = [];
   const parts: Array<{ value: number | null; weight: number }> = [];
 
-  if (peerValuation !== null) {
-    parts.push({ value: peerValuation, weight: 35 });
-    if (peerValuation >= 62) positives.push("Current valuation is attractive relative to tracked peers.");
+  if (historicalPeriods === null || historicalPeriods < 5) {
+    warnings.push(
+      `Own-history valuation needs at least five observed fiscal-year price/statement pairs; ${historicalPeriods === null ? "coverage is unavailable" : `${historicalPeriods.toFixed(0)} are currently usable`}.`,
+    );
   }
 
   if (industry === "SEC_FIN") {
-    parts.push({ value: scaleHigher(residualIncome, -0.05, 0.12), weight: 30 });
-    warnings.push(
-      "Financials still need P/TBV versus ROTCE plus regulatory-capital and asset-quality inputs before sector valuation can fully pass.",
-    );
+    parts.push({ value: peerValuation, weight: 20 });
+    parts.push({ value: selfPtBv, weight: 25 });
+    parts.push({ value: scaleLower(ptbv, 3, 0.8), weight: 20 });
+    parts.push({ value: scaleHigher(rotce, 0.06, 0.2), weight: 30 });
+    parts.push({ value: scaleHigher(residualIncome, -0.05, 0.12), weight: 5 });
     const score = weighted(parts);
+    const hasCore = ptbv !== null && rotce !== null;
+    const hasDualLens = selfPtBv !== null && peerValuation !== null;
+    if (ptbv !== null && ptbv <= 1.2) positives.push("P/TBV is near or below 1.2×.");
+    if (rotce !== null && rotce >= 0.12) positives.push("ROTCE is at least 12%, supporting the tangible-book valuation.");
+    if (selfPtBv !== null && selfPtBv >= 70) positives.push("P/TBV is cheap versus the company's own observed history.");
+    if (!hasCore) warnings.push("Financial valuation requires positive tangible common equity and a usable ROTCE calculation.");
+    if (!hasDualLens) warnings.push("Financials remain provisional until both peer valuation and own-history P/TBV are observed.");
+    warnings.push("Regulatory capital and asset-quality data remain a separate diligence requirement even when valuation passes.");
+    const state: FundamentalGateState =
+      score === null
+        ? "missing"
+        : hasCore && hasDualLens && score >= 62
+          ? "pass"
+          : hasCore && score < 35
+            ? "fail"
+            : "watch";
     return gate(
       "valuation",
-      "Sector-appropriate valuation",
-      score === null ? "missing" : score < 35 ? "fail" : "watch",
+      "P/TBV versus ROTCE valuation",
+      state,
       score,
       parts,
-      "Financial valuation remains provisional: peer pricing and residual-income evidence are visible, but the P/TBV–ROTCE lens is not complete.",
+      "Financials are valued on tangible book and ROTCE, cross-checked against peers and the company's own observed P/TBV history.",
       positives,
       warnings,
     );
@@ -210,39 +273,105 @@ function valuationGate(
   if (industry === "SEC_TECH") {
     const ruleOf40 =
       revenueGrowth !== null && fcfMargin !== null ? revenueGrowth + fcfMargin : null;
-    parts.push({ value: scaleHigher(ruleOf40, 0, 0.4), weight: 35 });
-    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 20 });
-    parts.push({ value: scaleHigher(expectationGap, -0.08, 0.1), weight: 10 });
+    const evRevenueScore =
+      ruleOf40 === null
+        ? null
+        : scaleLower(evRevenue, ruleOf40 >= 0.4 ? 12 : 8, ruleOf40 >= 0.4 ? 4 : 2);
+    parts.push({ value: peerValuation, weight: 15 });
+    parts.push({ value: scaleHigher(ruleOf40, 0, 0.4), weight: 25 });
+    parts.push({ value: evRevenueScore, weight: 20 });
+    parts.push({ value: selfEvRevenue, weight: 20 });
+    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 15 });
+    parts.push({ value: scaleHigher(expectationGap, -0.08, 0.1), weight: 5 });
     if (ruleOf40 !== null && ruleOf40 >= 0.4) positives.push("Revenue growth plus FCF margin meets the Rule-of-40 threshold.");
-    warnings.push("EV/revenue is not yet stored as a dedicated peer and historical series for software valuation.");
-  } else if (CYCLICAL_INDUSTRIES.has(industry)) {
-    parts.push({ value: scaleHigher(fcfYield, 0, 0.1), weight: 35 });
-    parts.push({ value: scaleHigher(expectationGap, -0.1, 0.1), weight: 20 });
-    warnings.push(
-      "Energy/materials still need a full-cycle normalized earnings series; current low peak-cycle multiples are not treated as proof of cheapness.",
+    if (selfEvRevenue !== null && selfEvRevenue >= 70) positives.push("EV/revenue is cheap versus the company's own observed history.");
+    if (evRevenue === null) warnings.push("Current EV/revenue cannot be derived from the stored market value and latest annual revenue.");
+    const score = weighted(parts);
+    const hasDualLens = peerValuation !== null && selfEvRevenue !== null;
+    const state: FundamentalGateState =
+      score === null
+        ? "missing"
+        : score >= 62 && hasDualLens && ruleOf40 !== null && evRevenue !== null
+          ? "pass"
+          : score < 35 && ruleOf40 !== null
+            ? "fail"
+            : "watch";
+    return gate(
+      "valuation",
+      "Rule-of-40 linked software valuation",
+      state,
+      score,
+      parts,
+      "Software valuation links EV/revenue to growth plus FCF margin, then requires both peer and own-history confirmation.",
+      positives,
+      warnings,
     );
-  } else {
-    parts.push({ value: scaleLower(evEbitda, 18, 7), weight: 35 });
-    parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 20 });
-    parts.push({ value: scaleHigher(expectationGap, -0.08, 0.1), weight: 10 });
-    if (evEbitda !== null && evEbitda <= 8) positives.push("EV/EBITDA is below 8×.");
-    if (fcfYield !== null && fcfYield >= 0.06) positives.push("FCF yield provides cash-backed valuation support.");
   }
 
+  if (CYCLICAL_INDUSTRIES.has(industry)) {
+    parts.push({ value: peerValuation, weight: 20 });
+    parts.push({ value: scaleLower(normalizedEvEbitda, 14, 6), weight: 35 });
+    parts.push({ value: scaleHigher(normalizedFcfYield, 0.01, 0.09), weight: 25 });
+    parts.push({ value: selfFcfYield, weight: 15 });
+    parts.push({ value: scaleHigher(expectationGap, -0.1, 0.1), weight: 5 });
+    if (normalizedEvEbitda !== null && normalizedEvEbitda <= 8) positives.push("Mid-cycle normalized EV/EBITDA is at or below 8×.");
+    if (normalizedFcfYield !== null && normalizedFcfYield >= 0.06) positives.push("Normalized FCF yield provides mid-cycle cash support.");
+    if (normalizedEvEbitda === null || normalizedFcfYield === null) {
+      warnings.push("Energy/materials require at least five usable annual margins before peak-cycle earnings can be normalized.");
+    }
+    const score = weighted(parts);
+    const hasNormalized = normalizedEvEbitda !== null && normalizedFcfYield !== null;
+    const hasSecondLens = peerValuation !== null || selfFcfYield !== null;
+    const state: FundamentalGateState =
+      score === null
+        ? "missing"
+        : hasNormalized && hasSecondLens && score >= 62
+          ? "pass"
+          : hasNormalized && score < 35
+            ? "fail"
+            : "watch";
+    return gate(
+      "valuation",
+      "Mid-cycle normalized valuation",
+      state,
+      score,
+      parts,
+      "Cyclicals are valued on median multi-year operating economics so a low multiple at peak earnings cannot masquerade as cheapness.",
+      positives,
+      warnings,
+    );
+  }
+
+  parts.push({ value: peerValuation, weight: 25 });
+  parts.push({ value: scaleLower(evEbitda, 18, 7), weight: 25 });
+  parts.push({ value: scaleHigher(fcfYield, 0.01, 0.09), weight: 15 });
+  parts.push({ value: selfEvEbitda, weight: 20 });
+  parts.push({ value: selfFcfYield, weight: 10 });
+  parts.push({ value: scaleHigher(expectationGap, -0.08, 0.1), weight: 5 });
+  if (peerValuation !== null && peerValuation >= 62) positives.push("Current valuation is attractive relative to tracked peers.");
+  if (evEbitda !== null && evEbitda <= 8) positives.push("EV/EBITDA is below 8×.");
+  if (fcfYield !== null && fcfYield >= 0.06) positives.push("FCF yield provides cash-backed valuation support.");
+  if ((selfEvEbitda ?? 0) >= 70 || (selfFcfYield ?? 0) >= 70) {
+    positives.push("At least one cash-backed multiple is cheap versus the company's own observed history.");
+  }
   const score = weighted(parts);
-  const state =
-    score === null ? "missing" : score >= 62 && parts.filter((part) => part.value !== null).length >= 2
-      ? "pass"
-      : score < 35
-        ? "fail"
-        : "watch";
+  const hasSelfLens = selfEvEbitda !== null || selfFcfYield !== null;
+  const hasPeerLens = peerValuation !== null;
+  const state: FundamentalGateState =
+    score === null
+      ? "missing"
+      : score >= 62 && hasSelfLens && hasPeerLens
+        ? "pass"
+        : score < 35 && (evEbitda !== null || fcfYield !== null)
+          ? "fail"
+          : "watch";
   return gate(
     "valuation",
-    "Sector-appropriate valuation",
+    "Dual-lens cash-backed valuation",
     state,
     score,
     parts,
-    "Uses the best currently observed sector-relevant valuation evidence while keeping missing historical-self valuation explicit.",
+    "Generic operating companies must look attractive versus both current peers and their own observed valuation history.",
     positives,
     warnings,
   );
@@ -272,6 +401,8 @@ function valueTrapGate(
   const shareCountCagr = raw(institutional, "shareCountCagr");
   const netDebtEbitda = raw(institutional, "netDebtEbitda");
   const interestCoverage = raw(institutional, "interestCoverage");
+  const rotce = raw(institutional, "rotce");
+  const isFinancial = candidate.industryCode === "SEC_FIN";
   const genericLeverage = !GENERIC_LEVERAGE_EXCLUSIONS.has(candidate.industryCode ?? "");
 
   const checks: TrapCheck[] = [
@@ -283,15 +414,26 @@ function valueTrapGate(
       (value) => value < -0.08,
       "Multi-year revenue should be stable or growing.",
     ),
-    fcfCheck(fcf, positiveFcfYears),
-    thresholdCheck(
-      "ROIC versus WACC",
-      spread,
-      (value) => value >= 0.02,
-      (value) => value >= 0,
-      (value) => value < -0.03,
-      "Economic value creation requires ROIC to exceed the modelled cost of capital.",
-    ),
+    isFinancial
+      ? missingCheck("Free cash flow", "Generic FCF is intentionally suppressed for financial companies.")
+      : fcfCheck(fcf, positiveFcfYears),
+    isFinancial
+      ? thresholdCheck(
+          "ROTCE",
+          rotce,
+          (value) => value >= 0.1,
+          (value) => value >= 0.06,
+          (value) => value < 0,
+          "Financial value creation is tested through return on tangible common equity.",
+        )
+      : thresholdCheck(
+          "ROIC versus WACC",
+          spread,
+          (value) => value >= 0.02,
+          (value) => value >= 0,
+          (value) => value < -0.03,
+          "Economic value creation requires ROIC to exceed the modelled cost of capital.",
+        ),
     thresholdCheck(
       "Share-count trend",
       shareCountCagr,
@@ -329,17 +471,21 @@ function valueTrapGate(
   const score = available.length
     ? average(available.map((check) => check.state === "pass" ? 90 : check.state === "watch" ? 55 : 15))
     : null;
+  const requiredPasses = isFinancial ? Math.min(3, available.length) : Math.min(4, available.length);
   const state: FundamentalGateState = !available.length
     ? "missing"
     : severe.length || failures.length >= 2
       ? "fail"
-      : passes.length >= Math.min(4, available.length) && failures.length === 0
+      : passes.length >= requiredPasses && failures.length === 0
         ? "pass"
         : "watch";
   const positives = checks.filter((check) => check.state === "pass").map((check) => check.detail);
   const warnings = checks
     .filter((check) => check.state === "watch" || check.state === "fail")
     .map((check) => `${check.label}: ${check.detail}`);
+  if (isFinancial) {
+    warnings.push("Regulatory capital, funding liquidity and credit/asset quality are not yet automated value-trap checks.");
+  }
 
   return gate(
     "value_trap",
@@ -362,37 +508,54 @@ function qualityGate(
   const incrementalRoic = raw(institutional, "incrementalRoic");
   const marginChange = raw(institutional, "grossMarginChange");
   const positiveFcfYears = raw(institutional, "positiveFcfYears");
-  const parts = [
-    { value: peerQuality, weight: 25 },
-    { value: scaleHigher(spread, -0.03, 0.1), weight: 30 },
-    { value: scaleHigher(incrementalRoic, -0.05, 0.2), weight: 20 },
-    { value: scaleHigher(marginChange, -0.03, 0.03), weight: 15 },
-    { value: scaleHigher(positiveFcfYears, 0.35, 1), weight: 10 },
-  ];
+  const rotce = raw(institutional, "rotce");
+  const residualIncome = raw(institutional, "residualIncome");
+  const isFinancial = candidate.industryCode === "SEC_FIN";
+  const parts = isFinancial
+    ? [
+        { value: peerQuality, weight: 35 },
+        { value: scaleHigher(rotce, 0.04, 0.2), weight: 45 },
+        { value: scaleHigher(residualIncome, -0.05, 0.12), weight: 20 },
+      ]
+    : [
+        { value: peerQuality, weight: 25 },
+        { value: scaleHigher(spread, -0.03, 0.1), weight: 30 },
+        { value: scaleHigher(incrementalRoic, -0.05, 0.2), weight: 20 },
+        { value: scaleHigher(marginChange, -0.03, 0.03), weight: 15 },
+        { value: scaleHigher(positiveFcfYears, 0.35, 1), weight: 10 },
+      ];
   const score = weighted(parts);
   const available = parts.filter((part) => part.value !== null).length;
   const state: FundamentalGateState = score === null
     ? "missing"
-    : score >= 62 && available >= 3
+    : score >= 62 && available >= (isFinancial ? 2 : 3)
       ? "pass"
-      : score < 35 && available >= 3
+      : score < 35 && available >= (isFinancial ? 2 : 3)
         ? "fail"
         : "watch";
   const positives: string[] = [];
-  if (spread !== null && spread > 0) positives.push("ROIC exceeds the modelled WACC.");
-  if (marginChange !== null && marginChange >= 0) positives.push("Gross margin is stable or improving, supporting pricing-power resilience.");
+  if (isFinancial) {
+    if (rotce !== null && rotce >= 0.12) positives.push("ROTCE is at least 12%.");
+  } else {
+    if (spread !== null && spread > 0) positives.push("ROIC exceeds the modelled WACC.");
+    if (marginChange !== null && marginChange >= 0) positives.push("Gross margin is stable or improving, supporting pricing-power resilience.");
+  }
   const warnings = [
-    "The Radar can observe returns and margin resilience, but the exact moat (switching costs, network effects, scale, regulation or pricing power) still requires analyst identification.",
+    isFinancial
+      ? "Financial quality is based on ROTCE, residual income and peer quality; regulatory capital and asset quality still require separate diligence."
+      : "The Radar can observe returns and margin resilience, but the exact moat (switching costs, network effects, scale, regulation or pricing power) still requires analyst identification.",
   ];
-  if (marginChange !== null && marginChange < -0.02) warnings.push("Gross margin compression weakens the pricing-power case.");
+  if (!isFinancial && marginChange !== null && marginChange < -0.02) warnings.push("Gross margin compression weakens the pricing-power case.");
 
   return gate(
     "quality",
-    "Economic quality & moat proxy",
+    isFinancial ? "Financial economic quality" : "Economic quality & moat proxy",
     state,
     score,
     parts,
-    "Economic value creation, incremental returns, cash consistency and margin resilience are used as moat/pricing-power evidence rather than assuming a moat exists.",
+    isFinancial
+      ? "Financial quality avoids generic industrial ROIC/FCF proxies and instead tests returns on tangible common equity and residual value creation."
+      : "Economic value creation, incremental returns, cash consistency and margin resilience are used as moat/pricing-power evidence rather than assuming a moat exists.",
     positives,
     warnings,
   );
@@ -443,6 +606,55 @@ function catalystGate(
     [],
     ["Valuation alone is not promoted to a qualified opportunity without a concrete catalyst."],
   );
+}
+
+function stage1Structure(candidate: OpportunityCandidate): Stage1Structure {
+  const record = candidate as OpportunityCandidate & {
+    technicalStructure?: {
+      state?: unknown;
+      score?: unknown;
+      invalidation?: unknown;
+      baseLow?: unknown;
+      baseLowDate?: unknown;
+      liquiditySweep?: unknown;
+      chochConfirmed?: unknown;
+      firstHigherLow?: unknown;
+      ma50Reclaimed?: unknown;
+      ma50Retest?: unknown;
+    };
+  };
+  const structure = record.technicalStructure;
+  if (!structure) {
+    return {
+      state: null,
+      score: null,
+      invalidation: null,
+      baseLow: null,
+      baseLowDate: null,
+      liquiditySweep: null,
+      chochConfirmed: null,
+      firstHigherLow: null,
+      ma50Reclaimed: null,
+      ma50Retest: null,
+    };
+  }
+  const allowed = new Set<TechnicalTimingState>(["confirmed", "basing", "markdown", "insufficient"]);
+  const state =
+    typeof structure.state === "string" && allowed.has(structure.state as TechnicalTimingState)
+      ? (structure.state as TechnicalTimingState)
+      : null;
+  return {
+    state,
+    score: finite(structure.score),
+    invalidation: finite(structure.invalidation),
+    baseLow: finite(structure.baseLow),
+    baseLowDate: typeof structure.baseLowDate === "string" ? structure.baseLowDate : null,
+    liquiditySweep: booleanOrNull(structure.liquiditySweep),
+    chochConfirmed: booleanOrNull(structure.chochConfirmed),
+    firstHigherLow: booleanOrNull(structure.firstHigherLow),
+    ma50Reclaimed: booleanOrNull(structure.ma50Reclaimed),
+    ma50Retest: booleanOrNull(structure.ma50Retest),
+  };
 }
 
 function gate(
@@ -531,6 +743,10 @@ function scaleHigher(value: number | null, bad: number, good: number): number | 
 function scaleLower(value: number | null, bad: number, good: number): number | null {
   if (value === null || good === bad) return null;
   return clamp(((bad - value) / (bad - good)) * 100);
+}
+
+function booleanOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
 }
 
 function finite(value: unknown): number | null {
