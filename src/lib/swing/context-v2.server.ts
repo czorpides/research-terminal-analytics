@@ -18,6 +18,11 @@ export interface SwingV2NewsItem {
   url: string | null;
 }
 
+export interface SwingV2PreciousMetalMacroContext extends SwingV2MacroContext {
+  /** Stable point-in-time condition tags for outcome/pattern calibration. */
+  eventConditions: string[];
+}
+
 export function buildEquityCatalystContext(
   events: SwingV2EarningsEvent[],
   expectations: SwingExpectationSignal | null,
@@ -115,7 +120,7 @@ export function buildEquityCatalystContext(
   };
 }
 
-export async function loadPreciousMetalMacroContexts(): Promise<Record<"XAUUSD" | "XAGUSD", SwingV2MacroContext>> {
+export async function loadPreciousMetalMacroContexts(): Promise<Record<"XAUUSD" | "XAGUSD", SwingV2PreciousMetalMacroContext>> {
   try {
     const series = await loadUsEngineSeries("market");
     const realYield = series.find((item) => item.concept === "real_yield_10y") ?? null;
@@ -127,12 +132,13 @@ export async function loadPreciousMetalMacroContexts(): Promise<Record<"XAUUSD" 
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const unavailable: SwingV2MacroContext = {
+    const unavailable: SwingV2PreciousMetalMacroContext = {
       score: 50,
       label: "Precious-metals macro context unavailable",
       available: false,
       reasons: [],
       risks: [`Macro context could not be loaded: ${message}`],
+      eventConditions: [],
     };
     return { XAUUSD: unavailable, XAGUSD: unavailable };
   }
@@ -143,29 +149,36 @@ function preciousMetalContext(
   realYield: MacroIndicatorSeries | null,
   broadDollar: MacroIndicatorSeries | null,
   vix: MacroIndicatorSeries | null,
-): SwingV2MacroContext {
+): SwingV2PreciousMetalMacroContext {
   const realYieldChange = pointChange(realYield, 20);
   const dollarChangePct = percentChange(broadDollar, 20);
   const vixChangePct = percentChange(vix, 10);
   let score = 50;
   const reasons: string[] = [];
   const risks: string[] = [];
+  const eventConditions: string[] = [];
   let evidence = 0;
 
   if (realYieldChange !== null) {
     evidence += 1;
     if (realYieldChange <= -0.2) {
       score += 22;
+      eventConditions.push("real_yield:falling_fast");
       reasons.push(`US 10-year real yields have fallen ${Math.abs(realYieldChange).toFixed(2)} percentage points over roughly 20 observations, a meaningful precious-metals tailwind.`);
     } else if (realYieldChange <= -0.07) {
       score += 10;
+      eventConditions.push("real_yield:falling");
       reasons.push("US real yields are easing, which is supportive for precious metals.");
     } else if (realYieldChange >= 0.2) {
       score -= 22;
+      eventConditions.push("real_yield:rising_fast");
       risks.push(`US 10-year real yields have risen ${realYieldChange.toFixed(2)} percentage points, a material headwind for precious metals.`);
     } else if (realYieldChange >= 0.07) {
       score -= 10;
+      eventConditions.push("real_yield:rising");
       risks.push("US real yields are rising, which works against the precious-metals setup.");
+    } else {
+      eventConditions.push("real_yield:stable");
     }
   }
 
@@ -173,21 +186,32 @@ function preciousMetalContext(
     evidence += 1;
     if (dollarChangePct <= -2) {
       score += 20;
+      eventConditions.push("broad_dollar:weakening_fast");
       reasons.push(`The broad US dollar index has weakened about ${Math.abs(dollarChangePct).toFixed(1)}% over roughly 20 observations.`);
     } else if (dollarChangePct <= -0.7) {
       score += 9;
+      eventConditions.push("broad_dollar:weakening");
       reasons.push("The broad US dollar is softening, which supports dollar-priced metals.");
     } else if (dollarChangePct >= 2) {
       score -= 20;
+      eventConditions.push("broad_dollar:strengthening_fast");
       risks.push(`The broad US dollar has strengthened about ${dollarChangePct.toFixed(1)}%, a headwind for dollar-priced metals.`);
     } else if (dollarChangePct >= 0.7) {
       score -= 9;
+      eventConditions.push("broad_dollar:strengthening");
       risks.push("The broad US dollar is strengthening against the metals setup.");
+    } else {
+      eventConditions.push("broad_dollar:stable");
     }
   }
 
   if (vixChangePct !== null) {
     evidence += 1;
+    if (vixChangePct >= 25) eventConditions.push("equity_volatility:spike");
+    else if (vixChangePct >= 15) eventConditions.push("equity_volatility:rising_fast");
+    else if (vixChangePct <= -15) eventConditions.push("equity_volatility:falling_fast");
+    else eventConditions.push("equity_volatility:stable");
+
     if (metal === "gold" && vixChangePct >= 15) {
       score += 7;
       reasons.push("Equity volatility has risen sharply, adding a modest safe-haven tailwind for gold.");
@@ -208,6 +232,7 @@ function preciousMetalContext(
     available: evidence >= 2,
     reasons,
     risks,
+    eventConditions: unique(eventConditions),
   };
 }
 
