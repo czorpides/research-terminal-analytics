@@ -44,7 +44,18 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Run Opportunity Radar and fundamental model tests
-        run: npm run test:opportunity
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:opportunity 2>&1 | tee opportunity-test-output.txt
+
+      - name: Upload Opportunity test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opportunity-test-diagnostics
+          path: opportunity-test-output.txt
+          if-no-files-found: error
 
   analytics:
     name: Python analytics tests
