@@ -13,6 +13,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import type { FundamentalGateState } from "@/lib/opportunity/fundamental-timing";
 import type { InstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import type { InstitutionalTier } from "@/lib/opportunity/institutional-model";
 import {
@@ -67,8 +68,13 @@ export function OpportunityRadarDefinitiveView({
 
   const opportunityTypes = useMemo(
     () =>
-      [...new Set(rows.map((row) => row.discovery.bestRoute?.label).filter((value): value is string => Boolean(value)))]
-        .sort(),
+      [
+        ...new Set(
+          rows
+            .map((row) => row.discovery.bestRoute?.label)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ].sort(),
     [rows],
   );
 
@@ -84,7 +90,9 @@ export function OpportunityRadarDefinitiveView({
     }
     if (needle) return true;
     if (!matchesMarket(row.candidate.countryCode, marketFilter)) return false;
-    if (opportunityFilter !== "all" && row.discovery.bestRoute?.label !== opportunityFilter) return false;
+    if (opportunityFilter !== "all" && row.discovery.bestRoute?.label !== opportunityFilter) {
+      return false;
+    }
     if (tierFilter === "all") return true;
     if (tierFilter === "researchable") {
       return ["priority", "qualified", "watch"].includes(row.tier);
@@ -103,11 +111,14 @@ export function OpportunityRadarDefinitiveView({
             <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
               <Sparkles className="h-4 w-4" /> Definitive research queue
             </div>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight">Find the companies worth opening.</h2>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+              Separate what is undervalued from when it is buyable.
+            </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              This page stays deliberately simple. It tells you why a company deserves attention, what the
-              main unresolved question is and how strong the current evidence looks. Detailed valuation,
-              financial statements, forecasts and model evidence live on the company research screen.
+              Fundamentals now decide whether a company deserves research: sector-aware valuation,
+              value-trap safety, economic quality and a concrete catalyst. Technical recovery is a
+              separate timing gate, so a strong chart cannot rescue weak economics and a good company
+              can stay on Watch while the selloff is still forming a base.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 xl:min-w-[560px]">
@@ -151,7 +162,9 @@ export function OpportunityRadarDefinitiveView({
           >
             <option value="all">All opportunity types</option>
             {opportunityTypes.map((label) => (
-              <option key={label} value={label}>{label}</option>
+              <option key={label} value={label}>
+                {label}
+              </option>
             ))}
           </select>
           <div className="grid grid-cols-4 gap-1 rounded-md border border-border/70 bg-background/40 p-1">
@@ -174,13 +187,17 @@ export function OpportunityRadarDefinitiveView({
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>{filtered.length.toLocaleString()} companies match the current view.</span>
-          <span>{workspace.universe.loaded.toLocaleString()} companies assessed across the managed universe.</span>
+          <span>
+            {workspace.universe.loaded.toLocaleString()} companies assessed across the managed universe.
+          </span>
         </div>
       </section>
 
       {visible.length ? (
         <section className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-          {visible.map((row) => <OpportunityCard key={row.candidate.assetId} row={row} />)}
+          {visible.map((row) => (
+            <OpportunityCard key={row.candidate.assetId} row={row} />
+          ))}
         </section>
       ) : (
         <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -190,7 +207,8 @@ export function OpportunityRadarDefinitiveView({
 
       {filtered.length > visible.length && (
         <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-center text-xs text-muted-foreground">
-          Showing the first {visible.length} of {filtered.length.toLocaleString()} matches. Narrow the filters or search a company directly.
+          Showing the first {visible.length} of {filtered.length.toLocaleString()} matches. Narrow the
+          filters or search a company directly.
         </div>
       )}
     </div>
@@ -200,21 +218,32 @@ export function OpportunityRadarDefinitiveView({
 function OpportunityCard({ row }: { row: PresentedOpportunity }) {
   const candidate = row.candidate;
   const route = row.discovery.bestRoute;
-  const risk = row.hardRisks[0] ?? row.warnings[0] ?? candidate.narrative.watch[0] ?? "No major model warning is currently recorded.";
+  const risk =
+    row.hardRisks[0] ??
+    row.warnings[0] ??
+    candidate.narrative.watch[0] ??
+    "No major model warning is currently recorded.";
   const thesis = route?.thesis ?? candidate.narrative.summary;
-  const nextProof = route?.nextProof ?? candidate.narrative.watch[0] ?? "Review the latest filing and management guidance.";
+  const nextProof =
+    route?.nextProof ??
+    candidate.narrative.watch[0] ??
+    "Review the latest filing and management guidance.";
+  const valuationGate = row.fundamental.gates.find((gate) => gate.key === "valuation");
+  const trapGate = row.fundamental.gates.find((gate) => gate.key === "value_trap");
 
   return (
-    <article className={cn(
-      "group flex min-h-[330px] flex-col rounded-2xl border bg-card/45 p-5 transition-all hover:-translate-y-0.5 hover:bg-card/70 hover:shadow-lg",
-      row.tier === "priority"
-        ? "border-[var(--positive)]/45"
-        : row.tier === "qualified"
-          ? "border-primary/40"
-          : row.tier === "watch"
-            ? "border-[var(--warning)]/35"
-            : "border-border/70",
-    )}>
+    <article
+      className={cn(
+        "group flex min-h-[350px] flex-col rounded-2xl border bg-card/45 p-5 transition-all hover:-translate-y-0.5 hover:bg-card/70 hover:shadow-lg",
+        row.tier === "priority"
+          ? "border-[var(--positive)]/45"
+          : row.tier === "qualified"
+            ? "border-primary/40"
+            : row.tier === "watch"
+              ? "border-[var(--warning)]/35"
+              : "border-border/70",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
@@ -230,32 +259,48 @@ function OpportunityCard({ row }: { row: PresentedOpportunity }) {
 
       <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/35 p-3">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Opportunity</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            Opportunity
+          </div>
           <div className="mt-1 text-sm font-semibold">{route?.label ?? "Evidence still forming"}</div>
         </div>
         <div className="text-right">
           <div className="font-mono text-2xl font-semibold tabular-nums">{row.score.toFixed(0)}</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Radar score</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Fundamental score
+          </div>
         </div>
       </div>
 
       <p className="mt-4 text-sm leading-6 text-foreground/90">{thesis}</p>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <EvidenceChip label="Valuation" value={candidate.evidence.valuationCompression?.value} />
-        <EvidenceChip label="Quality" value={candidate.evidence.fundamentalResilience?.value} />
-        <EvidenceChip label="Dislocation" value={candidate.evidence.priceDislocation?.value} />
+        <FrameworkChip label="Valuation" state={valuationGate?.state ?? "missing"} />
+        <FrameworkChip label="Trap safety" state={trapGate?.state ?? "missing"} />
+        <TimingChip state={row.timing.state} />
       </div>
 
       <div className="mt-4 space-y-2 text-xs leading-5 text-muted-foreground">
-        <div><span className="font-semibold text-foreground">What needs to happen: </span>{nextProof}</div>
-        <div><span className="font-semibold text-foreground">Main risk: </span>{risk}</div>
+        <div>
+          <span className="font-semibold text-foreground">Timing: </span>
+          {row.timing.detail}
+        </div>
+        <div>
+          <span className="font-semibold text-foreground">What needs to happen: </span>
+          {nextProof}
+        </div>
+        <div>
+          <span className="font-semibold text-foreground">Main risk: </span>
+          {risk}
+        </div>
       </div>
 
       <div className="mt-auto flex items-end justify-between gap-3 border-t border-border/50 pt-4">
         <div className="text-xs text-muted-foreground">
-          {candidate.price === null ? "Price unavailable" : `${formatPrice(candidate.price, candidate.currency)} · ${formatPct(candidate.drawdownPct)} from 52w context`}
-          <div className="mt-0.5">Evidence coverage {row.coverage.toFixed(0)}%</div>
+          {candidate.price === null
+            ? "Price unavailable"
+            : `${formatPrice(candidate.price, candidate.currency)} · ${formatPct(candidate.drawdownPct)} from 52w context`}
+          <div className="mt-0.5">Fundamental evidence coverage {row.coverage.toFixed(0)}%</div>
         </div>
         <Link
           to="/research/$assetId"
@@ -269,26 +314,60 @@ function OpportunityCard({ row }: { row: PresentedOpportunity }) {
   );
 }
 
-function EvidenceChip({ label, value }: { label: string; value: number | null | undefined }) {
-  const state = evidenceState(value);
+function FrameworkChip({ label, state }: { label: string; state: FundamentalGateState }) {
+  const display =
+    state === "pass" ? "Pass" : state === "watch" ? "Watch" : state === "fail" ? "Fail" : "Missing";
   return (
     <div className="rounded-lg border border-border/55 bg-muted/10 p-2.5">
       <div className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className={cn(
-        "mt-1 text-xs font-semibold",
-        state === "Strong" ? "text-[var(--positive)]" : state === "Weak" ? "text-destructive" : "text-foreground",
-      )}>
-        {state}
+      <div
+        className={cn(
+          "mt-1 text-xs font-semibold",
+          state === "pass"
+            ? "text-[var(--positive)]"
+            : state === "fail"
+              ? "text-destructive"
+              : state === "watch"
+                ? "text-[var(--warning)]"
+                : "text-muted-foreground",
+        )}
+      >
+        {display}
       </div>
     </div>
   );
 }
 
-function evidenceState(value: number | null | undefined): "Strong" | "Mixed" | "Weak" | "Missing" {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "Missing";
-  if (value >= 62) return "Strong";
-  if (value < 38) return "Weak";
-  return "Mixed";
+function TimingChip({ state }: { state: PresentedOpportunity["timing"]["state"] }) {
+  const display =
+    state === "confirmed"
+      ? "Confirmed"
+      : state === "basing"
+        ? "Basing"
+        : state === "markdown"
+          ? "Markdown"
+          : state === "extended"
+            ? "Extended"
+            : "Missing";
+  return (
+    <div className="rounded-lg border border-border/55 bg-muted/10 p-2.5">
+      <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Timing</div>
+      <div
+        className={cn(
+          "mt-1 text-xs font-semibold",
+          state === "confirmed"
+            ? "text-[var(--positive)]"
+            : state === "markdown"
+              ? "text-destructive"
+              : state === "basing" || state === "extended"
+                ? "text-[var(--warning)]"
+                : "text-muted-foreground",
+        )}
+      >
+        {display}
+      </div>
+    </div>
+  );
 }
 
 function QueueCount({
@@ -300,16 +379,33 @@ function QueueCount({
   value: number;
   tone: "positive" | "warning" | "negative" | "muted";
 }) {
-  const Icon = label === "Priority" ? Telescope : label === "Qualified" ? Target : label === "Watch" ? Eye : label === "Avoid" ? ShieldAlert : CircleDollarSign;
+  const Icon =
+    label === "Priority"
+      ? Telescope
+      : label === "Qualified"
+        ? Target
+        : label === "Watch"
+          ? Eye
+          : label === "Avoid"
+            ? ShieldAlert
+            : CircleDollarSign;
   return (
     <div className="rounded-xl border border-border/60 bg-background/35 p-3">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className={cn(
-        "mt-1 font-mono text-xl font-semibold tabular-nums",
-        tone === "positive" ? "text-[var(--positive)]" : tone === "warning" ? "text-[var(--warning)]" : tone === "negative" ? "text-destructive" : "text-foreground",
-      )}>
+      <div
+        className={cn(
+          "mt-1 font-mono text-xl font-semibold tabular-nums",
+          tone === "positive"
+            ? "text-[var(--positive)]"
+            : tone === "warning"
+              ? "text-[var(--warning)]"
+              : tone === "negative"
+                ? "text-destructive"
+                : "text-foreground",
+        )}
+      >
         {value}
       </div>
     </div>
@@ -317,7 +413,16 @@ function QueueCount({
 }
 
 function TierBadge({ tier }: { tier: InstitutionalTier }) {
-  const label = tier === "priority" ? "Priority" : tier === "qualified" ? "Qualified" : tier === "watch" ? "Watch" : tier === "avoid" ? "Avoid" : "Insufficient";
+  const label =
+    tier === "priority"
+      ? "Priority"
+      : tier === "qualified"
+        ? "Qualified"
+        : tier === "watch"
+          ? "Watch"
+          : tier === "avoid"
+            ? "Avoid"
+            : "Insufficient";
   return (
     <Badge
       variant="outline"
