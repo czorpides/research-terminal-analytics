@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test:opportunity": "for p in 'snapshot resolver' 'replay rejects context' 'technical-only fallback' 'reconstructed signals' 'state-transition emission' 'historical guard output'; do echo \"::notice title=Running reconstruction case::$p\"; node --experimental-strip-types --test --test-name-pattern=\"$p\" src/lib/swing/reconstruction-v21.test.ts || { echo \"::error file=src/lib/swing/reconstruction-v21.test.ts,title=Failed reconstruction case::$p\"; exit 1; }; done",
+    "test:opportunity": "node --test src/lib/opportunity/*.test.ts src/lib/swing/*.test.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
