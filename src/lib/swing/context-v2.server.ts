@@ -120,7 +120,7 @@ export function buildEquityCatalystContext(
   };
 }
 
-export async function loadPreciousMetalMacroContexts(): Promise<Record<"XAUUSD" | "XAGUSD", SwingV2PreciousMetalMacroContext>> {
+export async function loadPreciousMetalMacroContexts(): Promise<Record<string, SwingV2PreciousMetalMacroContext>> {
   try {
     const series = await loadUsEngineSeries("market");
     const realYield = series.find((item) => item.concept === "real_yield_10y") ?? null;
