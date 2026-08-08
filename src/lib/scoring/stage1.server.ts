@@ -1,6 +1,6 @@
 import type { Bar } from "./series.ts";
 
-export const STAGE1_CALC_VERSION = "score.stage1.v0.1";
+export const STAGE1_CALC_VERSION = "score.stage1.v0.2";
 
 export type Stage1State = "confirmed" | "basing" | "markdown" | "insufficient";
 
@@ -70,7 +70,11 @@ export function computeStage1(bars: Bar[]): Stage1Result {
     const high = highOf(bar);
     const range = Math.max(high - low, Math.abs(bar.close) * 0.001);
     const closeLocation = (bar.close - low) / range;
-    if (low < priorBaseLow * 0.995 && bar.close > priorBaseLow && closeLocation >= 0.55) {
+    // A true sweep must reclaim the prior base by a meaningful amount. Without
+    // this buffer, a persistent downtrend can briefly close a few basis points
+    // above yesterday's rolling low and be misclassified as accumulation.
+    const meaningfulReclaim = bar.close > priorBaseLow * 1.005;
+    if (low < priorBaseLow * 0.995 && meaningfulReclaim && closeLocation >= 0.55) {
       sweepIndex = index;
       break;
     }
