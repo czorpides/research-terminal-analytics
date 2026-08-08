@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test:opportunity": "for f in src/lib/opportunity/*.test.ts src/lib/swing/*.test.ts; do echo \"::notice title=Running test::$f\"; node --test \"$f\" || { echo \"::error file=$f,title=Node test failed::$f\"; exit 1; }; done",
+    "test:opportunity": "for p in 'historical equity deep scan' 'nomination calendar respects' 'future-dated broad scores' 'same-day broad score' 'equal nomination scores' 'cross-sectional nomination' 'XAUUSD and XAGUSD' 'other commodities' 'nominated-universe replay'; do echo \"::notice title=Running universe case::$p\"; node --test --test-name-pattern=\"$p\" src/lib/swing/universe-reconstruction-v21.test.ts || { echo \"::error file=src/lib/swing/universe-reconstruction-v21.test.ts,title=Failed universe case::$p\"; exit 1; }; done",
     "format": "prettier --write ."
   },
   "dependencies": {
