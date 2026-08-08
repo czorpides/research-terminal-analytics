@@ -257,7 +257,8 @@ test("XAUUSD and XAGUSD sit outside the 220-equity nomination cap", () => {
 
   assert.deepEqual(day.selectedEquities, equityOnly.selectedEquities);
   assert.ok(day.selectedEquities.length <= 220);
-  assert.deepEqual(day.selectedCommodities, ["gold", "silver"]);
+  // The live loader is symbol-sorted, so XAGUSD precedes XAUUSD.
+  assert.deepEqual(day.selectedCommodities, ["silver", "gold"]);
   assert.equal(day.selected.length, day.selectedEquities.length + 2);
   assert.equal(day.activeEquities, 300);
   assert.equal(day.activeCommodities, 2);
