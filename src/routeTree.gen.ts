@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
@@ -23,6 +24,8 @@ import { Route as AuthenticatedDataHealthRouteImport } from './routes/_authentic
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedAltDataRouteImport } from './routes/_authenticated/alt-data'
 import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security.index'
 import { Route as AuthenticatedMacroIndexRouteImport } from './routes/_authenticated/macro.index'
 import { Route as AuthenticatedSecuritySymbolRouteImport } from './routes/_authenticated/security.$symbol'
@@ -49,6 +52,8 @@ import { Route as AuthenticatedAltDataModelHealthRouteImport } from './routes/_a
 import { Route as AuthenticatedAltDataAttentionRouteImport } from './routes/_authenticated/alt-data.attention'
 import { Route as AuthenticatedAltDataAnomaliesRouteImport } from './routes/_authenticated/alt-data.anomalies'
 import { Route as AuthenticatedAltDataSplatRouteImport } from './routes/_authenticated/alt-data.$'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
@@ -70,6 +75,11 @@ import { Route as ApiPublicCalendarSyncRouteImport } from './routes/api/public/c
 import { Route as ApiPublicCalendarRunDueRouteImport } from './routes/api/public/calendar/run-due'
 import { Route as ApiPublicRadarsUndervaluationRefreshRouteImport } from './routes/api/public/radars/undervaluation/refresh'
 
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -142,6 +152,18 @@ const AuthenticatedAlertsRoute = AuthenticatedAlertsRouteImport.update({
   path: '/alerts',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedSecurityIndexRoute =
   AuthenticatedSecurityIndexRouteImport.update({
     id: '/security/',
@@ -295,6 +317,17 @@ const AuthenticatedAltDataSplatRoute =
     path: '/$',
     getParentRoute: () => AuthenticatedAltDataRoute,
   } as any)
+const Char91DotmcpChar93InvokeToolToolRoute =
+  Char91DotmcpChar93InvokeToolToolRouteImport.update({
+    id: '/.mcp/invoke-tool/$tool',
+    path: '/.mcp/invoke-tool/$tool',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
   id: '/api/public/verify/run',
   path: '/api/public/verify/run',
@@ -411,6 +444,9 @@ const ApiPublicRadarsUndervaluationRefreshRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/calendar': typeof AuthenticatedCalendarRoute
@@ -422,6 +458,8 @@ export interface FileRoutesByFullPath {
   '/screeners': typeof AuthenticatedScreenersRoute
   '/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
   '/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
@@ -471,6 +509,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/calendar': typeof AuthenticatedCalendarRoute
@@ -482,6 +523,8 @@ export interface FileRoutesByTo {
   '/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/': typeof AuthenticatedIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
   '/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
@@ -533,6 +576,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_authenticated/alerts': typeof AuthenticatedAlertsRoute
   '/_authenticated/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
@@ -545,6 +591,8 @@ export interface FileRoutesById {
   '/_authenticated/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/_authenticated/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/_authenticated/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
   '/_authenticated/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
@@ -597,6 +645,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/alerts'
     | '/alt-data'
     | '/calendar'
@@ -608,6 +659,8 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/swing-trades'
     | '/undervaluation'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/alt-data/$'
     | '/alt-data/anomalies'
     | '/alt-data/attention'
@@ -657,6 +710,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/alerts'
     | '/alt-data'
     | '/calendar'
@@ -668,6 +724,8 @@ export interface FileRouteTypes {
     | '/swing-trades'
     | '/undervaluation'
     | '/'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/alt-data/$'
     | '/alt-data/anomalies'
     | '/alt-data/attention'
@@ -718,6 +776,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/_authenticated/alerts'
     | '/_authenticated/alt-data'
     | '/_authenticated/calendar'
@@ -730,6 +791,8 @@ export interface FileRouteTypes {
     | '/_authenticated/swing-trades'
     | '/_authenticated/undervaluation'
     | '/_authenticated/'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/alt-data/$'
     | '/_authenticated/alt-data/anomalies'
     | '/_authenticated/alt-data/attention'
@@ -781,6 +844,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  McpRoute: typeof McpRoute
+  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
+  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicCalendarRunDueRoute: typeof ApiPublicCalendarRunDueRoute
   ApiPublicCalendarSyncRoute: typeof ApiPublicCalendarSyncRoute
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
@@ -805,6 +873,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -902,6 +977,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/alerts'
       preLoaderRoute: typeof AuthenticatedAlertsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/security/': {
       id: '/_authenticated/security/'
@@ -1084,6 +1173,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/alt-data/$'
       preLoaderRoute: typeof AuthenticatedAltDataSplatRouteImport
       parentRoute: typeof AuthenticatedAltDataRoute
+    }
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/verify/run': {
       id: '/api/public/verify/run'
@@ -1344,6 +1447,12 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  McpRoute: McpRoute,
+  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
+  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicCalendarRunDueRoute: ApiPublicCalendarRunDueRoute,
   ApiPublicCalendarSyncRoute: ApiPublicCalendarSyncRoute,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
