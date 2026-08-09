@@ -1,13 +1,13 @@
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+
 type LooseOAuthResult = {
   client?: { name?: string } | null;
   redirect_url?: string | null;
   redirect_to?: string | null;
 };
-
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/.lovable/oauth/consent")({
   ssr: false,

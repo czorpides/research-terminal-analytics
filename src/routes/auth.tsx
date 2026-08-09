@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
@@ -8,10 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (s: Record<string, unknown>): { next?: string } =>
-    typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//")
-      ? { next: s.next }
-      : {},
   head: () => ({
     meta: [
       { title: "Sign in — Research Terminal" },
@@ -21,6 +17,9 @@ export const Route = createFileRoute("/auth")({
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
+  }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
   }),
   component: AuthPage,
 });
@@ -35,17 +34,18 @@ async function routeAuthenticatedUser(
     throw error ?? new Error("Sign-in completed, but no active session was found.");
   }
   await router.invalidate();
-  if (next) {
-    window.location.href = next;
+  const target = next?.startsWith("/") ? next : "/";
+  if (/^https?:\/\//.test(target)) {
+    window.location.href = target;
     return;
   }
-  navigate({ to: "/", replace: true });
+  navigate({ to: target, replace: true });
 }
 
 function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
-  const { next } = Route.useSearch();
+  const search = useSearch({ from: "/auth" });
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -53,15 +53,15 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) void routeAuthenticatedUser(navigate, router, next);
+      if (data.session) void routeAuthenticatedUser(navigate, router, search.next);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
-        void routeAuthenticatedUser(navigate, router, next);
+        void routeAuthenticatedUser(navigate, router, search.next);
       }
     });
     return () => sub.subscription.unsubscribe();
-  }, [navigate, router, next]);
+  }, [navigate, router, search.next]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -75,7 +75,7 @@ function AuthPage() {
         password,
       });
       if (error) throw new Error("Incorrect password");
-      await routeAuthenticatedUser(navigate, router, next);
+      await routeAuthenticatedUser(navigate, router, search.next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Incorrect password");
     } finally {
