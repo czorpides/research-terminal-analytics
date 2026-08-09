@@ -49,6 +49,7 @@ import { Route as AuthenticatedAltDataModelHealthRouteImport } from './routes/_a
 import { Route as AuthenticatedAltDataAttentionRouteImport } from './routes/_authenticated/alt-data.attention'
 import { Route as AuthenticatedAltDataAnomaliesRouteImport } from './routes/_authenticated/alt-data.anomalies'
 import { Route as AuthenticatedAltDataSplatRouteImport } from './routes/_authenticated/alt-data.$'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicVerifyRunRouteImport } from './routes/api/public/verify/run'
 import { Route as ApiPublicScoresRunRouteImport } from './routes/api/public/scores/run'
 import { Route as ApiPublicProvidersPingRouteImport } from './routes/api/public/providers/ping'
@@ -295,6 +296,11 @@ const AuthenticatedAltDataSplatRoute =
     path: '/$',
     getParentRoute: () => AuthenticatedAltDataRoute,
   } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicVerifyRunRoute = ApiPublicVerifyRunRouteImport.update({
   id: '/api/public/verify/run',
   path: '/api/public/verify/run',
@@ -422,6 +428,7 @@ export interface FileRoutesByFullPath {
   '/screeners': typeof AuthenticatedScreenersRoute
   '/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
   '/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
@@ -482,6 +489,7 @@ export interface FileRoutesByTo {
   '/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/': typeof AuthenticatedIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
   '/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
@@ -545,6 +553,7 @@ export interface FileRoutesById {
   '/_authenticated/swing-trades': typeof AuthenticatedSwingTradesRoute
   '/_authenticated/undervaluation': typeof AuthenticatedUndervaluationRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/_authenticated/alt-data/$': typeof AuthenticatedAltDataSplatRoute
   '/_authenticated/alt-data/anomalies': typeof AuthenticatedAltDataAnomaliesRoute
   '/_authenticated/alt-data/attention': typeof AuthenticatedAltDataAttentionRoute
@@ -608,6 +617,7 @@ export interface FileRouteTypes {
     | '/screeners'
     | '/swing-trades'
     | '/undervaluation'
+    | '/.lovable/oauth/consent'
     | '/alt-data/$'
     | '/alt-data/anomalies'
     | '/alt-data/attention'
@@ -668,6 +678,7 @@ export interface FileRouteTypes {
     | '/swing-trades'
     | '/undervaluation'
     | '/'
+    | '/.lovable/oauth/consent'
     | '/alt-data/$'
     | '/alt-data/anomalies'
     | '/alt-data/attention'
@@ -730,6 +741,7 @@ export interface FileRouteTypes {
     | '/_authenticated/swing-trades'
     | '/_authenticated/undervaluation'
     | '/_authenticated/'
+    | '/.lovable/oauth/consent'
     | '/_authenticated/alt-data/$'
     | '/_authenticated/alt-data/anomalies'
     | '/_authenticated/alt-data/attention'
@@ -781,6 +793,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiPublicCalendarRunDueRoute: typeof ApiPublicCalendarRunDueRoute
   ApiPublicCalendarSyncRoute: typeof ApiPublicCalendarSyncRoute
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
@@ -1085,6 +1098,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAltDataSplatRouteImport
       parentRoute: typeof AuthenticatedAltDataRoute
     }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/verify/run': {
       id: '/api/public/verify/run'
       path: '/api/public/verify/run'
@@ -1344,6 +1364,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiPublicCalendarRunDueRoute: ApiPublicCalendarRunDueRoute,
   ApiPublicCalendarSyncRoute: ApiPublicCalendarSyncRoute,
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
