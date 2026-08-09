@@ -1,3 +1,9 @@
+type LooseOAuthResult = {
+  client?: { name?: string } | null;
+  redirect_url?: string | null;
+  redirect_to?: string | null;
+};
+
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,9 +25,10 @@ export const Route = createFileRoute("/.lovable/oauth/consent")({
     const authorizationId = new URLSearchParams(location.search).get("authorization_id")!;
     const { data, error } = await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
     if (error) throw error;
-    const immediate = data?.redirect_url ?? data?.redirect_to;
-    if (immediate && !data?.client) throw redirect({ href: immediate });
-    return data;
+    const details = (data ?? {}) as LooseOAuthResult;
+    const immediate = details.redirect_url ?? details.redirect_to;
+    if (immediate && !details.client) throw redirect({ href: immediate });
+    return details;
   },
   component: Consent,
   errorComponent: ({ error }) => (
@@ -49,7 +56,8 @@ function Consent() {
       setError(error.message);
       return;
     }
-    const target = data?.redirect_url ?? data?.redirect_to;
+    const result = (data ?? {}) as LooseOAuthResult;
+    const target = result.redirect_url ?? result.redirect_to;
     if (!target) {
       setBusy(false);
       setError("No redirect returned by the authorization server.");
