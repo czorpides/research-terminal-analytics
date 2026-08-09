@@ -3157,6 +3157,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_opportunity_candidate_freshness: { Args: never; Returns: Json }
       refresh_equity_technical_screen: { Args: never; Returns: number }
     }
     Enums: {
