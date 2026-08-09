@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
@@ -18,19 +18,28 @@ export const Route = createFileRoute("/auth")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
   component: AuthPage,
 });
 
 async function routeAuthenticatedUser(
   navigate: ReturnType<typeof useNavigate>,
   router: ReturnType<typeof useRouter>,
+  next?: string,
 ) {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     throw error ?? new Error("Sign-in completed, but no active session was found.");
   }
   await router.invalidate();
-  navigate({ to: "/", replace: true });
+  const target = next?.startsWith("/") ? next : "/";
+  if (/^https?:\/\//.test(target)) {
+    window.location.href = target;
+    return;
+  }
+  navigate({ to: target, replace: true });
 }
 
 function AuthPage() {
