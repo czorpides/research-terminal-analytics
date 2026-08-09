@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.1",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://itfwojimxuxwmxjcolzt.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "research-terminal-analytics",
+      "version": "0.1.0",
+      "title": "Research Terminal Analytics"
+    },
+    "tools": [
+      {
+        "name": "search_assets",
+        "title": "Search coverage universe",
+        "description": "Search the research terminal's active asset universe by ticker symbol or company name. Returns symbol, name, asset class, exchange and currency.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Ticker or part of a company name, e.g. 'AAPL' or 'health'."
+            },
+            "limit": {
+              "description": "Maximum rows to return (default 20, max 100).",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_score_types",
+        "title": "List available score types",
+        "description": "List the distinct score types currently computed for assets in the research terminal, with how many assets each covers and when it was last computed.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_asset_scores",
+        "title": "Get latest scores for a symbol",
+        "description": "Return the latest deterministic scores (momentum, trend, volatility, valuation, composite, etc.) computed by the research terminal for one ticker symbol, with confidence, calc version and computed timestamp.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "symbol": {
+              "type": "string",
+              "description": "Ticker symbol exactly as held in the universe, e.g. 'AAPL'."
+            }
+          },
+          "required": [
+            "symbol"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "rank_by_score",
+        "title": "Rank universe by a score type",
+        "description": "Rank the active universe by one score type (e.g. 'momentum', 'trend', 'volatility', 'composite') using the most recent value per asset. Useful for finding current leaders or laggards.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "score_type": {
+              "type": "string",
+              "description": "Score type key, e.g. 'momentum'. Use list_score_types to discover valid keys."
+            },
+            "direction": {
+              "description": "'top' for highest values (default), 'bottom' for lowest.",
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom"
+              ]
+            },
+            "limit": {
+              "description": "How many rows to return (default 10, max 50).",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "score_type"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
