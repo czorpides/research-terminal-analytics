@@ -11,19 +11,24 @@ import { getOpportunityRadarHealth } from "@/lib/opportunity/health.functions";
 import { getOpportunityCandidateFreshness } from "@/lib/opportunity/integrity.functions";
 import { applyOpportunityEvidenceIntegrity } from "@/lib/opportunity/integrity";
 import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
+import {
+  applyStage1Structures,
+  getStage1StructureWorkspace,
+} from "@/lib/opportunity/stage1-workspace.functions";
 import { getOpportunityRadarWorkspace } from "@/lib/opportunity/workspace.functions";
 
 const MANAGED_EQUITY_TARGET = 3_000;
 const MANAGED_EQUITY_READY_FLOOR = 2_950;
 
 const radarQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "horizons-v6-evidence-integrity"],
+  queryKey: ["opportunity-radar", "horizons-v7-stage1-structure"],
   queryFn: async () => {
-    const [workspace, freshness] = await Promise.all([
+    const [workspace, freshness, stage1] = await Promise.all([
       getOpportunityRadarWorkspace(),
       getOpportunityCandidateFreshness(),
+      getStage1StructureWorkspace(),
     ]);
-    return applyOpportunityEvidenceIntegrity(workspace, freshness);
+    return applyStage1Structures(applyOpportunityEvidenceIntegrity(workspace, freshness), stage1);
   },
   staleTime: 15 * 60 * 1000,
   refetchInterval: 15 * 60 * 1000,
@@ -40,7 +45,7 @@ const opportunityHealthQueryOptions = queryOptions({
 });
 
 const institutionalQueryOptions = queryOptions({
-  queryKey: ["opportunity-radar", "institutional-v1"],
+  queryKey: ["opportunity-radar", "institutional-v2-advanced-valuation"],
   queryFn: () => getInstitutionalOpportunityWorkspace(),
   staleTime: 60 * 60 * 1000,
   refetchInterval: 60 * 60 * 1000,

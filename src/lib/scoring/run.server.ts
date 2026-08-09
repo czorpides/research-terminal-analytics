@@ -10,6 +10,7 @@ import { computeConfidence } from "@/lib/reliability/confidence";
 import type { SourceTier } from "@/lib/reliability/tiers";
 import { computeMomentum, MOMENTUM_CALC_VERSION } from "./momentum.server";
 import type { Bar } from "./series";
+import { computeStage1, STAGE1_CALC_VERSION } from "./stage1.server";
 import { computeTrend, TREND_CALC_VERSION } from "./trend.server";
 import {
   computeQualityScore,
@@ -56,7 +57,7 @@ const sourceTierCache = new Map<string, Promise<SourceTier>>();
 async function loadBars(assetId: string): Promise<LoadedBars> {
   const { data, error } = await supabaseAdmin
     .from("prices_daily")
-    .select("trade_date, close, adj_close, volume, source_id")
+    .select("trade_date, open, high, low, close, adj_close, volume, source_id")
     .eq("asset_id", assetId)
     .order("trade_date", { ascending: true })
     .limit(2000);
@@ -64,14 +65,30 @@ async function loadBars(assetId: string): Promise<LoadedBars> {
 
   // Long-horizon Opportunity evidence must be corporate-action adjusted. Raw
   // close remains the canonical displayed/traded price elsewhere in the app.
+  // For Stage-1 structure we scale OHLC by the same close adjustment factor so
+  // splits cannot create false sweeps, gaps or base lows.
   const valid = (data ?? []).filter((row) => row.adj_close !== null || row.close !== null);
   const latest = valid.at(-1) ?? null;
   return {
-    bars: valid.map((row) => ({
-      date: row.trade_date as string,
-      close: Number(row.adj_close ?? row.close),
-      volume: row.volume === null ? null : Number(row.volume),
-    })),
+    bars: valid.map((row) => {
+      const rawClose = Number(row.close ?? row.adj_close);
+      const adjustedClose = Number(row.adj_close ?? row.close);
+      const factor = rawClose > 0 && Number.isFinite(rawClose) ? adjustedClose / rawClose : 1;
+      const adjusted = (value: unknown): number | null => {
+        if (value === null || value === undefined) return null;
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return null;
+        return parsed * factor;
+      };
+      return {
+        date: row.trade_date as string,
+        open: adjusted(row.open),
+        high: adjusted(row.high),
+        low: adjusted(row.low),
+        close: adjustedClose,
+        volume: row.volume === null ? null : Number(row.volume),
+      } satisfies Bar;
+    }),
     latestSourceId: latest?.source_id ? String(latest.source_id) : null,
   };
 }
@@ -118,10 +135,11 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
 
     const momo = computeMomentum(loaded.bars);
     const trend = computeTrend(loaded.bars);
+    const stage1 = computeStage1(loaded.bars);
     const vol = computeVolatility(loaded.bars);
     const now = new Date().toISOString();
     const provenance = {
-      _price_basis: "adjusted_close",
+      _price_basis: "split_adjusted_ohlc",
       _price_source_id: loaded.latestSourceId,
       _bar_count: loaded.bars.length,
     };
@@ -152,6 +170,19 @@ export async function runScoresForAsset(assetId: string): Promise<{ ok: boolean;
         weights: {},
         positives: trend.positives,
         deductions: trend.deductions,
+      },
+      {
+        subject_type: "asset",
+        subject_id: assetId,
+        score_type: "stage1",
+        value: stage1.value,
+        confidence: dataConf.value,
+        calc_version: STAGE1_CALC_VERSION,
+        computed_at: now,
+        inputs: { ...stage1.inputs, ...provenance },
+        weights: {},
+        positives: stage1.positives,
+        deductions: stage1.deductions,
       },
       {
         subject_type: "asset",
