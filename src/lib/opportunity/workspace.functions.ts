@@ -172,16 +172,26 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
       .select("id", { count: "exact", head: true })
       .eq("active", true)
       .eq("asset_class", "equity");
-    const { data: assetData, error: assetError } = await supabaseAdmin
-      .from("assets")
-      .select("id,symbol,name,exchange,currency,industry_id,country_id")
-      .eq("active", true)
-      .eq("asset_class", "equity")
-      .order("symbol", { ascending: true })
-      .limit(MAX_SHADOW_UNIVERSE);
-    if (assetError) throw assetError;
+    const assetPages: AssetRow[] = [];
+    const assetPageSize = 750;
+    for (let offset = 0; offset < MAX_SHADOW_UNIVERSE; offset += assetPageSize) {
+      const pageEnd = Math.min(offset + assetPageSize, MAX_SHADOW_UNIVERSE) - 1;
+      const { data: pageData, error: pageError } = await supabaseAdmin
+        .from("assets")
+        .select("id,symbol,name,exchange,currency,industry_id,country_id")
+        .eq("active", true)
+        .eq("asset_class", "equity")
+        .order("symbol", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, pageEnd);
+      if (pageError) throw pageError;
 
-    const assets = (assetData ?? []) as AssetRow[];
+      const page = (pageData ?? []) as AssetRow[];
+      assetPages.push(...page);
+      if (page.length < assetPageSize) break;
+    }
+
+    const assets = assetPages;
     if (assets.length === 0) {
       return emptyWorkspace(activeEquities ?? 0);
     }
