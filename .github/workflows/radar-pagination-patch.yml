@@ -1,0 +1,72 @@
+name: Radar pagination patch
+
+on:
+  push:
+    branches:
+      - fix/radar-universe-pagination
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/radar-universe-pagination
+      - name: Patch Opportunity Radar universe pagination
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/lib/opportunity/workspace.functions.ts")
+          text = path.read_text()
+          old = '''    const { data: assetData, error: assetError } = await supabaseAdmin
+      .from("assets")
+      .select("id,symbol,name,exchange,currency,industry_id,country_id")
+      .eq("active", true)
+      .eq("asset_class", "equity")
+      .order("symbol", { ascending: true })
+      .limit(MAX_SHADOW_UNIVERSE);
+    if (assetError) throw assetError;
+
+    const assets = (assetData ?? []) as AssetRow[];'''
+          new = '''    const assetPages: AssetRow[] = [];
+    const assetPageSize = 750;
+    for (let offset = 0; offset < MAX_SHADOW_UNIVERSE; offset += assetPageSize) {
+      const pageEnd = Math.min(offset + assetPageSize, MAX_SHADOW_UNIVERSE) - 1;
+      const { data: pageData, error: pageError } = await supabaseAdmin
+        .from("assets")
+        .select("id,symbol,name,exchange,currency,industry_id,country_id")
+        .eq("active", true)
+        .eq("asset_class", "equity")
+        .order("symbol", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, pageEnd);
+      if (pageError) throw pageError;
+
+      const page = (pageData ?? []) as AssetRow[];
+      assetPages.push(...page);
+      if (page.length < assetPageSize) break;
+    }
+
+    const assets = assetPages;'''
+          if old not in text:
+              if new in text:
+                  print("Pagination patch already applied")
+                  raise SystemExit(0)
+              raise SystemExit("Expected asset loader block not found")
+          path.write_text(text.replace(old, new, 1))
+      - name: Commit pagination fix
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/opportunity/workspace.functions.ts
+          git commit -m "Fix Opportunity Radar universe pagination"
+          git push origin HEAD:fix/radar-universe-pagination
