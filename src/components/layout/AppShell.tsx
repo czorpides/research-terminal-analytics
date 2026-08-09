@@ -301,7 +301,7 @@ function AccountMenu() {
 
   async function onSignOut() {
     await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
+    navigate({ href: "/auth", replace: true });
   }
 
   if (!email) return null;
