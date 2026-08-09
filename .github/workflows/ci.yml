@@ -9,7 +9,7 @@ on:
       - chatgpt/stage2-calibration-review
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   frontend:
@@ -20,6 +20,67 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: fix/radar-universe-pagination
+
+      - name: Apply Opportunity Radar universe pagination patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/opportunity/workspace.functions.ts")
+          text = path.read_text()
+          start_marker = '    const { data: assetData, error: assetError } = await supabaseAdmin'
+          end_marker = '    const assets = (assetData ?? []) as AssetRow[];'
+          already = '    const assetPages: AssetRow[] = [];'
+
+          if already in text:
+              print("Pagination patch already applied")
+              raise SystemExit(0)
+
+          start = text.find(start_marker)
+          end = text.find(end_marker, start if start >= 0 else 0)
+          if start < 0 or end < 0:
+              raise SystemExit("Expected asset loader markers not found")
+          end += len(end_marker)
+
+          replacement = '''    const assetPages: AssetRow[] = [];
+    const assetPageSize = 750;
+    for (let offset = 0; offset < MAX_SHADOW_UNIVERSE; offset += assetPageSize) {
+      const pageEnd = Math.min(offset + assetPageSize, MAX_SHADOW_UNIVERSE) - 1;
+      const { data: pageData, error: pageError } = await supabaseAdmin
+        .from("assets")
+        .select("id,symbol,name,exchange,currency,industry_id,country_id")
+        .eq("active", true)
+        .eq("asset_class", "equity")
+        .order("symbol", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, pageEnd);
+      if (pageError) throw pageError;
+
+      const page = (pageData ?? []) as AssetRow[];
+      assetPages.push(...page);
+      if (page.length < assetPageSize) break;
+    }
+
+    const assets = assetPages;'''
+
+          path.write_text(text[:start] + replacement + text[end:])
+          print("Pagination patch applied")
+          PY
+
+      - name: Commit Opportunity Radar universe pagination patch
+        run: |
+          if git diff --quiet; then
+            echo "No pagination source change to commit"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/lib/opportunity/workspace.functions.ts
+            git commit -m "Fix Opportunity Radar universe pagination"
+            git push origin HEAD:fix/radar-universe-pagination
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
