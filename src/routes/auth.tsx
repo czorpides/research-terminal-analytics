@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//") ? s.next : "",
+  }),
   head: () => ({
     meta: [
       { title: "Sign in — Research Terminal" },
@@ -24,18 +27,24 @@ export const Route = createFileRoute("/auth")({
 async function routeAuthenticatedUser(
   navigate: ReturnType<typeof useNavigate>,
   router: ReturnType<typeof useRouter>,
+  next?: string,
 ) {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     throw error ?? new Error("Sign-in completed, but no active session was found.");
   }
   await router.invalidate();
+  if (next) {
+    window.location.href = next;
+    return;
+  }
   navigate({ to: "/", replace: true });
 }
 
 function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
+  const { next } = Route.useSearch();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,15 +52,15 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) void routeAuthenticatedUser(navigate, router);
+      if (data.session) void routeAuthenticatedUser(navigate, router, next);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
-        void routeAuthenticatedUser(navigate, router);
+        void routeAuthenticatedUser(navigate, router, next);
       }
     });
     return () => sub.subscription.unsubscribe();
-  }, [navigate, router]);
+  }, [navigate, router, next]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -65,7 +74,7 @@ function AuthPage() {
         password,
       });
       if (error) throw new Error("Incorrect password");
-      await routeAuthenticatedUser(navigate, router);
+      await routeAuthenticatedUser(navigate, router, next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Incorrect password");
     } finally {
