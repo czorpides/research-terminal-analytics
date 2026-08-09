@@ -1,0 +1,13 @@
+node_modules
+.output
+.vinxi
+.tanstack
+.nitro
+.git
+.github
+.env
+.env.*
+!.env.example
+*.log
+services/analytics/.venv
+services/analytics/__pycache__
