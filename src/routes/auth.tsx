@@ -45,6 +45,7 @@ async function routeAuthenticatedUser(
 function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
+  const search = useSearch({ from: "/auth" });
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,15 +53,15 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) void routeAuthenticatedUser(navigate, router);
+      if (data.session) void routeAuthenticatedUser(navigate, router, search.next);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
-        void routeAuthenticatedUser(navigate, router);
+        void routeAuthenticatedUser(navigate, router, search.next);
       }
     });
     return () => sub.subscription.unsubscribe();
-  }, [navigate, router]);
+  }, [navigate, router, search.next]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,7 +75,7 @@ function AuthPage() {
         password,
       });
       if (error) throw new Error("Incorrect password");
-      await routeAuthenticatedUser(navigate, router);
+      await routeAuthenticatedUser(navigate, router, search.next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Incorrect password");
     } finally {
