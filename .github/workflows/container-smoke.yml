@@ -1,0 +1,58 @@
+name: Standalone container smoke
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "src/**"
+      - ".github/workflows/container-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build standalone image
+        run: |
+          docker build \
+            --build-arg VITE_SUPABASE_URL=https://example.supabase.co \
+            --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=smoke-publishable-key \
+            --tag research-terminal:smoke \
+            .
+
+      - name: Start standalone container
+        run: |
+          docker run --detach \
+            --name research-terminal-smoke \
+            --publish 3000:3000 \
+            --env SUPABASE_URL=https://example.supabase.co \
+            --env SUPABASE_PUBLISHABLE_KEY=smoke-publishable-key \
+            --env SUPABASE_SERVICE_ROLE_KEY=smoke-service-role-key \
+            --env OWNER_PASSWORD=smoke-owner-password \
+            research-terminal:smoke
+
+      - name: Verify HTTP startup
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/auth >/dev/null; then
+              echo "Standalone Research Terminal responded successfully."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs research-terminal-smoke
+          exit 1
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs research-terminal-smoke || true

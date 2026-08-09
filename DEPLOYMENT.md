@@ -14,7 +14,9 @@ The Research Terminal is a TanStack Start application built with Vite and Nitro.
 
 Copy the variable names from `.env.example` into the hosting provider's secret/environment settings. Never commit real values.
 
-The browser-side `VITE_SUPABASE_*` values must reference the same owned Supabase project as the server-side `SUPABASE_*` values. `SUPABASE_SERVICE_ROLE_KEY` must remain server-only.
+The browser-side `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are public client configuration and must be available **during the Vite/Docker build**. The Dockerfile accepts both as build arguments. The server-side `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are runtime environment variables. `SUPABASE_SERVICE_ROLE_KEY` must remain server-only and must never be passed as a Docker build argument.
+
+The browser and server Supabase values must reference the same owned Supabase project.
 
 ## Supabase
 
@@ -24,7 +26,7 @@ Do not enable database cron jobs until the replacement application has a stable 
 
 ## Cutover sequence
 
-1. Deploy this repository to the replacement host with the required environment variables.
+1. Deploy this repository to the replacement host with the required build-time and runtime environment variables.
 2. Verify the home page, authenticated routes and public API endpoints.
 3. Bootstrap/verify the owner account.
 4. Run provider/analytics health checks.
