@@ -33,8 +33,11 @@ jobs:
           route = Path("src/routes/_authenticated/route.tsx").read_text()
           auth = Path("src/routes/auth.tsx").read_text()
           assert "functionMiddleware: [stagingReadOnlyFunctions]" in start
-          assert 'request?.method === "GET"' in middleware
+          assert 'request.method === "GET"' in middleware
           assert "authorizeInternalJobRequest(request)" in middleware
+          assert 'process.env.RAILWAY_ENVIRONMENT_NAME === "staging"' in middleware
+          assert 'request.headers.get("sec-fetch-site") === "same-origin"' in middleware
+          assert 'new URL(request.url).pathname.startsWith("/_serverFn/")' in middleware
           assert "beforeLoad" not in route
           assert "signInWithPassword" not in auth
           assert 'navigate({ to: "/", replace: true })' in auth
@@ -45,7 +48,7 @@ jobs:
           ):
             s = Path(path).read_text()
             assert f'{name} = createServerFn({{ method: "GET" }})' in s, path
-          print("PASS: staging pages are open, reads allowed, writes require job token")
+          print("PASS: staging pages open, browser actions enabled, remote job routes retain their token")
           PY
       - name: Verify the identified administrative routes no longer trust public keys
         run: |
