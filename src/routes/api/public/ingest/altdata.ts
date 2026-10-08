@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 /**
  * POST /api/public/ingest/altdata
  * Called by pg_cron (daily 06:15 UTC) and by the Data Health page.
- * Auth: Supabase anon key in the `apikey` header.
+ * Auth: server-only INTERNAL_JOB_TOKEN in the Authorization bearer header.
  */
 export const Route = createFileRoute("/api/public/ingest/altdata")({
   server: {
