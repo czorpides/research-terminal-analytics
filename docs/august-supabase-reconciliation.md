@@ -15,6 +15,13 @@ External equity_technical_screen: 3,004 rows; 2,997 dated 7 August.
 External score history uses multiple calculation versions. The count difference is
 **not** a count of technical assets needing rescoring.
 
+External readiness checks (8 October 2026): **0 users in auth.users**, **0
+registered cron jobs**, **0 fresh technical-score assets** according to
+`get_opportunity_radar_health()`. Last successful bulk price run was dated
+8 August (for 7 August market data). The original's reported 13 August price
+maximum is itself almost two months behind today's date; recovery of the
+August difference does **not** constitute a current-data deployment.
+
 Neither production traffic nor original Lovable Cloud must be redirected during
 this exercise. No schema migrations, filtering changes, score deletions, or
 unverified provider substitutions are part of this work.
@@ -88,7 +95,7 @@ read-only. Do **not** set `--apply` until you have confirmed the dry-run diff.
    freshness warnings, ingest endpoints, idempotent jobs and scheduled crons.
    Ensure only one scheduler is active and all service-role secrets remain
    runtime-only.
-5. **No traffic/domain cutover** until the operator explicitly authorises it
+5. Confirm the original project's actual user identities and auth requirements.\n   External `auth.users` has zero rows: establish secure user migration or a\n   deliberate new-account/recovery procedure and test the end-to-end flow.\n   Register and verify the required scheduled jobs; external `cron.job` is empty.\n   Resume ingestion from the last available market date through the current\n   market session and monitor provider quotas/failures before declaring\n   scores fresh. Do not create jobs while the production scheduler could\n   compete with them.\n6. **No traffic/domain cutover** until the operator explicitly authorises it
    after evidence from the above checks. Leave Lovable Cloud available as the
    rollback route.
 
