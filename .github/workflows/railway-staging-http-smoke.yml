@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   http:
-    name: Public sign-in and denied privileged requests
+    name: Public preview and denied privileged requests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -28,8 +28,8 @@ jobs:
           set -euo pipefail
           code=$(curl --retry 3 --retry-all-errors --retry-delay 3 --connect-timeout 10 --max-time 30 -sSL -o /tmp/staging-auth.html -w '%{http_code}' "$BASE/auth")
           test "$code" = "200" || { echo "Expected 200 from /auth, got $code"; exit 1; }
-          grep -q 'Research Terminal' /tmp/staging-auth.html || { echo "Sign-in page missing"; exit 1; }
-          echo "PASS: public sign-in page responds 200"
+          grep -q 'Research Terminal' /tmp/staging-auth.html || { echo "Preview page missing"; exit 1; }
+          echo "PASS: public preview page responds 200"
 
           for path in /api/public/scores/run /api/public/ingest/stooq /api/public/ingest/fundamentals; do
             code=$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/staging-denied.txt -w '%{http_code}' -X POST "$BASE$path")
@@ -38,5 +38,5 @@ jobs:
           done
 
           code=$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/staging-bootstrap.txt -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/public/auth/bootstrap")
-          test "$code" = "401" || { echo "Expected 401 from bootstrap without password, got $code"; exit 1; }
-          echo "PASS: owner bootstrap denies unauthenticated creation"
+          test "$code" = "410" || { echo "Expected 410 from disabled bootstrap, got $code"; exit 1; }
+          echo "PASS: owner bootstrap is disabled"
