@@ -1,10 +1,10 @@
 /**
- * Authenticated server functions that drive the stateless calculation
+ * Staging preview server functions that drive the stateless calculation
  * service. The browser calls these; the Python analytics runtime is
  * addressable only from server code via the ANALYTICS_SERVICE_TOKEN bearer.
  *
- * Persistence, idempotency, vintage handling and model_runs/model_outputs
- * writes live entirely in Lovable Cloud — see growth-pipeline.server.ts.
+ * Persistence and model-run writes are handled server-side in the connected
+ * staging database. Never expose the analytics token in the browser.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
