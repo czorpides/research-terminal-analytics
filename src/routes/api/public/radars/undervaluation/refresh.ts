@@ -4,9 +4,9 @@ export const Route = createFileRoute("/api/public/radars/undervaluation/refresh"
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const anon = process.env.SUPABASE_PUBLISHABLE_KEY;
-        const apikey = request.headers.get("apikey");
-        if (!anon || apikey !== anon) return new Response("Unauthorized", { status: 401 });
+        const { authorizeInternalJobRequest } = await import("@/lib/security/internal-job-auth.server");
+
+        if (!authorizeInternalJobRequest(request)) return new Response("Unauthorized", { status: 401 });
         try {
           const { refreshUndervaluationWatchlist } = await import("@/lib/panels/undervaluation.functions");
           const result = await refreshUndervaluationWatchlist();
