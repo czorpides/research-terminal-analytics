@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { cachedResearchWorkspace } from "@/lib/research/research-cache.server";
 
 import {
   buildEquityCatalystContext,
@@ -125,8 +126,7 @@ export interface SwingV2Workspace {
   warnings: string[];
 }
 
-export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SwingV2Workspace> => {
+async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // v2.1 reads optional/new evidence fail-soft while it remains shadow.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -192,7 +192,9 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
             .in("asset_id", batch)
             .gte("trade_date", priceStart)
             .order("trade_date", { ascending: false })
-            .limit(batch.length * 360),
+            // Under PostgREST's 1,000-row response cap for 3 symbols,
+            // and above the 280-session technical lookback.
+            .limit(batch.length * 300),
         ),
       ),
       Promise.all(
@@ -385,7 +387,10 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
         "Swing v2.1 is a multi-strategy shadow engine built around tradeability, structure, location, trigger, catalyst and risk/reward. The broad screen allocates deep-scan capacity to 3-6 month lows, drawdowns, negative-to-positive momentum transitions, 200SMA/20SMA/50SMA locations, stabilising damaged names, volume-driven reversals and a smaller clean-breakout lane. Deep analysis combines RSI/MACD, bullish divergence, ADX regime, daily/weekly moving-average confluence, volume contraction then reversal expansion, rejection/engulfing/liquidity-sweep candles, first breakout retests, ATR, structural targets/stops, earnings timing and validated estimate/target revisions. Long-term valuation does not add Swing score. XAUUSD and XAGUSD are permanent priority research assets: they remain in the surfaced observation set without any artificial ranking bonus, and their setup outcomes are tagged against point-in-time real-yield, broad-dollar and volatility conditions. Spot volume is not treated as centralised institutional flow.",
       warnings: unique(warnings).slice(0, 20),
     };
-  },
+}
+
+export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handler(
+  () => cachedResearchWorkspace("swing-v2.1", loadSwingV2Workspace),
 );
 
 function selectDeepScanV2(
