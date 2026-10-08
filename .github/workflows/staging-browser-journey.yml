@@ -22,3 +22,5 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Navigate main research routes without sign-in
         run: node scripts/verify-staging-pages.mjs
+
+# Verify the deployed read-only staging preview after Railway rollout.
