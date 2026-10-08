@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { runAllFredIngest, runFredIngest } from "@/lib/ingestion/fred/ingest.server";
 
 /**
- * Public HTTP endpoint hit by pg_cron (via pg_net). Auth uses the Supabase
- * anon key in the `apikey` header — the canonical /api/public/* pattern.
+ * Administrative HTTP endpoint used by the scheduler. Requires a private
+ * server-side INTERNAL_JOB_TOKEN in the Authorization bearer header.
  *
  * Usage:
  *   POST /api/public/ingest/fred                → ingest all series
