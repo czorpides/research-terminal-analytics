@@ -1,124 +1,22 @@
-import { createFileRoute, useNavigate, useRouter, useSearch } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { OWNER_EMAIL } from "@/lib/auth/owner.functions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 
+/** Legacy /auth address stays 200 for the Railway health check. */
 export const Route = createFileRoute("/auth")({
-  head: () => ({
-    meta: [
-      { title: "Sign in — Research Terminal" },
-      { name: "description", content: "Sign in to access your private research operating system." },
-      { property: "og:title", content: "Research Terminal — Sign in" },
-      { property: "og:description", content: "Private research dashboard sign-in." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
-  validateSearch: (s: Record<string, unknown>) => ({
-    next: typeof s.next === "string" ? s.next : undefined,
-  }),
-  component: AuthPage,
+  head: () => ({ meta: [{ title: "Research Terminal — Open Preview" }] }),
+  component: OpenPreview,
 });
 
-async function routeAuthenticatedUser(
-  navigate: ReturnType<typeof useNavigate>,
-  router: ReturnType<typeof useRouter>,
-  next?: string,
-) {
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    throw error ?? new Error("Sign-in completed, but no active session was found.");
-  }
-  await router.invalidate();
-  const target = next?.startsWith("/") ? next : "/";
-  if (/^https?:\/\//.test(target)) {
-    window.location.href = target;
-    return;
-  }
-  navigate({ to: target, replace: true });
-}
-
-function AuthPage() {
+function OpenPreview() {
   const navigate = useNavigate();
-  const router = useRouter();
-  const search = useSearch({ from: "/auth" });
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) void routeAuthenticatedUser(navigate, router, search.next);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
-        void routeAuthenticatedUser(navigate, router, search.next);
-      }
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [navigate, router, search.next]);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      // Only the exact configured password can initialise an empty Supabase Auth project.
-      // Existing passwords are never silently reset by a login attempt.
-      const bootstrap = await fetch("/api/public/auth/bootstrap", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password }),
-        cache: "no-store",
-      });
-      if (!bootstrap.ok) {
-        throw new Error(bootstrap.status === 401 ? "Incorrect password" : "Owner account not available");
-      }
-      const { error } = await supabase.auth.signInWithPassword({
-        email: OWNER_EMAIL,
-        password,
-      });
-      if (error) throw new Error("Incorrect password");
-      await routeAuthenticatedUser(navigate, router, search.next);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Incorrect password");
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  useEffect(() => { void navigate({ to: "/", replace: true }); }, [navigate]);
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6 rounded-md border border-border/70 bg-card p-6">
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Research Terminal
-          </div>
-          <h1 className="mt-1 text-lg font-semibold text-foreground">Enter password</h1>
-        </div>
-
-        <form onSubmit={onSubmit} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              autoFocus
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </div>
-          {error ? <p className="text-xs text-[var(--negative)]">{error}</p> : null}
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "…" : "Enter"}
-          </Button>
-        </form>
+    <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
+      <div className="space-y-3 text-center">
+        <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Research Terminal · Staging Preview</p>
+        <h1 className="text-xl font-semibold">Opening Research Terminal…</h1>
+        <Link to="/" className="text-sm underline">Open dashboard</Link>
       </div>
-    </div>
+    </main>
   );
 }
