@@ -98,7 +98,15 @@ read-only. Do **not** set `--apply` until you have confirmed the dry-run diff.
    exposure: current `/api/public/scores/run` compares its `apikey` header
    with a publishable Supabase key, which is not a privileged secret. Verify
    ingestion routes have appropriate independent server-side protection.
-5. Confirm the original project's actual user identities and auth requirements.\n   External `auth.users` has zero rows: establish secure user migration or a\n   deliberate new-account/recovery procedure and test the end-to-end flow.\n   Register and verify the required scheduled jobs; external `cron.job` is empty.\n   Resume ingestion from the last available market date through the current\n   market session and monitor provider quotas/failures before declaring\n   scores fresh. Do not create jobs while the production scheduler could\n   compete with them.\n6. **No traffic/domain cutover** until the operator explicitly authorises it
+5. Confirm the original project's actual user identities and auth requirements.
+   External `auth.users` has zero rows: establish secure user migration or a
+   deliberate new-account/recovery procedure and test the end-to-end flow.
+   Register and verify the required scheduled jobs; external `cron.job` is empty.
+   Resume ingestion from the last available market date through the current
+   market session and monitor provider quotas/failures before declaring
+   scores fresh. Do not create jobs while the production scheduler could
+   compete with them.
+6. **No traffic/domain cutover** until the operator explicitly authorises it
    after evidence from the above checks. Leave Lovable Cloud available as the
    rollback route.
 
