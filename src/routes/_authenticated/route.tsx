@@ -1,13 +1,7 @@
-// Integration-managed protected layout. Redirects to /auth when no session.
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+// Staging research preview: all research routes open without user credentials.
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw redirect({ href: "/auth" });
-    return { user: data.user };
-  },
   component: () => <Outlet />,
 });
