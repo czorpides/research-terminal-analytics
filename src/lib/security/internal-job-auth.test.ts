@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { authorizeInternalJobRequest } from "./internal-job-auth.server";
+import { authorizeInternalJobRequest } from "./internal-job-auth.server.ts";
 
 const previous = process.env.INTERNAL_JOB_TOKEN;
 const secret = "testing-token-for-stage-only-not-a-production-secret-0123456789";
