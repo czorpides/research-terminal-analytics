@@ -24,21 +24,28 @@ jobs:
         run: node --experimental-strip-types --test src/lib/security/internal-job-auth.test.ts
       - name: Test owner bootstrap password verification
         run: node --experimental-strip-types --test src/lib/auth/owner.test.ts
-      - name: Verify global owner authentication remains enforced
+      - name: Verify staging read-only boundary and open route
         run: |
           python3 - <<'PY'
           from pathlib import Path
           start = Path("src/start.ts").read_text()
-          middleware = Path("src/integrations/supabase/auth-middleware.ts").read_text()
-          owner = Path("src/lib/auth/owner.functions.ts").read_text()
-          bootstrap = Path("src/routes/api/public/auth/bootstrap.ts").read_text()
-          assert "functionMiddleware: [attachSupabaseAuth, requireSupabaseAuth]" in start
-          assert "data.user.email !== 'owner@research.local'" in middleware
-          assert "ensureOwnerAccount" not in owner
-          assert "bootstrapOwnerIfMissing(candidate)" in bootstrap
-          assert "updateUserById" not in bootstrap
-          assert "updateUserById" not in Path("src/lib/auth/owner.server.ts").read_text()
-          print("PASS: server functions require owner session; bootstrap cannot reset a password")
+          middleware = Path("src/lib/security/staging-readonly.middleware.ts").read_text()
+          route = Path("src/routes/_authenticated/route.tsx").read_text()
+          auth = Path("src/routes/auth.tsx").read_text()
+          assert "functionMiddleware: [stagingReadOnlyFunctions]" in start
+          assert 'request?.method === "GET"' in middleware
+          assert "authorizeInternalJobRequest(request)" in middleware
+          assert "beforeLoad" not in route
+          assert "signInWithPassword" not in auth
+          assert 'navigate({ to: "/", replace: true })' in auth
+          for path, name in (
+            ("src/lib/equities/explorer.functions.ts", "getEquityExplorer"),
+            ("src/lib/panels/growth-engine.functions.ts", "getGrowthEngine"),
+            ("src/lib/panels/macro.functions.ts", "getMacroPanelsForRegion"),
+          ):
+            s = Path(path).read_text()
+            assert f'{name} = createServerFn({{ method: "GET" }})' in s, path
+          print("PASS: staging pages are open, reads allowed, writes require job token")
           PY
       - name: Verify the identified administrative routes no longer trust public keys
         run: |
