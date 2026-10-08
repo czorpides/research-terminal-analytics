@@ -202,7 +202,9 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
     const countryIds = unique(
       assets.map((asset) => asset.country_id).filter((id): id is string => Boolean(id)),
     );
-    const assetBatches = chunkValues(assetIds, 75);
+    // Keep each PostgREST result under its normal 1,000-row cap (125 × 7 scores
+    // <= 875) while reducing round-trips vs the former 75-asset batches.
+    const assetBatches = chunkValues(assetIds, 125);
 
     const [scorePages, pricePages, industryResult, countryResult, earningsPages] =
       await Promise.all([
