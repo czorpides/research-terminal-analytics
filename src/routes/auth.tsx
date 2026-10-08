@@ -1,8 +1,7 @@
 import { createFileRoute, useNavigate, useRouter, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useServerFn } from "@tanstack/react-start";
-import { ensureOwnerAccount, OWNER_EMAIL } from "@/lib/auth/owner.functions";
+import { OWNER_EMAIL } from "@/lib/auth/owner.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,7 +48,6 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const ensureOwner = useServerFn(ensureOwnerAccount);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -68,8 +66,17 @@ function AuthPage() {
     setError(null);
     setBusy(true);
     try {
-      // Ensure the single owner account exists with the current password.
-      await ensureOwner({});
+      // Only the exact configured password can initialise an empty Supabase Auth project.
+      // Existing passwords are never silently reset by a login attempt.
+      const bootstrap = await fetch("/api/public/auth/bootstrap", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password }),
+        cache: "no-store",
+      });
+      if (!bootstrap.ok) {
+        throw new Error(bootstrap.status === 401 ? "Incorrect password" : "Owner account not available");
+      }
       const { error } = await supabase.auth.signInWithPassword({
         email: OWNER_EMAIL,
         password,
