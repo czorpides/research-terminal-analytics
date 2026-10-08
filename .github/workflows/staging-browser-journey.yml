@@ -1,5 +1,10 @@
 name: Research Terminal staging browser journey
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/verify-staging-pages.mjs"
+      - ".github/workflows/staging-browser-journey.yml"
   workflow_dispatch:
   push:
     branches: [fix/railway-staging-internal-auth]
