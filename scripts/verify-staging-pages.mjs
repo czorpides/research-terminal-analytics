@@ -39,6 +39,24 @@ try {
       await page.close();
     }
   }
+  // Prove the tabs remain usable in both directions even during slow data loads.
+  const switching = await browser.newPage({ viewport: { width: 1366, height: 860 } });
+  try {
+    await switching.goto(base + "/radar", { waitUntil: "domcontentloaded", timeout: 45000 });
+    const nav = switching.getByRole("navigation", { name: "Switch research radar" });
+    await nav.getByRole("link", { name: "Swing Radar" }).click({ timeout: 10000 });
+    await switching.waitForURL("**/swing-trades", { timeout: 12000 });
+    await switching.getByRole("heading", { name: "Multi-strategy swing opportunities" }).waitFor({ timeout: 12000 });
+    await nav.getByRole("link", { name: "Opportunity Radar" }).click({ timeout: 10000 });
+    await switching.waitForURL("**/radar", { timeout: 12000 });
+    await switching.getByRole("heading", { name: "One research queue. One company research screen." }).waitFor({ timeout: 12000 });
+    reports.push({ path: "Radar tab round-trip", passed: true, from: "/radar", via: "/swing-trades", back: "/radar" });
+  } catch (err) {
+    failures.push("Radar tab round-trip: " + String(err));
+    reports.push({ path: "Radar tab round-trip", passed: false, error: String(err) });
+  } finally {
+    await switching.close();
+  }
   console.log(JSON.stringify(reports, null, 2));
   assert.equal(failures.length, 0, "Failed routes:\n" + failures.join("\n"));
 } finally {
