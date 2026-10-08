@@ -94,7 +94,10 @@ read-only. Do **not** set `--apply` until you have confirmed the dry-run diff.
    session/RLS isolation, 3,016 assets, Radar coverage and candidate ordering,
    freshness warnings, ingest endpoints, idempotent jobs and scheduled crons.
    Ensure only one scheduler is active and all service-role secrets remain
-   runtime-only.
+   runtime-only. Audit public POST endpoint authentication before internet
+   exposure: current `/api/public/scores/run` compares its `apikey` header
+   with a publishable Supabase key, which is not a privileged secret. Verify
+   ingestion routes have appropriate independent server-side protection.
 5. Confirm the original project's actual user identities and auth requirements.\n   External `auth.users` has zero rows: establish secure user migration or a\n   deliberate new-account/recovery procedure and test the end-to-end flow.\n   Register and verify the required scheduled jobs; external `cron.job` is empty.\n   Resume ingestion from the last available market date through the current\n   market session and monitor provider quotas/failures before declaring\n   scores fresh. Do not create jobs while the production scheduler could\n   compete with them.\n6. **No traffic/domain cutover** until the operator explicitly authorises it
    after evidence from the above checks. Leave Lovable Cloud available as the
    rollback route.
