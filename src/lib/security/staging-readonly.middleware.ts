@@ -2,21 +2,31 @@ import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { authorizeInternalJobRequest } from "@/lib/security/internal-job-auth.server";
 
+const STAGING_ORIGIN = "https://research-terminal-web-staging.up.railway.app";
+
 /**
- * The isolated staging research preview does not require a user session.
- * Only GET server functions are callable anonymously. Any POST server function
- * needs the dedicated server-only internal job token; in particular, callers
- * cannot run ingestions, recompute scores, or mutate the research store.
+ * Temporary credential-free development access only for the isolated Railway
+ * staging environment. Research reads and on-page writes can run without a
+ * Supabase login. Direct privileged HTTP job endpoints retain their own token.
  *
- * Do not carry this middleware into public production without a full auth review.
+ * Origin and fetch metadata guard accidental CSRF, NOT anonymous attackers:
+ * origin headers can be forged by non-browser clients. Do not deploy publicly
+ * as a production access-control scheme or use with sensitive user information.
  */
 export const stagingReadOnlyFunctions = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
     const request = getRequest();
-    if (request?.method === "GET") return next();
-    if (!request || !authorizeInternalJobRequest(request)) {
-      throw new Error("Research preview is read-only; administrative actions are disabled.");
-    }
-    return next();
+    if (!request) throw new Error("Missing request");
+    if (request.method === "GET") return next();
+    if (authorizeInternalJobRequest(request)) return next();
+
+    const isStaging = process.env.RAILWAY_ENVIRONMENT_NAME === "staging";
+    const sameOrigin =
+      request.headers.get("origin") === STAGING_ORIGIN &&
+      request.headers.get("sec-fetch-site") === "same-origin" &&
+      new URL(request.url).pathname.startsWith("/_serverFn/");
+
+    if (isStaging && request.method === "POST" && sameOrigin) return next();
+    throw new Error("This action is only available in the staging research interface.");
   },
 );
