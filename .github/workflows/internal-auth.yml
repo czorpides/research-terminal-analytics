@@ -22,6 +22,24 @@ jobs:
           node-version: "22"
       - name: Test internal-only bearer authentication
         run: node --experimental-strip-types --test src/lib/security/internal-job-auth.test.ts
+      - name: Test owner bootstrap password verification
+        run: node --experimental-strip-types --test src/lib/auth/owner.test.ts
+      - name: Verify global owner authentication remains enforced
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          start = Path("src/start.ts").read_text()
+          middleware = Path("src/integrations/supabase/auth-middleware.ts").read_text()
+          owner = Path("src/lib/auth/owner.functions.ts").read_text()
+          bootstrap = Path("src/routes/api/public/auth/bootstrap.ts").read_text()
+          assert "functionMiddleware: [attachSupabaseAuth, requireSupabaseAuth]" in start
+          assert "data.user.email !== 'owner@research.local'" in middleware
+          assert "ensureOwnerAccount" not in owner
+          assert "bootstrapOwnerIfMissing(candidate)" in bootstrap
+          assert "updateUserById" not in bootstrap
+          assert "updateUserById" not in Path("src/lib/auth/owner.server.ts").read_text()
+          print("PASS: server functions require owner session; bootstrap cannot reset a password")
+          PY
       - name: Verify the identified administrative routes no longer trust public keys
         run: |
           python3 - <<'PY'
