@@ -126,7 +126,7 @@ function OpportunityRadarPage() {
         </section>
       )}
 
-      {universeUnderfilled && (
+      {workspace && universeUnderfilled && (
         <section className="mb-5 rounded-xl border border-amber-500/35 bg-amber-500/[0.06] p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
