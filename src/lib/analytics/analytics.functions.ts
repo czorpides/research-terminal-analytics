@@ -9,7 +9,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const TriggerInput = z
   .object({
@@ -20,7 +19,6 @@ const TriggerInput = z
   .default({});
 
 export const runUsGrowthKalmanFn = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => TriggerInput.parse(input ?? {}))
   .handler(async ({ data }) => {
     const { runUsGrowthKalmanPipeline } = await import("./growth-pipeline.server");
@@ -32,7 +30,6 @@ export const runUsGrowthKalmanFn = createServerFn({ method: "POST" })
   });
 
 export const analyticsHealthFn = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { analyticsHealth } = await import("./client.server");
     return analyticsHealth();
