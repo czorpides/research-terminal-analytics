@@ -43,6 +43,9 @@ jobs:
       - name: Run TypeScript check against generated routes
         run: npx tsc --noEmit
 
+      - name: Verify radar research caching and retry
+        run: node --experimental-strip-types --test src/lib/research/research-cache.test.ts
+
       - name: Run Opportunity Radar and fundamental model tests
         run: npm run test:opportunity
 
