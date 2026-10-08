@@ -12,6 +12,7 @@
 import {
   LayoutGrid,
   Radar,
+  Crosshair,
   TrendingDown,
   TrendingUp,
   Filter,
@@ -142,6 +143,19 @@ export const ROUTES: RouteEntry[] = [
     requiredDataSources: ["prices", "fundamentals"],
     requiredModels: ["opportunity.horizons", "impairment", "idiosyncrasy"],
     purpose: "Finds share-price damage that appears greater than business impairment.",
+  },
+  {
+    id: "sw",
+    path: "/swing-trades",
+    name: "Swing Radar",
+    group: "platform",
+    icon: Crosshair,
+    stage: 3,
+    status: "active",
+    enabled: true,
+    requiredDataSources: ["prices", "earnings", "macro"],
+    requiredModels: ["swing.v2", "entry-quality", "risk-controls"],
+    purpose: "Multi-strategy swing trade opportunities and entry-quality monitoring.",
   },
   {
     id: "uv",
