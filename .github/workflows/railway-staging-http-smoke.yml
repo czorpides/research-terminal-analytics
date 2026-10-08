@@ -40,3 +40,5 @@ jobs:
           code=$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/staging-bootstrap.txt -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/public/auth/bootstrap")
           test "$code" = "410" || { echo "Expected 410 from disabled bootstrap, got $code"; exit 1; }
           echo "PASS: owner bootstrap is disabled"
+
+# Verify the deployed read-only staging preview after Railway rollout.
