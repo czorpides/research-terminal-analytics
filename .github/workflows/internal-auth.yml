@@ -1,0 +1,45 @@
+name: Privileged endpoint authentication
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/security/**"
+      - "src/routes/api/public/**"
+      - ".github/workflows/internal-auth.yml"
+  push:
+    branches: [fix/railway-staging-internal-auth]
+
+permissions:
+  contents: read
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test internal-only bearer authentication
+        run: node --experimental-strip-types --test src/lib/security/internal-job-auth.test.ts
+      - name: Verify the identified administrative routes no longer trust public keys
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          paths = [
+              "verify/run.ts", "scores/run.ts", "providers/ping.ts",
+              "ingest/fred.ts", "ingest/altdata.ts", "ingest/commodities.ts",
+              "ingest/swing-metals.ts", "ingest/macro-native.ts",
+              "ingest/us-labour-fred.ts", "ingest/us-market-fred.ts",
+              "models/us-market-regime.ts", "ingest/us-liquidity-fred.ts",
+              "ingest/us-inflation-fred.ts", "history/verify-narratives.ts",
+              "ingest/us-growth-fred.ts", "radars/undervaluation/refresh.ts",
+              "ingest/fundamentals.ts", "ingest/stooq.ts"
+          ]
+          root = Path("src/routes/api/public")
+          for route in paths:
+              body = (root / route).read_text()
+              assert 'authorizeInternalJobRequest(request)' in body, route
+              assert 'request.headers.get("apikey")' not in body, route
+          print(f"PASS: {len(paths)} privileged routes require internal bearer token")
+          PY
