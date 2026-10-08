@@ -1,0 +1,44 @@
+name: Railway staging HTTP smoke
+
+on:
+  push:
+    branches: [fix/railway-staging-internal-auth]
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/railway-staging-http-smoke.yml"
+      - "src/lib/auth/**"
+      - "src/routes/auth.tsx"
+      - "src/routes/api/public/**"
+
+permissions:
+  contents: read
+
+jobs:
+  http:
+    name: Public preview and denied privileged requests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check staging HTTP endpoints without credentials
+        env:
+          BASE: https://research-terminal-web-staging.up.railway.app
+        run: |
+          set -euo pipefail
+          code=$(curl --retry 3 --retry-all-errors --retry-delay 3 --connect-timeout 10 --max-time 30 -sSL -o /tmp/staging-auth.html -w '%{http_code}' "$BASE/auth")
+          test "$code" = "200" || { echo "Expected 200 from /auth, got $code"; exit 1; }
+          grep -q 'Research Terminal' /tmp/staging-auth.html || { echo "Preview page missing"; exit 1; }
+          echo "PASS: public preview page responds 200"
+
+          for path in /api/public/scores/run /api/public/ingest/stooq /api/public/ingest/fundamentals; do
+            code=$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/staging-denied.txt -w '%{http_code}' -X POST "$BASE$path")
+            test "$code" = "401" || { echo "Expected 401 from $path, got $code"; exit 1; }
+            echo "PASS: $path denies unauthenticated POST"
+          done
+
+          code=$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/staging-bootstrap.txt -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/public/auth/bootstrap")
+          test "$code" = "410" || { echo "Expected 410 from disabled bootstrap, got $code"; exit 1; }
+          echo "PASS: owner bootstrap is disabled"
+
+# Verify the deployed read-only staging preview after Railway rollout.

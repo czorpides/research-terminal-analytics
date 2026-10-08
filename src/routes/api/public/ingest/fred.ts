@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { runAllFredIngest, runFredIngest } from "@/lib/ingestion/fred/ingest.server";
 
 /**
- * Public HTTP endpoint hit by pg_cron (via pg_net). Auth uses the Supabase
- * anon key in the `apikey` header — the canonical /api/public/* pattern.
+ * Administrative HTTP endpoint used by the scheduler. Requires a private
+ * server-side INTERNAL_JOB_TOKEN in the Authorization bearer header.
  *
  * Usage:
  *   POST /api/public/ingest/fred                → ingest all series
@@ -13,11 +13,8 @@ export const Route = createFileRoute("/api/public/ingest/fred")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const anon = process.env.SUPABASE_PUBLISHABLE_KEY;
-        const apikey = request.headers.get("apikey");
-        if (!anon || apikey !== anon) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const { authorizeInternalJobRequest } = await import("@/lib/security/internal-job-auth.server");
+        if (!authorizeInternalJobRequest(request)) return new Response("Unauthorized", { status: 401 });
 
         const url = new URL(request.url);
         const series = url.searchParams.get("series");

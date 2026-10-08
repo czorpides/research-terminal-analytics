@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, Crosshair } from "lucide-react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { AlertTriangle, ChevronDown, Crosshair, RotateCcw } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
@@ -10,7 +10,7 @@ import { OpportunityRadarReadinessStatus } from "@/components/research/Opportuni
 import { getOpportunityRadarHealth } from "@/lib/opportunity/health.functions";
 import { getOpportunityCandidateFreshness } from "@/lib/opportunity/integrity.functions";
 import { applyOpportunityEvidenceIntegrity } from "@/lib/opportunity/integrity";
-import { getInstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
+import { getInstitutionalOpportunityWorkspace, type InstitutionalOpportunityWorkspace } from "@/lib/opportunity/institutional.functions";
 import {
   applyStage1Structures,
   getStage1StructureWorkspace,
@@ -32,7 +32,8 @@ const radarQueryOptions = queryOptions({
   },
   staleTime: 15 * 60 * 1000,
   refetchInterval: 15 * 60 * 1000,
-  refetchOnWindowFocus: true,
+  refetchOnWindowFocus: false,
+  retry: 1,
 });
 
 const opportunityHealthQueryOptions = queryOptions({
@@ -62,19 +63,31 @@ export const Route = createFileRoute("/_authenticated/radar")({
       },
     ],
   }),
-  loader: ({ context }) =>
-    Promise.all([
-      context.queryClient.ensureQueryData(radarQueryOptions),
-      context.queryClient.ensureQueryData(institutionalQueryOptions),
-    ]),
   component: OpportunityRadarPage,
 });
 
 function OpportunityRadarPage() {
-  const { data: workspace } = useSuspenseQuery(radarQueryOptions);
-  const { data: institutionalWorkspace } = useSuspenseQuery(institutionalQueryOptions);
+  // Render the route immediately rather than blocking navigation on several
+  // large 3,000-equity remote queries. Surface failures instead of a blank page.
+  const radarQuery = useQuery(radarQueryOptions);
+  const institutionalQuery = useQuery({
+    ...institutionalQueryOptions,
+    enabled: Boolean(radarQuery.data),
+    retry: false,
+  });
   const healthQuery = useQuery(opportunityHealthQueryOptions);
-  const universeUnderfilled = workspace.universe.activeEquities < MANAGED_EQUITY_READY_FLOOR;
+  const workspace = radarQuery.data;
+  const institutionalWorkspace: InstitutionalOpportunityWorkspace = institutionalQuery.data ?? {
+    asOf: new Date(0).toISOString(),
+    calcVersion: "unavailable",
+    status: "unavailable",
+    universe: { activeEquities: 0, loadedAssets: 0, assetsWithStatements: 0, assetsWithTwoPeriods: 0, cap: 3000, truncated: false },
+    counts: { priority: 0, qualified: 0, watch: 0, avoid: 0, insufficient: 0 },
+    analyses: [],
+    modelNote: "Institutional analysis is still loading or currently unavailable.",
+    warnings: ["Institutional analysis is not available yet. Core radar discovery remains accessible."],
+  };
+  const universeUnderfilled = workspace ? workspace.universe.activeEquities < MANAGED_EQUITY_READY_FLOOR : false;
 
   return (
     <AppShell>
@@ -92,7 +105,28 @@ function OpportunityRadarPage() {
         </Link>
       </div>
 
-      {universeUnderfilled && (
+      {!workspace && (
+        <section role="status" className="mb-5 rounded-xl border border-border/70 bg-card p-5">
+          <div className="text-sm font-semibold">
+            {radarQuery.isError ? "Opportunity Radar data is unavailable" : "Loading Opportunity Radar research data…"}
+          </div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {radarQuery.isError
+              ? "The research page is available, but its data query failed. Other screens can still be used. Check Data Health while the recovered database is being repaired."
+              : "Loading and evaluating the recovered equity universe. This may take longer than ordinary page navigation."}
+          </p>
+          {radarQuery.isError && (
+            <div className="mt-3 flex items-center gap-4">
+              <button type="button" onClick={() => void radarQuery.refetch()} className="inline-flex items-center gap-2 rounded border border-border px-3 py-1.5 text-xs">
+                <RotateCcw className="h-3 w-3" /> Retry data loading
+              </button>
+              <Link to="/data-health" className="text-xs underline">Open Data Health</Link>
+            </div>
+          )}
+        </section>
+      )}
+
+      {workspace && universeUnderfilled && (
         <section className="mb-5 rounded-xl border border-amber-500/35 bg-amber-500/[0.06] p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
@@ -106,12 +140,18 @@ function OpportunityRadarPage() {
         </section>
       )}
 
-      <OpportunityRadarDefinitiveView
-        workspace={workspace}
-        institutionalWorkspace={institutionalWorkspace}
-      />
+      {workspace && (
+        <OpportunityRadarDefinitiveView
+          workspace={workspace}
+          institutionalWorkspace={institutionalWorkspace}
+        />
+      )}
 
-      <details className="group mt-5 rounded-xl border border-border/65 bg-muted/10">
+      {institutionalQuery.isError && workspace && (
+        <p className="mb-3 text-xs text-amber-500">Advanced valuation is temporarily unavailable. Core Radar remains usable.</p>
+      )}
+
+      {workspace && <details className="group mt-5 rounded-xl border border-border/65 bg-muted/10">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
           <div>
             <div className="text-sm font-semibold">Data readiness & evidence integrity</div>
@@ -125,7 +165,7 @@ function OpportunityRadarPage() {
           <OpportunityRadarReadinessStatus health={healthQuery.data ?? null} />
           <OpportunityRadarEvidenceFreshness workspace={workspace} />
         </div>
-      </details>
+      </details>}
     </AppShell>
   );
 }
