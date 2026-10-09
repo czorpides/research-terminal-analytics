@@ -89,7 +89,9 @@ export function assessCatalyst(event: CatalystEvidence, asOf: Date = new Date())
   if (known > now || Date.parse(event.verified_at) > now) {
     return unknown("future", "Not yet publicly verified at this historical assessment date.");
   }
-  const ageDays = Math.max(0, (now - known) / 86_400_000);
+  // Time-of-availability gates lookahead; publication time controls freshness.
+  // Backfilling last month's official news today must not reset its decay clock.
+  const ageDays = Math.max(0, (now - published) / 86_400_000);
   const expiry = event.expires_at ? Date.parse(event.expires_at) : Infinity;
   if (ageDays > horizons[event.event_type] || (Number.isFinite(expiry) && now >= expiry)) {
     return unknown("expired", "Event is outside its short-term catalyst window.");
