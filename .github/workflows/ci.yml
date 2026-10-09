@@ -56,6 +56,10 @@ jobs:
       - name: Test S&P official-criteria preflight (source/PIT/member veto)
         run: node --experimental-strip-types --test src/lib/catalysts/sp500-preflight.test.ts
 
+      - name: Test point-in-time SEC GAAP profitability source and bounded reader
+        run: |
+          node --experimental-strip-types --test src/lib/catalysts/providers/sec-gaap-continuing.test.ts
+          node --experimental-strip-types --test src/lib/catalysts/providers/sec-gaap-continuing.server.test.ts
       - name: Test official SEC filing intake without network access
         run: node --experimental-strip-types --test src/lib/catalysts/providers/sec-edgar.test.ts
 
