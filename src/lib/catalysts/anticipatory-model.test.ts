@@ -89,8 +89,9 @@ test("Nasdaq has separate current rules and does not reuse S&P committee claim",
 test("two independently reviewed time-stamped snapshots reveal improving conditions, not event odds",()=>{
   const earlier={...sample,hypothesis_key:"sp500:BE:2026q3",first_observed_at:"2026-10-07T08:00:00Z",
     last_reviewed_at:"2026-10-07T08:00:00Z",verified_at:"2026-10-07T10:00:00Z",
-    criteria:sample.criteria.map(c=>["gaap_latest_quarter","gaap_trailing_four_quarters"].includes(c.code)
-      ?{...c,state:"unknown" as const,observedAt:"2026-10-07T08:00:00Z"}:c)};
+    criteria:sample.criteria.map(c=>({...c,
+      state:["gaap_latest_quarter","gaap_trailing_four_quarters"].includes(c.code)?"unknown" as const:"pass" as const,
+      observedAt:"2026-10-07T08:00:00Z"}))};
   const later={...sample,hypothesis_key:"sp500:BE:2026q4",
     first_observed_at:"2026-10-08T12:00:00Z",
     last_reviewed_at:"2026-10-08T12:00:00Z",
