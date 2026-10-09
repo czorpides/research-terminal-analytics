@@ -23,6 +23,8 @@ jobs:
         run: |
           npm run build
           npx tsc --noEmit
+      - name: Unit-test independently reviewed anticipatory evidence
+        run: node --experimental-strip-types --test src/lib/catalysts/anticipatory-model.test.ts
       - name: Unit-test official source adapters and bounded scheduler
         run: |
           node --experimental-strip-types --test src/lib/catalysts/providers/sp-index-feed.test.ts

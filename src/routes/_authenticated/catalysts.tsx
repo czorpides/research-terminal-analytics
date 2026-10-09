@@ -5,6 +5,8 @@ import { ArrowUpRight, ClipboardCheck, CalendarClock, ShieldCheck, AlertTriangle
 import { AppShell } from "@/components/layout/AppShell";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { getCompanyCatalystWorkspace, type CompanyCatalystRow } from "@/lib/catalysts/company-event.functions";
+import { getAnticipatoryCatalysts } from "@/lib/catalysts/anticipatory.functions";
+import { ANTICIPATION_RULEBOOK } from "@/lib/catalysts/anticipatory-model";
 
 export const Route = createFileRoute("/_authenticated/catalysts")({
   head: () => ({ meta: [{ title: "Catalyst Intelligence — Research Terminal" },
@@ -46,6 +48,7 @@ function CatalystIntelligencePage() {
         <span className="rounded-full border border-border px-2.5 py-1">Shadow research · no trading bonuses</span>
         <span>Time-of-publication verified · events expire automatically</span>
       </div>
+      <AnticipationBoard symbol={symbol}/>
       {query.isPending && <section role="status" className="rounded-xl border border-border/70 p-5 text-sm">Loading Catalyst Intelligence…</section>}
       {query.isError && (
         <section role="alert" className="rounded-xl border border-[var(--negative)]/40 p-5 text-sm">
@@ -138,6 +141,78 @@ function CatalystIntelligencePage() {
       </>)}
     </AppShell>
   );
+}
+/** Separate research lane: hypotheses are never relabelled as verified corporate events. */
+function AnticipationBoard({symbol}:{symbol:string}) {
+  const query=useQuery({
+    queryKey:["anticipation-research","v0.1"],queryFn:()=>getAnticipatoryCatalysts(),
+    staleTime:5*60_000,retry:false,refetchOnWindowFocus:false,
+  });
+  const rows=(query.data?.rows??[]).filter(r=>
+    !symbol.trim() || r.symbol.toLowerCase().includes(symbol.trim().toLowerCase()));
+  return <section className="mb-5 rounded-xl border border-border/70 bg-card/40 p-4" aria-label="Anticipatory catalyst research">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <h2 className="text-base font-semibold">Anticipatory catalysts · research watch</h2>
+        <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+          Identify plausible upcoming events before announcement, using published methodologies and documented issuer evidence.
+          Passing formal criteria is not a probability forecast. Committee decisions, earnings outcomes and contract awards remain unknown.
+        </p>
+      </div>
+      <span className="rounded border border-border px-2 py-1 text-[10px] text-muted-foreground">Separate from confirmed events · zero score adjustment</span>
+    </div>
+    {query.isPending && <p role="status" className="mt-3 text-xs text-muted-foreground">Loading evidence-backed watchlist…</p>}
+    {query.isError && <p role="status" className="mt-3 text-xs text-muted-foreground">
+      Anticipatory store not available in this environment; existing catalyst ledger remains unaffected.
+    </p>}
+    {query.data && <>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {query.data.reviewed} independently reviewed · {query.data.awaitingReview} pending review · {query.data.qualifiedForResearch} passed all documented criteria
+      </p>
+      {rows.length===0 ? <p role="status" className="mt-3 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+        No source-backed anticipation hypotheses logged yet. The rulebook is ready, but no index membership,
+        eligibility, analyst estimate, procurement or FDA outcome has been inferred from share-price momentum.
+      </p> : <div className="mt-3 space-y-2">
+        {rows.map(row=>{
+          const definition=ANTICIPATION_RULEBOOK[row.hypothesisType];
+          return <article key={row.id} className="rounded-lg border border-border/70 bg-card p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="text-xs">
+                <span className="font-semibold">{row.symbol}</span>
+                <span className="ml-2 text-muted-foreground">{row.companyName} · {definition.label}</span>
+                <p className="mt-1 font-medium">{row.headline}</p>
+              </div>
+              <span className="rounded border border-border px-2 py-1 text-[10px]">
+                {row.assessment.state.replaceAll("_"," ")}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+              <span>Evidence {row.assessment.passed}/{row.assessment.total} conditions</span>
+              <span>Review: {row.verificationStatus}</span>
+              <span>First observed: {row.firstObservedAt.slice(0,10)}</span>
+              {row.targetAt && <span>Event window: {row.targetAt.slice(0,10)} (not guaranteed)</span>}
+              <a href={row.evidenceUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">Source evidence ↗</a>
+            </div>
+            {row.assessment.missing.length>0 && <p className="mt-2 text-[11px] text-muted-foreground">
+              Unproven: {row.assessment.missing.join(", ").replaceAll("_"," ")}
+            </p>}
+            {row.assessment.failed.length>0 && <p className="mt-1 text-[11px] text-muted-foreground">
+              Failed: {row.assessment.failed.join(", ").replaceAll("_"," ")}
+            </p>}
+            {row.progress && (row.progress.newlySupported.length>0 || row.progress.newlyFailed.length>0 || row.progress.evidenceLost.length>0) &&
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Changed vs prior verified snapshot: {row.progress.newlySupported.length>0 && `new evidence satisfied ${row.progress.newlySupported.join(", ").replaceAll("_"," ")}`}
+                {row.progress.newlyFailed.length>0 && ` · newly failed ${row.progress.newlyFailed.join(", ").replaceAll("_"," ")}`}
+                {row.progress.evidenceLost.length>0 && ` · evidence unavailable ${row.progress.evidenceLost.join(", ").replaceAll("_"," ")}`}.
+                These are evidence transitions, not increased inclusion odds.
+              </p>}
+            <p className="mt-2 text-[11px] text-muted-foreground">{row.assessment.explanation}</p>
+          </article>;
+        })}
+      </div>}
+      <p className="mt-3 text-[11px] text-muted-foreground">{query.data.note}</p>
+    </>}
+  </section>;
 }
 function Metric({label,value,note}:{label:string;value:number;note:string}) {
   return <div className="rounded-lg border border-border/70 bg-card p-3">
