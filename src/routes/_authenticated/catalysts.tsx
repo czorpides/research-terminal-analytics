@@ -199,6 +199,13 @@ function AnticipationBoard({symbol}:{symbol:string}) {
             {row.assessment.failed.length>0 && <p className="mt-1 text-[11px] text-muted-foreground">
               Failed: {row.assessment.failed.join(", ").replaceAll("_"," ")}
             </p>}
+            {row.progress && (row.progress.newlySupported.length>0 || row.progress.newlyFailed.length>0 || row.progress.evidenceLost.length>0) &&
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Changed vs prior verified snapshot: {row.progress.newlySupported.length>0 && `new evidence satisfied ${row.progress.newlySupported.join(", ").replaceAll("_"," ")}`}
+                {row.progress.newlyFailed.length>0 && ` · newly failed ${row.progress.newlyFailed.join(", ").replaceAll("_"," ")}`}
+                {row.progress.evidenceLost.length>0 && ` · evidence unavailable ${row.progress.evidenceLost.join(", ").replaceAll("_"," ")}`}.
+                These are evidence transitions, not increased inclusion odds.
+              </p>}
             <p className="mt-2 text-[11px] text-muted-foreground">{row.assessment.explanation}</p>
           </article>;
         })}
