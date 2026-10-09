@@ -1,0 +1,33 @@
+name: Production release read-only page probe
+on:
+  pull_request:
+    branches: [main]
+    paths: [".github/workflows/production-release-probe.yml"]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Public GET page responses (no credentials)
+        run: |
+          node --input-type=module <<'JS'
+          const origin="https://research-terminal-analytics.lovable.app";
+          const staging="https://research-terminal-web-staging.up.railway.app";
+          let failed=false;
+          for(const base of [origin,staging]){
+            for(const path of ["/auth","/radar","/swing-trades","/catalysts"]){
+              try{
+                const response=await fetch(base+path,{redirect:"manual",headers:{"cache-control":"no-cache","x-research-terminal-probe":"pr67-live-check"},signal:AbortSignal.timeout(15000)});
+                console.log(JSON.stringify({target:base===origin?"production":"staging",path,status:response.status,location:response.headers.get("location")}));
+                if(base===origin && path==="/catalysts"&&response.status===404)failed=true;
+              }catch(error){
+                console.log(JSON.stringify({target:base===origin?"production":"staging",path,error:String(error)}));
+                failed=true;
+              }
+            }
+          }
+          if(failed)process.exitCode=1;
+          JS
