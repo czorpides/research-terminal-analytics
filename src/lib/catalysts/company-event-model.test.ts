@@ -40,6 +40,7 @@ test("political statements remain tightly capped and decay rapidly", () => {
   const item={...sample,event_type:"political_statement" as const,source_tier:"social" as const};
   const a=assessCatalyst(item,at);
   assert.ok(a.confidence! <=35);
+  assert.ok(a.priorityScore! <=35,"social political statements must not earn an 80-point bullish catalyst");
   assert.equal(assessCatalyst(item,new Date("2026-10-12T14:00:00Z")).priorityScore,null);
 });
 test("high projected EPS alone is not treated as a positive revision", () => {
