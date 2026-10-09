@@ -60,3 +60,15 @@ The example is **illustrative**, not an actual verified filing. Before approving
 6. Reintroduce production login, role-based reviewer authorisation and backend rate/cost limits before opening any source or admin controls to external users.
 
 **Scope:** additive staging migration and feature branch. Original Lovable cloud deployment and legacy production jobs remain untouched.
+
+## Phase 2 execution status — 9 October 2026
+
+- PR #61 was merged into the **staging integration branch only**. PR #60 targeting main remains draft pending Lovable legacy-job cutover.
+- Separate staging Railway service `catalyst-source-cron` uses an isolated `/cron/Dockerfile` (not the web Dockerfile).
+- One controlled S&P DJI RSS poll returned **HTTP 403**, recorded in `catalyst_poll_runs`. Do not evade source access restrictions or enable failing automated retries.
+- **Recurring cron is not enabled.** SEC polling remains disabled; `SEC_EDGAR_USER_AGENT` and independent `CATALYST_REVIEW_TOKEN` need authorised configuration.
+- Three official S&P press releases were manually recorded as `collection_method='manual_official'`, not an automated feed. Four company-level inclusion candidates (BE, ILMN, TWLO, FRSH) were recorded as unverified, direction-unknown and score-free.
+- A date-only source publication is represented conservatively at 23:59:59 UTC with `published_time_precision='date_only_conservative'`, never an invented intraday publication timestamp.
+- Score decay starts at source publication (not the late ingestion date); separate known-at and verified-at gates prevent lookahead.
+
+**Gates before turning on recurring polling:** (1) permitted automated source access tested, (2) SEC User-Agent configured with a reachable human contact, (3) worker secret reference verified end to end, (4) independent reviewer credential and process configured, (5) staging-only limited-frequency schedule with failure monitoring. The current S&P feed 403 fails gate 1.
