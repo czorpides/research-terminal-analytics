@@ -23,6 +23,10 @@ jobs:
         run: |
           npm run build
           npx tsc --noEmit
+      - name: Prove standalone Railway cron Docker context and idle entrypoint
+        run: |
+          docker build --file cron/Dockerfile --tag catalyst-staging-cron:check cron
+          docker run --rm --env INTERNAL_JOB_TOKEN=staging-ci-example-token-longer-than-32 catalyst-staging-cron:check
       - name: Unit-test independently reviewed anticipatory evidence
         run: node --experimental-strip-types --test src/lib/catalysts/anticipatory-model.test.ts
       - name: Test S&P inclusion preflight source and eligibility gates
