@@ -25,6 +25,8 @@ jobs:
           npx tsc --noEmit
       - name: Unit-test independently reviewed anticipatory evidence
         run: node --experimental-strip-types --test src/lib/catalysts/anticipatory-model.test.ts
+      - name: Test S&P inclusion preflight source and eligibility gates
+        run: node --experimental-strip-types --test src/lib/catalysts/sp500-preflight.test.ts
       - name: Unit-test official source adapters and bounded scheduler
         run: |
           node --experimental-strip-types --test src/lib/catalysts/providers/sp-index-feed.test.ts
