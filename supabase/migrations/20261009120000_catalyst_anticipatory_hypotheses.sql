@@ -16,10 +16,17 @@ CREATE TABLE IF NOT EXISTS public.catalyst_anticipations (
   target_at timestamptz,
   expires_at timestamptz,
   status text NOT NULL DEFAULT 'monitoring' CHECK (status IN ('monitoring','dismissed','realized')),
+  verification_status text NOT NULL DEFAULT 'candidate' CHECK (verification_status IN ('candidate','verified','rejected')),
+  verified_at timestamptz,
+  verification_note text,
   criteria jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(criteria) = 'array'),
   reviewer_note text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT anticipation_verified_requires_review CHECK (
+    verification_status <> 'verified' OR
+    (verified_at IS NOT NULL AND char_length(coalesce(verification_note,'')) >= 12)
+  ),
   CONSTRAINT anticipation_publication_before_capture CHECK (source_published_at <= first_observed_at + interval '2 seconds'),
   CONSTRAINT anticipation_review_after_capture CHECK (last_reviewed_at >= first_observed_at),
   CONSTRAINT anticipation_expiry_after_capture CHECK (expires_at IS NULL OR expires_at > first_observed_at)
