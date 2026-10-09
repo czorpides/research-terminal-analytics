@@ -1,0 +1,35 @@
+name: Radar staging browser check
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/verify-radar-journey.mjs"
+      - ".github/workflows/radar-staging-browser.yml"
+  push:
+    branches: [fix/radar-switch-and-progressive-load]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - name: Verify both radar datasets and both directions of navigation
+        run: node scripts/verify-radar-journey.mjs
+
+# Check freshly deployed Radar diagnostics and timing.
+
+# Regression against successfully deployed indexed price query release.
+
+# Capture server-side Swing scan diagnostics after rollout.
+
+# Final deployment acceptance: throttled history requests + two-way tabs.
+
+# Acceptance check for concurrent Swing research context loading.

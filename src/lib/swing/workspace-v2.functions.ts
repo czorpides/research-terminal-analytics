@@ -1,4 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { cachedResearchWorkspace } from "@/lib/research/research-cache.server";
+import { readPersistedResearchWorkspace, persistResearchWorkspace } from "@/lib/research/research-snapshot.server";
 
 import {
   buildEquityCatalystContext,
@@ -125,8 +127,8 @@ export interface SwingV2Workspace {
   warnings: string[];
 }
 
-export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SwingV2Workspace> => {
+async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
+    const scanStarted = Date.now();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // v2.1 reads optional/new evidence fail-soft while it remains shadow.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,6 +142,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
 
     const equities = await loadActiveEquities();
     const expectedActiveEquities = activeEquities ?? equities.length;
+    console.info("[swing-v2:stage]", { phase: "universe", elapsedMs: Date.now() - scanStarted, loaded: equities.length });
     if (!equities.length) return emptyWorkspace(expectedActiveEquities, ["No active equities are loaded."]);
 
     const equityIds = equities.map((asset) => asset.id);
@@ -162,6 +165,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
         .eq("asset_class", "commodity")
         .in("symbol", [...METAL_SYMBOLS]),
     ]);
+    console.info("[swing-v2:stage]", { phase: "screening", elapsedMs: Date.now() - scanStarted });
     const scoreError = scorePages.find((page) => page.error)?.error;
     if (scoreError) throw scoreError;
     const scores = scoreMap(scorePages.flatMap((page) => page.data ?? []) as unknown as ScoreRow[]);
@@ -171,6 +175,18 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
     const metals = metalResult.error ? [] : ((metalResult.data ?? []) as AssetRow[]);
     const selectedAssets = [...selectedEquities, ...metals];
     const selectedIdsAll = selectedAssets.map((asset) => asset.id);
+
+    // Analyst evidence and metals macro are independent of historical bars.
+    // Start both during the long price scan rather than serially afterwards.
+    // Keep the original missing-evidence behaviour and scoring unchanged.
+    const expectationsTask: Promise<Record<string, SwingExpectationSignal>> =
+      import("./expectations.functions")
+        .then(({ loadExpectationSignalsForAssets }) =>
+          loadExpectationSignalsForAssets(selectedEquities.map((asset) => asset.id)),
+        )
+        .catch(() => ({}));
+    const metalMacroTask = loadPreciousMetalMacroContexts();
+
     const scoreScreened = equities.filter((asset) =>
       technicalScreen.has(asset.id) || hasTechnicalScore(scores.get(asset.id)),
     ).length;
@@ -184,17 +200,27 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
     const newsStart = new Date(now.getTime() - 14 * 86_400_000).toISOString();
 
     const [pricePages, earningsPages, newsPages, countryResult, industryResult] = await Promise.all([
-      Promise.all(
-        chunk(selectedIdsAll, 3).map((batch) =>
-          db
-            .from("prices_daily")
-            .select("asset_id,trade_date,open,high,low,close,adj_close,volume")
-            .in("asset_id", batch)
-            .gte("trade_date", priceStart)
-            .order("trade_date", { ascending: false })
-            .limit(batch.length * 360),
-        ),
-      ),
+      // Indexed 20-asset groups in two-request waves avoid exceeding
+      // the database's per-statement budget under concurrent deep scans.
+      // Every instrument retains up to 300 bars; the model is unchanged.
+      (async () => {
+        const priceBatches = chunk(selectedIdsAll, 20);
+        const resultPages: Array<{ data: PriceRow[] | null; error: { message: string; code?: string } | null }> = [];
+        for (let i = 0; i < priceBatches.length; i += 2) {
+          const wave = await Promise.all(
+            priceBatches.slice(i, i + 2).map((batch) =>
+              db.rpc("get_swing_recent_price_bars", {
+                p_asset_ids: batch,
+                p_from_date: priceStart,
+                p_bars_per_asset: 300,
+              }),
+            ),
+          );
+          resultPages.push(...wave);
+          if (wave.some((page) => page.error)) break;
+        }
+        return resultPages;
+      })(),
       Promise.all(
         chunk(selectedIdsAll, 75).map((batch) =>
           db
@@ -216,6 +242,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
         : Promise.resolve({ data: [], error: null }),
     ]);
 
+    console.info("[swing-v2:stage]", { phase: "deep-history", elapsedMs: Date.now() - scanStarted, batches: pricePages.length });
     const priceError = pricePages.find((page: { error?: unknown }) => page.error)?.error;
     const earningsError = earningsPages.find((page: { error?: unknown }) => page.error)?.error;
     if (priceError) throw priceError;
@@ -224,7 +251,7 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
     if (industryResult.error) throw industryResult.error;
 
     const barsByAsset = groupAdjustedBars(
-      pricePages.flatMap((page: { data?: unknown[] }) => page.data ?? []) as PriceRow[],
+      pricePages.flatMap((page) => page.data ?? []) as PriceRow[],
     );
     const earningsByAsset = groupRows<SwingV2EarningsEvent>(
       earningsPages.flatMap((page: { data?: unknown[] }) => page.data ?? []) as Array<SwingV2EarningsEvent & { asset_id: string }>,
@@ -243,14 +270,11 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
       ]),
     );
 
-    let expectationSignals: Record<string, SwingExpectationSignal> = {};
-    try {
-      const { loadExpectationSignalsForAssets } = await import("./expectations.functions");
-      expectationSignals = await loadExpectationSignalsForAssets(selectedEquities.map((asset) => asset.id));
-    } catch {
-      expectationSignals = {};
-    }
-    const metalMacro = await loadPreciousMetalMacroContexts();
+    const [expectationSignals, metalMacro] = await Promise.all([
+      expectationsTask,
+      metalMacroTask,
+    ]);
+    console.info("[swing-v2:stage]", { phase: "context", elapsedMs: Date.now() - scanStarted });
 
     const warnings: string[] = [];
     const loadedUniverseCoverage = expectedActiveEquities > 0 ? equities.length / expectedActiveEquities * 100 : 0;
@@ -385,7 +409,37 @@ export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handl
         "Swing v2.1 is a multi-strategy shadow engine built around tradeability, structure, location, trigger, catalyst and risk/reward. The broad screen allocates deep-scan capacity to 3-6 month lows, drawdowns, negative-to-positive momentum transitions, 200SMA/20SMA/50SMA locations, stabilising damaged names, volume-driven reversals and a smaller clean-breakout lane. Deep analysis combines RSI/MACD, bullish divergence, ADX regime, daily/weekly moving-average confluence, volume contraction then reversal expansion, rejection/engulfing/liquidity-sweep candles, first breakout retests, ATR, structural targets/stops, earnings timing and validated estimate/target revisions. Long-term valuation does not add Swing score. XAUUSD and XAGUSD are permanent priority research assets: they remain in the surfaced observation set without any artificial ranking bonus, and their setup outcomes are tagged against point-in-time real-yield, broad-dollar and volatility conditions. Spot volume is not treated as centralised institutional flow.",
       warnings: unique(warnings).slice(0, 20),
     };
-  },
+}
+
+export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handler(
+  () => cachedResearchWorkspace("swing-v2.1", async () => {
+    const started = Date.now();
+    // Server-only persisted snapshot survives Railway restarts and avoids
+    // a full deep scan on most user visits. Snapshots older than one hour are
+    // never served as fresh, and all original evidence dates remain visible.
+    const snapshot = await readPersistedResearchWorkspace<SwingV2Workspace>(
+      "swing-v2.1",
+      SWING_V2_MODEL_VERSION,
+      60 * 60_000,
+    );
+    if (snapshot) {
+      console.info("[swing-v2] persisted snapshot", {
+        elapsedMs: Date.now() - started,
+        candidates: snapshot.candidates.length,
+        evidenceAsOf: snapshot.asOf,
+      });
+      return snapshot;
+    }
+    try {
+      const value = await loadSwingV2Workspace();
+      console.info("[swing-v2] loaded", { elapsedMs: Date.now() - started, candidates: value.candidates.length });
+      await persistResearchWorkspace("swing-v2.1", value);
+      return value;
+    } catch (error) {
+      console.error("[swing-v2] failed", { elapsedMs: Date.now() - started, error });
+      throw error;
+    }
+  }),
 );
 
 function selectDeepScanV2(

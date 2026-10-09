@@ -25,7 +25,7 @@ type ByMetric = Map<string, Obs[]>;
  * (rates, inflation, labor, credit, housing, business, growth) with
  * inline trend charts and goldilocks/warn/danger zones.
  */
-export const getMacroPanelsForRegion = createServerFn({ method: "POST" })
+export const getMacroPanelsForRegion = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => RegionInput.parse(d))
   .handler(async ({ data }): Promise<PanelData[]> => {
     return buildRegionPanels(data.region);

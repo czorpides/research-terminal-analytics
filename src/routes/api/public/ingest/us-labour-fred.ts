@@ -5,11 +5,8 @@ export const Route = createFileRoute("/api/public/ingest/us-labour-fred")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (
-          !process.env.SUPABASE_PUBLISHABLE_KEY ||
-          request.headers.get("apikey") !== process.env.SUPABASE_PUBLISHABLE_KEY
-        )
-          return new Response("Unauthorized", { status: 401 });
+        const { authorizeInternalJobRequest } = await import("@/lib/security/internal-job-auth.server");
+        if (!authorizeInternalJobRequest(request)) return new Response("Unauthorized", { status: 401 });
         try {
           const params = new URL(request.url).searchParams;
           const yearsBack = Number(params.get("years") ?? "30");

@@ -62,8 +62,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
           {!collapsed && (
             <div className="border-t border-border/70 p-3 font-mono text-[10px] leading-5 text-muted-foreground">
-              <div>Stage 1 · Quant upgrade</div>
-              <div className="text-[var(--positive)]">Session active</div>
+              <div>Research Terminal · Staging</div>
+              <div className="text-[var(--positive)]">Open read-only preview</div>
             </div>
           )}
         </aside>

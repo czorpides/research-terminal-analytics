@@ -94,7 +94,7 @@ const US_GROWTH_CONCEPTS = [
   "nonfarm_payrolls",
 ];
 
-export const getGrowthEngine = createServerFn({ method: "POST" })
+export const getGrowthEngine = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => z.object({ region: RegionCode }).parse(input))
   .handler(async ({ data }): Promise<GrowthEnginePayload> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

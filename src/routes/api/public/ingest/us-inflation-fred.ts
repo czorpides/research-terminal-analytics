@@ -11,9 +11,8 @@ export const Route = createFileRoute("/api/public/ingest/us-inflation-fred")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const anon = process.env.SUPABASE_PUBLISHABLE_KEY;
-        const apikey = request.headers.get("apikey");
-        if (!anon || apikey !== anon) return new Response("Unauthorized", { status: 401 });
+        const { authorizeInternalJobRequest } = await import("@/lib/security/internal-job-auth.server");
+        if (!authorizeInternalJobRequest(request)) return new Response("Unauthorized", { status: 401 });
 
         const url = new URL(request.url);
         const yearsBack = Number(url.searchParams.get("years") ?? "30");
