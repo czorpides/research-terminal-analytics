@@ -49,6 +49,9 @@ jobs:
       - name: Test verified corporate catalysts and anti-lookahead safeguards
         run: node --experimental-strip-types --test src/lib/catalysts/company-event-model.test.ts
 
+      - name: Test official SEC filing intake without network access
+        run: node --experimental-strip-types --test src/lib/catalysts/providers/sec-edgar.test.ts
+
       - name: Run Opportunity Radar and fundamental model tests
         run: npm run test:opportunity
 
