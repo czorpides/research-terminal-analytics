@@ -115,6 +115,9 @@ function OpportunityRadarPage() {
   return (
     <AppShell>
       <RadarModeTabs current="opportunity" />
+      <Link to="/catalysts" className="mb-3 inline-flex items-center text-xs text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-foreground">
+        Catalyst Intelligence · verified event monitoring (shadow mode) →
+      </Link>
       <SectionHeader
         code="OR · Opportunity Radar"
         title="One research queue. One company research screen."
