@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 
@@ -126,6 +126,9 @@ function SwingTradesPage() {
   return (
     <AppShell>
       <RadarModeTabs current="swing" />
+      <Link to="/catalysts" className="mb-3 inline-flex items-center text-xs text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-foreground">
+        Catalyst Intelligence · verified event monitoring (shadow mode) →
+      </Link>
       <SectionHeader
         code="ST · Swing Trades"
         title="Multi-strategy swing opportunities"
