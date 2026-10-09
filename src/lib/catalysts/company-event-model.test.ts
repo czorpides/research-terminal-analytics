@@ -64,3 +64,15 @@ test("missing materiality is unknown, not a neutral 50", () => {
   assert.equal(a.priorityScore,null);
   assert.equal(a.state,"incomplete");
 });
+
+test("late ingestion cannot make a month-old published catalyst fresh",()=>{
+  const oldSource = {
+    ...sample,
+    source_published_at:"2026-09-01T12:00:00Z",
+    known_at:"2026-10-08T12:00:00Z",
+    verified_at:"2026-10-08T13:00:00Z",
+  };
+  const a=assessCatalyst(oldSource,at);
+  assert.equal(a.state,"expired");
+  assert.equal(a.priorityScore,null);
+});
