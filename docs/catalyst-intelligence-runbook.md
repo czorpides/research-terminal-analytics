@@ -72,3 +72,14 @@ The example is **illustrative**, not an actual verified filing. Before approving
 - Score decay starts at source publication (not the late ingestion date); separate known-at and verified-at gates prevent lookahead.
 
 **Gates before turning on recurring polling:** (1) permitted automated source access tested, (2) SEC User-Agent configured with a reachable human contact, (3) worker secret reference verified end to end, (4) independent reviewer credential and process configured, (5) staging-only limited-frequency schedule with failure monitoring. The current S&P feed 403 fails gate 1.
+
+## Operational audit and worker fail-closed update — 9 October 2026
+
+- The owned Supabase replacement project is **sythouvmvdhxwbmzwpxy**. The additive `catalyst_anticipatory_hypotheses` migration was applied to this project's existing staging research tables, and checks confirmed zero fabricated hypotheses, RLS enabled, service-role-only access and an evidence immutability trigger. This is NOT the original Lovable production database.
+- Railway staging has two services: `research-terminal-web` and `catalyst-source-cron`. The web service has not yet deployed the current staging branch tip; it was serving commit `702f98b` at the audit. The cron service was at `b0fbfb1` and had recorded `MODULE_NOT_FOUND /app/scripts/catalyst-source-cron.mjs`; the repository now has an isolated `cron/Dockerfile` with a valid `/app/catalyst-source-cron.mjs` entrypoint.
+- The cron service currently has **no Railway cron schedule**, and its previous S&P polling attempt returned 503 while the underlying S&P provider returned 403. Do not enable an unattended poll until a permitted feed is working.
+- The worker now defaults **both** `CATALYST_SP_POLL_ENABLED=false` and `CATALYST_SEC_POLL_ENABLED=false`. If neither is enabled, it performs a safe offline no-op and exits successfully. Enabling SEC requires a real reachable `SEC_EDGAR_USER_AGENT` configured on the **web** service. New dedicated Docker CI builds the exact isolated worker context and executes its no-network idle path.
+- The web staging environment has an `INTERNAL_JOB_TOKEN`, but the separately required `CATALYST_REVIEW_TOKEN` and `SEC_EDGAR_USER_AGENT` are not among the configured variable names. Do not generate or commit either secret on behalf of the operator.
+- Railway source/deployment settings must be checked after staging merges. Do not assume GitHub CI's mock container smoke proves the deployed Railway commit is current.
+
+**No new recurring schedule, source polling, production cutover, index odds or Swing score adjustments are authorised by these changes.**

@@ -9,6 +9,7 @@ export async function pollCatalystSources({
  fetcher=fetch,
  token,
  baseUrl=STAGING_URL,
+ spEnabled=false,
  secEnabled=false,
  symbols=["QCOM","PENG","BE","AAOI","INTC","NBIS"],
 }) {
@@ -18,7 +19,7 @@ export async function pollCatalystSources({
  if(secEnabled&&(symbols.length<1||symbols.length>8||symbols.some(s=>!/^[A-Z0-9.-]{1,22}$/.test(s))))
    throw new Error("SEC poll must contain at most 8 validated US symbols.");
  const tasks=[
-  {name:"sp_dji_index_news",route:"/api/public/catalysts/poll-sp-index",body:{}},
+  ...(spEnabled?[{name:"sp_dji_index_news",route:"/api/public/catalysts/poll-sp-index",body:{}}]:[]),
   ...(secEnabled?[{name:"sec_earnings",route:"/api/public/catalysts/ingest-sec",body:{symbols,lookbackDays:45}}]:[]),
  ];
  const results=[];
@@ -48,8 +49,10 @@ export async function pollCatalystSources({
 if(process.argv[1]?.endsWith("catalyst-source-cron.mjs")){
  const token=process.env.INTERNAL_JOB_TOKEN;
  const secEnabled=process.env.CATALYST_SEC_POLL_ENABLED==="true";
+ const spEnabled=process.env.CATALYST_SP_POLL_ENABLED==="true";
  try{
-   const results=await pollCatalystSources({token,secEnabled});
+   const results=await pollCatalystSources({token,secEnabled,spEnabled});
+   if(!results.length)console.info("[catalyst-cron] no providers enabled; safe staging idle run");
    // Never log credentials, raw event payloads, user email or headers.
    console.info("[catalyst-cron]",JSON.stringify(results));
    if(results.some(r=>!r.ok))process.exitCode=1;
