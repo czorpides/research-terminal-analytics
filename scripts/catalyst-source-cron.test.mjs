@@ -10,7 +10,7 @@ test("S&P poll runs without enabling unconfigured SEC, and sends token server-si
    authorizations.push(options.headers.Authorization);
    return Response.json({ok:true,observed:1},{status:200});
  };
- const results=await pollCatalystSources({token:TOKEN,fetcher});
+ const results=await pollCatalystSources({token:TOKEN,spEnabled:true,fetcher});
  assert.deepEqual(paths,["/api/public/catalysts/poll-sp-index"]);
  assert.equal(results[0].ok,true);
  assert.equal(authorizations[0],"Bearer "+TOKEN);
@@ -18,7 +18,7 @@ test("S&P poll runs without enabling unconfigured SEC, and sends token server-si
 test("when SEC is enabled, sources remain bounded and safe",async()=>{
  const paths=[];
  const results=await pollCatalystSources({
-   token:TOKEN,secEnabled:true,symbols:["QCOM","PENG"],
+   token:TOKEN,spEnabled:true,secEnabled:true,symbols:["QCOM","PENG"],
    fetcher:async(url,options)=>{
      paths.push({path:new URL(url).pathname,body:JSON.parse(options.body)});
      return Response.json({ok:true},{status:200});
@@ -37,8 +37,15 @@ test("cron refuses arbitrary hosts and missing secrets",async()=>{
 });
 test("source failure becomes explicit non-success; no silent successful poll",async()=>{
  const results=await pollCatalystSources({
-   token:TOKEN,fetcher:async()=>Response.json({ok:false},{status:503}),
+   token:TOKEN,spEnabled:true,fetcher:async()=>Response.json({ok:false},{status:503}),
  });
  assert.equal(results[0].ok,false);
  assert.equal(results[0].httpStatus,503);
+});
+
+test("staging worker does not touch a blocked provider unless explicitly enabled",async()=>{
+ let calls=0;
+ const result=await pollCatalystSources({token:TOKEN,fetcher:async()=>{calls+=1;throw Error("must not poll");}});
+ assert.deepEqual(result,[]);
+ assert.equal(calls,0);
 });
