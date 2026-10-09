@@ -2,7 +2,7 @@ import {createFileRoute} from "@tanstack/react-router";
 import {z} from "zod";
 
 /** Guarded, source-fed preflight. No live source polling, no auto-verification. */
-const fact=(value:z.ZodTypeAny)=>z.object({
+const fact=<T extends z.ZodType>(value:T)=>z.object({
  value:value.nullable(),sourceUrl:z.string().url().startsWith("https://"),
  sourceName:z.string().min(3).max(140),
  sourcePublishedAt:z.string().datetime({offset:true}),
@@ -16,6 +16,7 @@ const packet=z.object({
  methodologyReviewedAt:z.string().datetime({offset:true}),
  currentMember:booleanFact,usDomicile:booleanFact,
  eligibleUsListing:booleanFact,eligibleSecurityType:booleanFact,
+ secDomesticReporting:booleanFact,ipoSeasoningOrExemption:booleanFact,
  companyMarketCapUsd:numberFact,securityFloatMarketCapUsd:numberFact,
  investableWeightFactor:numberFact,
  lastSixMonthlySharesTraded:fact(z.array(z.number().finite()).length(6)),
@@ -32,7 +33,6 @@ export const Route=createFileRoute("/api/public/catalysts/anticipations/screen-s
   const parsed=z.object({packets:z.array(packet).min(1).max(20)}).strict().safeParse(raw);
   if(!parsed.success)return Response.json({ok:false,error:"Invalid source evidence packets",issues:parsed.error.issues.slice(0,4)},{status:422});
   const {screenSP500Preflight,SP500_METHODOLOGY_URL}=await import("@/lib/catalysts/sp500-preflight");
-  const {createHash}=await import("node:crypto");
   const now=new Date();
   const screened=parsed.data.packets.map(input=>({input,result:screenSP500Preflight(input,now)}));
   const accepted=screened.filter(s=>["eligible_for_review","partial_research"].includes(s.result.state));
