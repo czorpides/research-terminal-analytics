@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { cachedResearchWorkspace } from "@/lib/research/research-cache.server";
+import { readPersistedResearchWorkspace, persistResearchWorkspace } from "@/lib/research/research-snapshot.server";
 
 import {
   buildEquityCatalystContext,
@@ -413,9 +414,26 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
 export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handler(
   () => cachedResearchWorkspace("swing-v2.1", async () => {
     const started = Date.now();
+    // Server-only persisted snapshot survives Railway restarts and avoids
+    // a full deep scan on most user visits. Snapshots older than one hour are
+    // never served as fresh, and all original evidence dates remain visible.
+    const snapshot = await readPersistedResearchWorkspace<SwingV2Workspace>(
+      "swing-v2.1",
+      SWING_V2_MODEL_VERSION,
+      60 * 60_000,
+    );
+    if (snapshot) {
+      console.info("[swing-v2] persisted snapshot", {
+        elapsedMs: Date.now() - started,
+        candidates: snapshot.candidates.length,
+        evidenceAsOf: snapshot.asOf,
+      });
+      return snapshot;
+    }
     try {
       const value = await loadSwingV2Workspace();
       console.info("[swing-v2] loaded", { elapsedMs: Date.now() - started, candidates: value.candidates.length });
+      await persistResearchWorkspace("swing-v2.1", value);
       return value;
     } catch (error) {
       console.error("[swing-v2] failed", { elapsedMs: Date.now() - started, error });
