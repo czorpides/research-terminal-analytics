@@ -31,3 +31,5 @@ jobs:
 # Capture server-side Swing scan diagnostics after rollout.
 
 # Final deployment acceptance: throttled history requests + two-way tabs.
+
+# Acceptance check for concurrent Swing research context loading.
