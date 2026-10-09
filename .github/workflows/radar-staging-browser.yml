@@ -27,3 +27,5 @@ jobs:
 # Check freshly deployed Radar diagnostics and timing.
 
 # Regression against successfully deployed indexed price query release.
+
+# Capture server-side Swing scan diagnostics after rollout.
