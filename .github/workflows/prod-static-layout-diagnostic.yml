@@ -1,0 +1,39 @@
+name: Production static asset build layout diagnostic
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/prod-static-layout-diagnostic.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  asset-layout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - name: Build Cloudflare production bundle
+        env:
+          NITRO_PRESET: cloudflare-module
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: diagnostic-public-key
+        run: npm run build
+      - name: Record output folders and HTML-to-asset mapping
+        run: |
+          echo STATIC_LAYOUT
+          find dist -maxdepth 3 -type d | sort | head -65
+          echo ASSET_FILES
+          find dist -maxdepth 5 -type f \( -name '*.css' -o -name '*.js' \) | head -35
+          echo ENTRY_FILES
+          find dist -maxdepth 3 -type f \( -name '*.mjs' -o -name 'index.html' -o -name 'nitro.json' \) | head -35
+          echo DIST_ROOT
+          ls -al dist | head -35
+          echo DIST_PUBLIC
+          ls -al dist/public 2>/dev/null | head -25 || true
+          echo DIST_CLIENT
+          ls -al dist/client 2>/dev/null | head -25 || true
