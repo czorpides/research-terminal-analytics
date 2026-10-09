@@ -161,3 +161,55 @@ export function collapseAnticipation(items: AnticipationHypothesis[], asOf = new
   }
   return [...byKey.values()].map(item => ({ item, assessment: assessAnticipation(item, asOf) }));
 }
+
+
+export interface EligibilityProgress {
+  newlySupported: string[];
+  newlyFailed: string[];
+  evidenceLost: string[];
+  comparisonAt: string;
+  probability: null;
+  scoreAdjustment: 0;
+}
+
+/**
+ * Explains exactly which sourced eligibility gates changed between independent
+ * revisions. "More criteria passed" does NOT mean a calculable increase in
+ * the probability of a discretionary future event.
+ */
+export function compareEligibilityEvidence(
+  earlier: AnticipationHypothesis, later: AnticipationHypothesis, asOf = new Date(),
+): EligibilityProgress | null {
+  const now = asOf.getTime();
+  if (earlier.asset_id !== later.asset_id || earlier.hypothesis_type !== later.hypothesis_type ||
+      earlier.hypothesis_key === later.hypothesis_key ||
+      earlier.verification_status !== "verified" || later.verification_status !== "verified" ||
+      !earlier.verified_at || !later.verified_at ||
+      validDate(earlier.verified_at) === null || validDate(later.verified_at) === null ||
+      Date.parse(earlier.verified_at) > Date.parse(later.first_observed_at) ||
+      Date.parse(later.verified_at) > now ||
+      Date.parse(earlier.last_reviewed_at) >= Date.parse(later.last_reviewed_at)) return null;
+  const assessedEarlier=assessAnticipation(earlier,new Date(Math.max(Date.parse(earlier.verified_at),Date.parse(earlier.last_reviewed_at))));
+  const assessedLater=assessAnticipation(later,asOf);
+  if (["unverified","not_yet_known","insufficient"].includes(assessedEarlier.state) &&
+      assessedEarlier.passed === 0 ||
+      ["unverified","not_yet_known","insufficient"].includes(assessedLater.state) &&
+      assessedLater.passed === 0) return null;
+  const requirements=ANTICIPATION_RULEBOOK[later.hypothesis_type].criteria as readonly string[];
+  const observable=(h:AnticipationHypothesis,code:string):CriterionState=>{
+    const matches=h.criteria.filter(c=>c.code===code);
+    if(matches.length!==1)return "unknown";
+    const c=matches[0],ts=validDate(c.observedAt);
+    if(ts===null || ts>now || ts>Date.parse(h.last_reviewed_at) || !validSource(c.sourceUrl))return "unknown";
+    return c.state;
+  };
+  const newlySupported:string[]=[],newlyFailed:string[]=[],evidenceLost:string[]=[];
+  for(const code of requirements){
+    const oldState=observable(earlier,code),newState=observable(later,code);
+    if(newState==="pass"&&oldState!=="pass")newlySupported.push(code);
+    if(newState==="fail"&&oldState!=="fail")newlyFailed.push(code);
+    if(oldState==="pass"&&newState==="unknown")evidenceLost.push(code);
+  }
+  return {newlySupported,newlyFailed,evidenceLost,comparisonAt:later.last_reviewed_at,
+    probability:null,scoreAdjustment:0};
+}
