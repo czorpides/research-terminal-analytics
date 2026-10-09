@@ -1,5 +1,10 @@
 name: Catalyst Intelligence deployed browser smoke
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/catalyst-browser-smoke.yml"
+      - "scripts/verify-catalyst-staging.mjs"
   push:
     branches: [feature/catalyst-intelligence-foundation]
     paths:
