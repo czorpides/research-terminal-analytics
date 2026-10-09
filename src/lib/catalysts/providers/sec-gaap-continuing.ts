@@ -67,7 +67,8 @@ export function extractSecGaapContinuingIncome(
        typeof fact.accn!=="string"||!accessionPattern.test(fact.accn)||
        !["10-Q","10-Q/A","10-K","10-K/A"].includes(String(fact.form)))continue;
     const accepted=acceptedAtByAccession[fact.accn];
-    if(!accepted||!iso(accepted)||Date.parse(accepted)>cutoff)continue;
+    if(!accepted||!iso(accepted)||Date.parse(accepted)>cutoff||
+       Date.parse(accepted)<Date.parse(fact.end+"T00:00:00Z"))continue;
     const current:SecQuarterIncome={start:fact.start,end:fact.end,valueUsd:fact.val,
       accession:fact.accn,form:String(fact.form),acceptedAt:accepted,
       sourceUrl:"https://www.sec.gov/Archives/edgar/data/"+Number(cik)+"/"+fact.accn.replaceAll("-","")+"/"};
@@ -84,7 +85,8 @@ export function extractSecGaapContinuingIncome(
   for(let i=0;i<3;i++){
     const gap=(Date.parse(recent[i].end+"T00:00:00Z")-
       Date.parse(recent[i+1].end+"T00:00:00Z"))/86_400_000;
-    if(gap<70||gap>110)return unknown("insufficient","Quarter observations are not consecutive.");
+    if(gap<70||gap>110||recent[i+1].end>=recent[i].start)
+      return unknown("insufficient","Quarter observations are missing, nonconsecutive or overlap.");
   }
   const sum=recent.reduce((total,f)=>total+f.valueUsd,0);
   if(!Number.isFinite(sum))return unknown("ambiguous","Invalid USD aggregation.");
