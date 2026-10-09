@@ -127,6 +127,7 @@ export interface SwingV2Workspace {
 }
 
 async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
+    const scanStarted = Date.now();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // v2.1 reads optional/new evidence fail-soft while it remains shadow.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,6 +141,7 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
 
     const equities = await loadActiveEquities();
     const expectedActiveEquities = activeEquities ?? equities.length;
+    console.info("[swing-v2:stage]", { phase: "universe", elapsedMs: Date.now() - scanStarted, loaded: equities.length });
     if (!equities.length) return emptyWorkspace(expectedActiveEquities, ["No active equities are loaded."]);
 
     const equityIds = equities.map((asset) => asset.id);
@@ -162,6 +164,7 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
         .eq("asset_class", "commodity")
         .in("symbol", [...METAL_SYMBOLS]),
     ]);
+    console.info("[swing-v2:stage]", { phase: "screening", elapsedMs: Date.now() - scanStarted });
     const scoreError = scorePages.find((page) => page.error)?.error;
     if (scoreError) throw scoreError;
     const scores = scoreMap(scorePages.flatMap((page) => page.data ?? []) as unknown as ScoreRow[]);
@@ -226,6 +229,7 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
         : Promise.resolve({ data: [], error: null }),
     ]);
 
+    console.info("[swing-v2:stage]", { phase: "deep-history", elapsedMs: Date.now() - scanStarted, batches: pricePages.length });
     const priceError = pricePages.find((page: { error?: unknown }) => page.error)?.error;
     const earningsError = earningsPages.find((page: { error?: unknown }) => page.error)?.error;
     if (priceError) throw priceError;
@@ -261,6 +265,7 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
       expectationSignals = {};
     }
     const metalMacro = await loadPreciousMetalMacroContexts();
+    console.info("[swing-v2:stage]", { phase: "context", elapsedMs: Date.now() - scanStarted });
 
     const warnings: string[] = [];
     const loadedUniverseCoverage = expectedActiveEquities > 0 ? equities.length / expectedActiveEquities * 100 : 0;
