@@ -19,7 +19,7 @@ export default defineConfig({
     // The Docker/Railway build sets NITRO_PRESET=node-server.
     nitro({
       preset: process.env.NITRO_PRESET || "cloudflare-module",
-      output: { dir: "dist" },
+      output: { dir: "dist", publicDir: "dist/client" },
     }),
     mcpPlugin(),
   ],
