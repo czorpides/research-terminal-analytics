@@ -102,7 +102,7 @@ function CatalystIntelligencePage() {
         <section className="mt-6 rounded-xl border border-border/70 bg-card p-4">
           <h2 className="text-sm font-semibold">Official index-announcement inbox</h2>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            S&P Dow Jones Indices source documents are captured here before any company is matched. Additions, deletions and transaction-related changes are not automatically interpreted as bullish stock catalysts.
+            S&P Dow Jones Indices source documents are captured here before any company is matched. Additions, deletions and transaction-related changes are not automatically interpreted as bullish stock catalysts. The official RSS feed currently blocks staging requests; manually checked official releases are labelled separately.
           </p>
           <div className="my-3 text-xs text-muted-foreground">
             {query.data.lastIndexPoll
@@ -120,7 +120,10 @@ function CatalystIntelligencePage() {
                 <div className="min-w-0 flex-1">
                   <a href={doc.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium underline underline-offset-2">{doc.title}</a>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Published {doc.publishedAt.slice(0,10)} · first observed {doc.firstObservedAt.slice(0,10)} · {doc.state === "unmapped" ? "Ticker mapping and verification pending" : doc.state}
+                    Source date {doc.publishedAt.slice(0,10)}{doc.publishedTimePrecision === "date_only_conservative" ? " (date only; intraday time unknown)" : ""}
+                    {" · "}First observed {doc.firstObservedAt.slice(0,10)}
+                    {" · "}{doc.collectionMethod === "manual_official" ? "Manually verified official publication" : "Automated official feed"}
+                    {" · "}{doc.state === "unmapped" ? "Ticker mapping and verification pending" : doc.state}
                   </p>
                 </div>
                 <span className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground">{doc.state}</span>
