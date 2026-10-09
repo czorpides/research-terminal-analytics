@@ -23,3 +23,5 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Verify both radar datasets and both directions of navigation
         run: node scripts/verify-radar-journey.mjs
+
+# Check freshly deployed Radar diagnostics and timing.
