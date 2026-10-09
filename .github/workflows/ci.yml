@@ -53,6 +53,9 @@ jobs:
       - name: Test anticipatory catalyst eligibility and point-in-time safeguards
         run: node --experimental-strip-types --test src/lib/catalysts/anticipatory-model.test.ts
 
+      - name: Test S&P official-criteria preflight (source/PIT/member veto)
+        run: node --experimental-strip-types --test src/lib/catalysts/sp500-preflight.test.ts
+
       - name: Test official SEC filing intake without network access
         run: node --experimental-strip-types --test src/lib/catalysts/providers/sec-edgar.test.ts
 
