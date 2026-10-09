@@ -55,6 +55,14 @@ function CatalystIntelligencePage() {
         </section>
       )}
       {query.data && (<>
+        <section className="mb-4 rounded-xl border border-border/70 bg-card/40 p-3 text-xs">
+          <div className="font-semibold">Source connections</div>
+          <div className="mt-2 flex flex-wrap gap-3 text-muted-foreground">
+            <span>SEC EDGAR earnings filings: {query.data.secEdgarConfigured ? "configured · manual internal polling available" : "awaiting SEC contact configuration"}</span>
+            <span>Automatic polling: {query.data.scheduledRefreshConfigured ? "enabled" : "not yet scheduled"}</span>
+            <span>Index changes / contracts / political statements: source feeds pending</span>
+          </div>
+        </section>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           <Metric label="Verified source events" value={query.data.verified} note="Reviewed with source evidence" />
           <Metric label="Active event signals" value={query.data.activeSignals} note="Within event-specific expiry window" />
