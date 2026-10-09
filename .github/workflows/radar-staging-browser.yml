@@ -29,3 +29,5 @@ jobs:
 # Regression against successfully deployed indexed price query release.
 
 # Capture server-side Swing scan diagnostics after rollout.
+
+# Final deployment acceptance: throttled history requests + two-way tabs.
