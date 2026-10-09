@@ -14,6 +14,7 @@ const sample: AnticipationHypothesis = {
   source_published_at:"2026-09-01T12:00:00Z",
   first_observed_at:date,last_reviewed_at:date,
   target_at:null,expires_at:null,status:"monitoring",
+  verification_status:"verified",verified_at:date,
   criteria:spec.criteria.map(k=>criterion(k)),
 };
 
@@ -24,6 +25,11 @@ test("all documented requirements unlock eligibility review, not a likelihood or
   assert.equal(a.scoreAdjustment,0);
   assert.equal(a.passed,a.total);
   assert.match(a.explanation,/committee/i);
+});
+test("unreviewed hypotheses never become qualifying signals",()=>{
+  const a=assessAnticipation({...sample,verification_status:"candidate",verified_at:null},t);
+  assert.equal(a.state,"unverified");
+  assert.equal(a.passed,0);
 });
 test("unknown membership and profitability must never silently become passing criteria",()=>{
   const hypothesis={...sample,criteria:sample.criteria.filter(c=>!["not_current_member","gaap_profitability"].includes(c.code))};
