@@ -191,10 +191,8 @@ export function compareEligibilityEvidence(
       Date.parse(earlier.last_reviewed_at) >= Date.parse(later.last_reviewed_at)) return null;
   const assessedEarlier=assessAnticipation(earlier,new Date(Math.max(Date.parse(earlier.verified_at),Date.parse(earlier.last_reviewed_at))));
   const assessedLater=assessAnticipation(later,asOf);
-  if (["unverified","not_yet_known","insufficient"].includes(assessedEarlier.state) &&
-      assessedEarlier.passed === 0 ||
-      ["unverified","not_yet_known","insufficient"].includes(assessedLater.state) &&
-      assessedLater.passed === 0) return null;
+  if (["unverified","not_yet_known"].includes(assessedEarlier.state) ||
+      ["unverified","not_yet_known"].includes(assessedLater.state)) return null;
   const requirements=ANTICIPATION_RULEBOOK[later.hypothesis_type].criteria as readonly string[];
   const observable=(h:AnticipationHypothesis,code:string):CriterionState=>{
     const matches=h.criteria.filter(c=>c.code===code);
