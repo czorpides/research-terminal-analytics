@@ -20,6 +20,8 @@ export interface SP500FactPacket {
  usDomicile:EvidenceFact<boolean>|null;
  eligibleUsListing:EvidenceFact<boolean>|null;
  eligibleSecurityType:EvidenceFact<boolean>|null;
+ secDomesticReporting:EvidenceFact<boolean>|null;
+ ipoSeasoningOrExemption:EvidenceFact<boolean>|null;
  companyMarketCapUsd:EvidenceFact<number>|null;
  securityFloatMarketCapUsd:EvidenceFact<number>|null;
  investableWeightFactor:EvidenceFact<number>|null;
@@ -34,7 +36,7 @@ export interface SP500PreflightResult {
  modelVersion:string;probability:null;scoreAdjustment:0;explanation:string;
 }
 type CriterionCode=
- "not_current_member"|"us_domicile"|"eligible_us_listing"|"eligible_security_type"|
+ "not_current_member"|"us_domicile"|"eligible_us_listing"|"eligible_security_type"|"sec_domestic_reporting"|"ipo_seasoning_or_exemption"|
  "market_cap_threshold"|"float_adjusted_market_cap"|"investable_weight_factor"|
  "monthly_share_volume"|"float_adjusted_liquidity"|"gaap_latest_quarter"|"gaap_trailing_four_quarters";
 function https(url:string):boolean{
@@ -66,6 +68,8 @@ export function screenSP500Preflight(packet:SP500FactPacket,asOf:Date=new Date()
   criterion("us_domicile",packet.usDomicile,now,v=>v===true,"US domicile"),
   criterion("eligible_us_listing",packet.eligibleUsListing,now,v=>v===true,"Eligible US exchange"),
   criterion("eligible_security_type",packet.eligibleSecurityType,now,v=>v===true,"Eligible equity type"),
+  criterion("sec_domestic_reporting",packet.secDomesticReporting,now,v=>v===true,"Domestic issuer SEC periodic reporting"),
+  criterion("ipo_seasoning_or_exemption",packet.ipoSeasoningOrExemption,now,v=>v===true,"Twelve-month listing history or documented methodology exception"),
   criterion("market_cap_threshold",currentMethod?packet.companyMarketCapUsd:null,now,
    v=>Number.isFinite(v)&&v>=rules.companyMarketCapUsd,"Company market cap USD"),
   criterion("float_adjusted_market_cap",currentMethod?packet.securityFloatMarketCapUsd:null,now,
