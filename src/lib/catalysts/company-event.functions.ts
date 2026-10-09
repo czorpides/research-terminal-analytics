@@ -23,6 +23,8 @@ export interface CompanyCatalystWorkspace {
   asOf: string;
   modelVersion: string;
   mode: "shadow";
+  secEdgarConfigured: boolean;
+  scheduledRefreshConfigured: boolean;
   events: CompanyCatalystRow[];
   verified: number;
   pendingReview: number;
@@ -70,6 +72,8 @@ export const getCompanyCatalystWorkspace = createServerFn({ method: "GET" }).han
       || b.knownAt.localeCompare(a.knownAt));
     return {
       asOf:now.toISOString(),modelVersion:CATALYST_MODEL_VERSION,mode:"shadow",
+      secEdgarConfigured:Boolean(process.env.SEC_EDGAR_USER_AGENT),
+      scheduledRefreshConfigured:false,
       events:rows,verified:events.filter(e=>e.status==="verified").length,
       pendingReview:events.filter(e=>e.status==="candidate").length,
       activeSignals:rows.filter(r=>r.assessment.state==="active").length,
