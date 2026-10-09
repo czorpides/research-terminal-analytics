@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { getAnticipatoryCatalysts, type AnticipatoryCandidate } from "@/lib/catalysts/anticipatory.functions";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -43,6 +46,19 @@ export function SwingTradesV2View({ workspace }: { workspace: SwingV2Workspace }
   const [setup, setSetup] = useState<SetupFilter>("all");
   const [minRank, setMinRank] = useState(45);
   const [riskBudget, setRiskBudget] = useState(250);
+  const [onlyAnticipatory, setOnlyAnticipatory] = useState(false);
+  // Optional research enrichment: failures never block or re-rank the core Swing scan.
+  const anticipations = useQuery({queryKey:["anticipation-research","v0.1"],
+    queryFn:()=>getAnticipatoryCatalysts(),staleTime:5*60_000,retry:false,refetchOnWindowFocus:false});
+  const anticipationsBySymbol = useMemo(()=>{
+    const bySymbol=new Map<string,AnticipatoryCandidate[]>();
+    for(const item of anticipations.data?.rows??[]){
+      if(!["criteria_pass_review","investigate"].includes(item.assessment.state))continue;
+      const key=item.symbol.toUpperCase();
+      bySymbol.set(key,[...(bySymbol.get(key)??[]),item]);
+    }
+    return bySymbol;
+  },[anticipations.data]);
 
   const needle = query.trim().toLowerCase();
   const filtered = useMemo(
@@ -57,9 +73,10 @@ export function SwingTradesV2View({ workspace }: { workspace: SwingV2Workspace }
       if (entryState !== "all" && candidate.setup.entryState !== entryState) return false;
       if (setup !== "all" && candidate.setup.setup !== setup) return false;
       if (candidate.setup.rankingScore < minRank) return false;
+      if (onlyAnticipatory && !anticipationsBySymbol.has(candidate.symbol.toUpperCase())) return false;
       return true;
     }),
-    [entryState, instrument, minRank, needle, setup, workspace.candidates],
+    [entryState, instrument, minRank, needle, setup, workspace.candidates, onlyAnticipatory, anticipationsBySymbol],
   );
 
   const metals = workspace.candidates.filter((candidate) => candidate.assetType === "commodity");
@@ -212,6 +229,16 @@ export function SwingTradesV2View({ workspace }: { workspace: SwingV2Workspace }
         </div>
       </section>
 
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 p-3 text-xs">
+        <label className="inline-flex items-center gap-2">
+          <input type="checkbox" checked={onlyAnticipatory}
+            onChange={e=>setOnlyAnticipatory(e.target.checked)} disabled={!anticipations.data}
+            className="accent-primary" />
+          Only setups with reviewed potential catalysts
+        </label>
+        <span className="text-muted-foreground">Anticipation is separate from v2.1 rank; eligibility is not a prediction.</span>
+        <Link to="/catalysts" className="underline underline-offset-2">Catalyst Intelligence →</Link>
+      </div>
       {filtered.length === 0 ? (
         <section className="rounded-xl border border-dashed border-border p-8 text-center">
           <Crosshair className="mx-auto h-6 w-6 text-muted-foreground" />
@@ -227,6 +254,7 @@ export function SwingTradesV2View({ workspace }: { workspace: SwingV2Workspace }
               key={`${candidate.assetId}:${candidate.setup.setup}`}
               candidate={candidate}
               riskBudget={riskBudget}
+              anticipated={anticipationsBySymbol.get(candidate.symbol.toUpperCase())??[]}
             />
           ))}
         </section>
@@ -253,7 +281,9 @@ export function SwingTradesV2View({ workspace }: { workspace: SwingV2Workspace }
   );
 }
 
-function SetupCard({ candidate, riskBudget }: { candidate: SwingV2WorkspaceCandidate; riskBudget: number }) {
+function SetupCard({ candidate, riskBudget, anticipated }: {
+  candidate: SwingV2WorkspaceCandidate; riskBudget: number; anticipated: AnticipatoryCandidate[];
+}) {
   const { setup } = candidate;
   const geometry = setup.geometry;
   const discipline = setup.discipline;
@@ -349,6 +379,16 @@ function SetupCard({ candidate, riskBudget }: { candidate: SwingV2WorkspaceCandi
             <Gauge className="h-3.5 w-3.5 text-muted-foreground" /> Catalyst / macro context
           </div>
           <div className="mt-2 text-xs leading-5 text-muted-foreground">{catalystText}</div>
+          {anticipated.length>0 && <div className="mt-2 space-y-1 border-t border-border/60 pt-2">
+            {anticipated.slice(0,2).map(h=><div key={h.id} className="text-[11px] leading-5">
+              <span className="font-medium">Potential: {h.headline}</span>
+              <span className="ml-2 text-muted-foreground">· {h.assessment.state==="criteria_pass_review"?"criteria reviewed, outcome discretionary":"partial evidence"}</span>
+              <span className="ml-2 text-muted-foreground">· {h.assessment.passed}/{h.assessment.total} conditions</span>
+              <a href={h.evidenceUrl} target="_blank" rel="noopener noreferrer"
+                 className="ml-2 underline underline-offset-2">Source</a>
+            </div>)}
+            <p className="text-[10px] text-muted-foreground">Research context only. These hypotheses do not change Swing scores or waive entry-risk gates.</p>
+          </div>}
           {candidate.expectations?.targetUpsidePct !== null && candidate.expectations?.targetUpsidePct !== undefined && (
             <div className="mt-1 text-[11px] text-muted-foreground">
               Consensus target gap: {fmtPct(candidate.expectations.targetUpsidePct)} · context only, not a Swing target
