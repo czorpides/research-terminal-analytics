@@ -1,0 +1,24 @@
+name: Catalyst Intelligence deployed browser smoke
+on:
+  push:
+    branches: [feature/catalyst-intelligence-foundation]
+    paths:
+      - ".github/workflows/catalyst-browser-smoke.yml"
+      - "scripts/verify-catalyst-staging.mjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  catalyst:
+    name: Verify Catalyst dashboard and protected source endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - name: Verify page navigation, empty ledger and token gates
+        run: node scripts/verify-catalyst-staging.mjs
