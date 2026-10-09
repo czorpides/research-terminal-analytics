@@ -46,6 +46,9 @@ jobs:
       - name: Verify radar research caching and retry
         run: node --experimental-strip-types --test src/lib/research/research-cache.test.ts
 
+      - name: Test verified corporate catalysts and anti-lookahead safeguards
+        run: node --experimental-strip-types --test src/lib/catalysts/company-event-model.test.ts
+
       - name: Run Opportunity Radar and fundamental model tests
         run: npm run test:opportunity
 
