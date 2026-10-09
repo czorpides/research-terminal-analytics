@@ -103,7 +103,9 @@ export function assessCatalyst(event: CatalystEvidence, asOf: Date = new Date())
   const cap = Math.min(sourceCaps[event.source_tier], event.event_type === "political_statement" ? 35 : 100);
   const confidence = Math.min(cap, event.evidence_confidence);
   const raw = event.materiality * 0.5 + event.novelty * 0.2 + confidence * 0.3;
-  const decayed = rounded(raw * Math.exp(-Math.LN2 * ageDays / (horizons[event.event_type] / 2)));
+  // A social-media statement must never earn a high catalyst rank merely
+  // because its estimated novelty/materiality is high.
+  const decayed = rounded(Math.min(cap, raw) * Math.exp(-Math.LN2 * ageDays / (horizons[event.event_type] / 2)));
   if (event.direction === "uncertain") {
     return { state: "uncertain", priorityScore: null, downsideRiskScore: null,
       confidence, modelVersion: CATALYST_MODEL_VERSION,
