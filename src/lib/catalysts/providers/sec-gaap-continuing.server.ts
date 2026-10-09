@@ -1,8 +1,8 @@
 /** SEC data.sec.gov XBRL reader: named real contact, bounded serial requests. */
 import {parseTickerIndex,zipRecentFilings,verifySecUserAgent,
- type SecSubmissions} from "./sec-edgar.server";
+ type SecSubmissions} from "./sec-edgar.server.ts";
 import {extractSecGaapContinuingIncome,
- type SecCompanyFacts,type SecGaapProfitability} from "./sec-gaap-continuing";
+ type SecCompanyFacts,type SecGaapProfitability} from "./sec-gaap-continuing.ts";
 
 const MAX_RESPONSE_BYTES=12_000_000;
 async function getSecJson<T>(address:string,userAgent:string):Promise<T>{
