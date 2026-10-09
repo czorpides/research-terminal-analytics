@@ -11,13 +11,7 @@ export async function pollCatalystSources({
  baseUrl=STAGING_URL,
  secEnabled=false,
  symbols=["QCOM","PENG","BE","AAOI","INTC","NBIS"],
-}:{
- fetcher?:typeof fetch;
- token:string|undefined;
- baseUrl?:string;
- secEnabled?:boolean;
- symbols?:string[];
-}):Promise<{provider:string;ok:boolean;httpStatus:number|null;message:string}[]> {
+}) {
  if(!token||Buffer.byteLength(token,"utf8")<32)throw new Error("INTERNAL_JOB_TOKEN is absent or too short.");
  const url=new URL(baseUrl);
  if(url.origin!==STAGING_URL)throw new Error("Catalyst cron can only target the isolated staging app.");
@@ -27,7 +21,7 @@ export async function pollCatalystSources({
   {name:"sp_dji_index_news",route:"/api/public/catalysts/poll-sp-index",body:{}},
   ...(secEnabled?[{name:"sec_earnings",route:"/api/public/catalysts/ingest-sec",body:{symbols,lookbackDays:45}}]:[]),
  ];
- const results:{provider:string;ok:boolean;httpStatus:number|null;message:string}[]=[];
+ const results=[];
  for(const task of tasks) {
    try {
      const response=await fetcher(new URL(task.route,STAGING_URL),{
@@ -37,8 +31,8 @@ export async function pollCatalystSources({
        signal:AbortSignal.timeout(100_000),
        redirect:"error",
      });
-     const result:unknown=await response.json().catch(()=>null);
-     const info=result && typeof result==="object" ? result as Record<string,unknown> : {};
+     const result=await response.json().catch(()=>null);
+     const info=result && typeof result==="object" ? result : {};
      results.push({
        provider:task.name,ok:response.ok && info.ok===true,
        httpStatus:response.status,
