@@ -64,10 +64,12 @@ export interface AnticipationHypothesis {
   target_at: string | null;
   expires_at: string | null;
   status: "monitoring" | "dismissed" | "realized";
+  verification_status: "candidate" | "verified" | "rejected";
+  verified_at: string | null;
   criteria: AnticipationCriterion[];
 }
 export interface AnticipationAssessment {
-  state: "not_yet_known" | "insufficient" | "investigate" | "criteria_pass_review" | "blocked" | "stale" | "expired" | "closed";
+  state: "not_yet_known" | "unverified" | "insufficient" | "investigate" | "criteria_pass_review" | "blocked" | "stale" | "expired" | "closed";
   passed: number;
   total: number;
   missing: string[];
@@ -108,6 +110,13 @@ export function assessAnticipation(item: AnticipationHypothesis, asOf = new Date
   }
   if (firstSeen > now || reviewed > now) {
     return result("not_yet_known", 0, [...requirements], [], "Evidence not yet observable at this assessment time.");
+  }
+  if (item.verification_status !== "verified" || !item.verified_at) {
+    return result("unverified", 0, [...requirements], [], "Independent evidence review pending or rejected; nothing actionable.");
+  }
+  const independentlyVerifiedAt = validDate(item.verified_at);
+  if (independentlyVerifiedAt === null || independentlyVerifiedAt > now) {
+    return result("not_yet_known", 0, [...requirements], [], "Independent verification was not available at this historical time.");
   }
   if (item.status !== "monitoring") {
     return result("closed", 0, [...requirements], [], "Thesis closed; not an active anticipatory catalyst.");
