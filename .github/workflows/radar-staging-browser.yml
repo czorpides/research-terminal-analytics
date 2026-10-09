@@ -1,5 +1,10 @@
 name: Radar staging browser check
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/verify-radar-journey.mjs"
+      - ".github/workflows/radar-staging-browser.yml"
   push:
     branches: [fix/radar-switch-and-progressive-load]
   workflow_dispatch:
