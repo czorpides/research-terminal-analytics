@@ -3,7 +3,7 @@
  * market return, or retroactive "hit" may be assigned without original
  * timestamped evidence and an independently sourced future outcome.
  */
-import { assessAnticipation, type AnticipationHypothesis } from "./anticipatory-model";
+import { assessAnticipation, type AnticipationHypothesis } from "./anticipatory-model.ts";
 
 export const CATALYST_VALIDATION_VERSION="company.catalyst.outcome-study.v0.1";
 export type OutcomeLabel="announced_addition"|"not_added_complete_membership"|"unresolved";
