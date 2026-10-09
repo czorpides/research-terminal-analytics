@@ -136,6 +136,7 @@ export function assessAnticipation(item: AnticipationHypothesis, asOf = new Date
     // Never count future observations, invalid evidence, or source evidence
     // acquired later than the recorded review.
     if (observed === null || observed > reviewed || observed > now ||
+        now - observed > rule.refreshDays * 86_400_000 ||
         !validSource(c.sourceUrl) || !["pass", "fail", "unknown"].includes(c.state)) continue;
     criterionByCode.set(c.code, c);
   }
