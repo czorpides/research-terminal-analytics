@@ -406,7 +406,24 @@ async function loadOpportunityRadarWorkspace(): Promise<OpportunityRadarWorkspac
 }
 
 export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).handler(
-  () => cachedResearchWorkspace("opportunity-core-v1", loadOpportunityRadarWorkspace),
+  () => cachedResearchWorkspace("opportunity-core-v1", async () => {
+    const started = Date.now();
+    try {
+      const result = await loadOpportunityRadarWorkspace();
+      console.info("[radar-core] loaded", {
+        elapsedMs: Date.now() - started,
+        equities: result.universe.loaded,
+        candidates: result.candidates.length,
+      });
+      return result;
+    } catch (error) {
+      console.error("[radar-core] failed", {
+        elapsedMs: Date.now() - started,
+        error,
+      });
+      throw error;
+    }
+  }),
 );
 
 type ScoreBag = Partial<
