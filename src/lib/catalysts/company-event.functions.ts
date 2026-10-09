@@ -26,6 +26,8 @@ export interface OfficialIndexDocument {
   publishedAt:string;
   firstObservedAt:string;
   state:"unmapped" | "reviewed" | "dismissed";
+  collectionMethod:"automatic_feed"|"manual_official";
+  publishedTimePrecision:"exact"|"date_only_conservative";
 }
 export interface PollHealth {
   startedAt:string;
@@ -72,7 +74,7 @@ export const getCompanyCatalystWorkspace = createServerFn({ method: "GET" }).han
     );
     const [sourceRows,runRows]=await Promise.all([
       db.from("catalyst_source_documents")
-        .select("id,title,source_url,source_published_at,first_observed_at,status")
+        .select("id,title,source_url,source_published_at,first_observed_at,status,collection_method,published_time_precision")
         .eq("provider","sp_dji_index_news")
         .order("first_observed_at",{ascending:false})
         .limit(60),
@@ -87,9 +89,13 @@ export const getCompanyCatalystWorkspace = createServerFn({ method: "GET" }).han
     const indexDocuments:OfficialIndexDocument[]=((sourceRows.data??[]) as Array<{
       id:string;title:string;source_url:string;source_published_at:string;
       first_observed_at:string;status:"unmapped"|"reviewed"|"dismissed";
+      collection_method:"automatic_feed"|"manual_official";
+      published_time_precision:"exact"|"date_only_conservative";
     }>).map(d=>({
       id:d.id,title:d.title,sourceUrl:d.source_url,publishedAt:d.source_published_at,
       firstObservedAt:d.first_observed_at,state:d.status,
+      collectionMethod:d.collection_method,
+      publishedTimePrecision:d.published_time_precision,
     }));
     const lastRun=(runRows.data??[])[0] as {
       started_at:string;status:PollHealth["status"];observed:number;warning:string|null;
