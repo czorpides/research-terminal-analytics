@@ -13,6 +13,7 @@ const fixture:SP500FactPacket={
  symbol:"EXAMPLE",methodologyReviewedAt:observed,methodologyVersion:"2026-07",
  currentMember:evidence(false),usDomicile:evidence(true),
  eligibleUsListing:evidence(true),eligibleSecurityType:evidence(true),
+ secDomesticReporting:evidence(true),ipoSeasoningOrExemption:evidence(true),
  companyMarketCapUsd:evidence(SP500_JULY_2026.companyMarketCapUsd),
  securityFloatMarketCapUsd:evidence(SP500_JULY_2026.securityFloatMarketCapUsd),
  investableWeightFactor:evidence(0.1),
@@ -23,7 +24,7 @@ const fixture:SP500FactPacket={
 };
 test("all published July thresholds pass at boundary yet no inclusion probability",()=>{
  const a=screenSP500Preflight(fixture,at);
- assert.equal(a.state,"eligible_for_review");assert.equal(a.passed,11);
+ assert.equal(a.state,"eligible_for_review");assert.equal(a.passed,13);
  assert.equal(a.probability,null);assert.equal(a.scoreAdjustment,0);
  assert.ok(a.criteria.every(x=>x.sourceUrl.startsWith("https://")));
 });
@@ -67,4 +68,11 @@ test("S&P requires float-adjusted size and free float in addition to company siz
 });
 test("only the official published methodology supplies the fixed July rules",()=>{
  assert.ok(SP500_METHODOLOGY_URL.includes("spglobal.com"));
+});
+
+test("domestic reporting and standard IPO seasoning are independent qualification gates",()=>{
+ const a=screenSP500Preflight({...fixture,secDomesticReporting:evidence(false)},at);
+ assert.equal(a.state,"excluded");assert.ok(a.failed.includes("sec_domestic_reporting"));
+ const b=screenSP500Preflight({...fixture,ipoSeasoningOrExemption:evidence(false)},at);
+ assert.equal(b.state,"excluded");assert.ok(b.failed.includes("ipo_seasoning_or_exemption"));
 });
