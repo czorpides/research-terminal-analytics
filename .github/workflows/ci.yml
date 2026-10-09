@@ -2,11 +2,12 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/catalyst-intelligence-foundation]
   push:
     branches:
       - main
       - chatgpt/stage2-calibration-review
+      - feature/catalyst-source-polling
 
 permissions:
   contents: read
@@ -54,6 +55,11 @@ jobs:
 
       - name: Test independent catalyst review authorization
         run: node --experimental-strip-types --test src/lib/catalysts/review-auth.test.ts
+
+      - name: Test official index announcements and source scheduler
+        run: |
+          node --experimental-strip-types --test src/lib/catalysts/providers/sp-index-feed.test.ts
+          node --test scripts/catalyst-source-cron.test.mjs
 
       - name: Run Opportunity Radar and fundamental model tests
         run: npm run test:opportunity

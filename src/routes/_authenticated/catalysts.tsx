@@ -99,6 +99,35 @@ function CatalystIntelligencePage() {
             {rows.map(row=><EventCard key={row.id} row={row}/>)}
           </div>
         )}
+        <section className="mt-6 rounded-xl border border-border/70 bg-card p-4">
+          <h2 className="text-sm font-semibold">Official index-announcement inbox</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            S&P Dow Jones Indices source documents are captured here before any company is matched. Additions, deletions and transaction-related changes are not automatically interpreted as bullish stock catalysts.
+          </p>
+          <div className="my-3 text-xs text-muted-foreground">
+            {query.data.lastIndexPoll
+              ? `Last poll: ${query.data.lastIndexPoll.status} · ${query.data.lastIndexPoll.startedAt.slice(0,16).replace("T"," ")} UTC · ${query.data.lastIndexPoll.observed} qualifying source documents`
+              : "Not yet polled"}
+            {query.data.lastIndexPoll?.warning && <span className="ml-2">· {query.data.lastIndexPoll.warning}</span>}
+          </div>
+          {query.data.indexDocuments.length===0 ? (
+            <p role="status" className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+              No index-announcement source documents ingested yet. The index provider and polling worker are being configured.
+            </p>
+          ) : <div className="space-y-2">
+            {query.data.indexDocuments.map(doc=>(
+              <div key={doc.id} className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-border/70 p-3">
+                <div className="min-w-0 flex-1">
+                  <a href={doc.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium underline underline-offset-2">{doc.title}</a>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Published {doc.publishedAt.slice(0,10)} · first observed {doc.firstObservedAt.slice(0,10)} · {doc.state === "unmapped" ? "Ticker mapping and verification pending" : doc.state}
+                  </p>
+                </div>
+                <span className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground">{doc.state}</span>
+              </div>
+            ))}
+          </div>}
+        </section>
         <p className="mt-5 text-xs leading-5 text-muted-foreground">
           {query.data.note} Last source publication: {query.data.latestKnownAt ? query.data.latestKnownAt.slice(0,10) : "unavailable"}.
           Source publication and verification timestamps prevent using future news in historical backtests.
