@@ -199,15 +199,15 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     const newsStart = new Date(now.getTime() - 14 * 86_400_000).toISOString();
 
     const [pricePages, earningsPages, newsPages, countryResult, industryResult] = await Promise.all([
-      // Smaller indexed JSON groups in three-request waves avoid exceeding
+      // Indexed 20-asset groups in two-request waves avoid exceeding
       // the database's per-statement budget under concurrent deep scans.
       // Every instrument retains up to 300 bars; the model is unchanged.
       (async () => {
-        const priceBatches = chunk(selectedIdsAll, 10);
+        const priceBatches = chunk(selectedIdsAll, 20);
         const resultPages: Array<{ data: PriceRow[] | null; error: { message: string; code?: string } | null }> = [];
-        for (let i = 0; i < priceBatches.length; i += 3) {
+        for (let i = 0; i < priceBatches.length; i += 2) {
           const wave = await Promise.all(
-            priceBatches.slice(i, i + 3).map((batch) =>
+            priceBatches.slice(i, i + 2).map((batch) =>
               db.rpc("get_swing_recent_price_bars", {
                 p_asset_ids: batch,
                 p_from_date: priceStart,
