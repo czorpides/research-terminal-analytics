@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ANTICIPATION_RULEBOOK, assessAnticipation, collapseAnticipation, type AnticipationHypothesis } from "./anticipatory-model.ts";
+import { ANTICIPATION_RULEBOOK, assessAnticipation, collapseAnticipation, compareEligibilityEvidence, type AnticipationHypothesis } from "./anticipatory-model.ts";
 
 const date = "2026-10-08T12:00:00Z";
 const t = new Date("2026-10-09T12:00:00Z");
@@ -83,4 +83,28 @@ test("Nasdaq has separate current rules and does not reuse S&P committee claim",
   assert.ok(rules.criteria.includes("rank_at_reference_date"));
   assert.ok(!(rules.criteria as readonly string[]).includes("gaap_profitability"));
   assert.match(rules.discretion,/rank alone/i);
+});
+
+
+test("two independently reviewed time-stamped snapshots reveal improving conditions, not event odds",()=>{
+  const earlier={...sample,hypothesis_key:"sp500:BE:2026q3",first_observed_at:"2026-10-07T08:00:00Z",
+    last_reviewed_at:"2026-10-07T08:00:00Z",verified_at:"2026-10-07T10:00:00Z",
+    criteria:sample.criteria.map(c=>["gaap_latest_quarter","gaap_trailing_four_quarters"].includes(c.code)
+      ?{...c,state:"unknown" as const,observedAt:"2026-10-07T08:00:00Z"}:c)};
+  const later={...sample,hypothesis_key:"sp500:BE:2026q4",
+    first_observed_at:"2026-10-08T12:00:00Z",
+    last_reviewed_at:"2026-10-08T12:00:00Z",
+    verified_at:"2026-10-08T18:00:00Z"};
+  const progress=compareEligibilityEvidence(earlier,later,t);
+  assert.ok(progress);
+  assert.deepEqual(progress.newlySupported,["gaap_latest_quarter","gaap_trailing_four_quarters"]);
+  assert.equal(progress.probability,null);
+  assert.equal(progress.scoreAdjustment,0);
+});
+test("no progression without different source-backed independently verified revisions",()=>{
+  const later={...sample,first_observed_at:"2026-10-09T09:00:00Z",
+    last_reviewed_at:"2026-10-09T09:00:00Z",verified_at:"2026-10-09T10:00:00Z"};
+  assert.equal(compareEligibilityEvidence(sample,later,t),null,"same immutable revision");
+  assert.equal(compareEligibilityEvidence({...sample,hypothesis_key:"old-key",verification_status:"candidate"},later,t),null);
+  assert.equal(compareEligibilityEvidence({...sample,hypothesis_key:"old-key",verified_at:"2026-10-11T00:00:00Z"},later,t),null);
 });
