@@ -389,7 +389,17 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
 }
 
 export const getSwingTradesV2Workspace = createServerFn({ method: "GET" }).handler(
-  () => cachedResearchWorkspace("swing-v2.1", loadSwingV2Workspace),
+  () => cachedResearchWorkspace("swing-v2.1", async () => {
+    const started = Date.now();
+    try {
+      const value = await loadSwingV2Workspace();
+      console.info("[swing-v2] loaded", { elapsedMs: Date.now() - started, candidates: value.candidates.length });
+      return value;
+    } catch (error) {
+      console.error("[swing-v2] failed", { elapsedMs: Date.now() - started, error });
+      throw error;
+    }
+  }),
 );
 
 function selectDeepScanV2(
