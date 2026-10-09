@@ -15,7 +15,12 @@ export default defineConfig({
     tailwindcss(),
     tanstackStart(),
     viteReact(),
-    nitro({ output: { dir: "dist" } }),
+    // Lovable hosting runs a Cloudflare Worker (needs an exported fetch handler).
+    // The Docker/Railway build sets NITRO_PRESET=node-server.
+    nitro({
+      preset: process.env.NITRO_PRESET || "cloudflare-module",
+      output: { dir: "dist" },
+    }),
     mcpPlugin(),
   ],
 });
