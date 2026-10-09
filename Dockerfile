@@ -19,7 +19,7 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=build /app/.output ./.output
+COPY --from=build /app/dist ./dist
 COPY package.json ./package.json
 EXPOSE 3000
 CMD ["npm", "run", "start"]
