@@ -25,3 +25,5 @@ jobs:
         run: node scripts/verify-radar-journey.mjs
 
 # Check freshly deployed Radar diagnostics and timing.
+
+# Regression against successfully deployed indexed price query release.
