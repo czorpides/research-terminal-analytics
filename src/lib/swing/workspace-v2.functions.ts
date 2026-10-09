@@ -174,6 +174,18 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     const metals = metalResult.error ? [] : ((metalResult.data ?? []) as AssetRow[]);
     const selectedAssets = [...selectedEquities, ...metals];
     const selectedIdsAll = selectedAssets.map((asset) => asset.id);
+
+    // Analyst evidence and metals macro are independent of historical bars.
+    // Start both during the long price scan rather than serially afterwards.
+    // Keep the original missing-evidence behaviour and scoring unchanged.
+    const expectationsTask: Promise<Record<string, SwingExpectationSignal>> =
+      import("./expectations.functions")
+        .then(({ loadExpectationSignalsForAssets }) =>
+          loadExpectationSignalsForAssets(selectedEquities.map((asset) => asset.id)),
+        )
+        .catch(() => ({}));
+    const metalMacroTask = loadPreciousMetalMacroContexts();
+
     const scoreScreened = equities.filter((asset) =>
       technicalScreen.has(asset.id) || hasTechnicalScore(scores.get(asset.id)),
     ).length;
@@ -257,14 +269,10 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
       ]),
     );
 
-    let expectationSignals: Record<string, SwingExpectationSignal> = {};
-    try {
-      const { loadExpectationSignalsForAssets } = await import("./expectations.functions");
-      expectationSignals = await loadExpectationSignalsForAssets(selectedEquities.map((asset) => asset.id));
-    } catch {
-      expectationSignals = {};
-    }
-    const metalMacro = await loadPreciousMetalMacroContexts();
+    const [expectationSignals, metalMacro] = await Promise.all([
+      expectationsTask,
+      metalMacroTask,
+    ]);
     console.info("[swing-v2:stage]", { phase: "context", elapsedMs: Date.now() - scanStarted });
 
     const warnings: string[] = [];
