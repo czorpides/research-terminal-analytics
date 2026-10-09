@@ -7,8 +7,8 @@ import { z } from "zod";
  */
 export const Route = createFileRoute("/api/public/catalysts/review")({
   server:{handlers:{POST:async ({request})=>{
-    const {authorizeInternalJobRequest}=await import("@/lib/security/internal-job-auth.server");
-    if(!authorizeInternalJobRequest(request)) return new Response("Unauthorized",{status:401});
+    const {authorizeCatalystReviewRequest}=await import("@/lib/catalysts/review-auth.server");
+    if(!authorizeCatalystReviewRequest(request)) return new Response("Unauthorized",{status:401});
     const body:unknown=await request.json().catch(()=>null);
     const check=z.object({
       event_key:z.string().regex(/^[A-Za-z0-9_:-]{8,180}$/),
