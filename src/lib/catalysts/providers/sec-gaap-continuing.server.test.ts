@@ -53,7 +53,7 @@ test("SEC CIK discrepancy is rejected rather than assigned to ticker",async()=>{
 test("SEC contact User-Agent and bounded securities are mandatory",async()=>{
  await assert.rejects(()=>fetchSecContinuingProfitability({
   symbols:["BE"],userAgent:"bot",fetchJson:async()=>{throw Error("NO");}
- }),/User-Agent/);
+ }),/SEC_EDGAR_USER_AGENT/);
  await assert.rejects(()=>fetchSecContinuingProfitability({
   symbols:["BE","B","C","D","E"],userAgent:agent,
   fetchJson:async()=>{throw Error("NO");}
