@@ -184,17 +184,16 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     const newsStart = new Date(now.getTime() - 14 * 86_400_000).toISOString();
 
     const [pricePages, earningsPages, newsPages, countryResult, industryResult] = await Promise.all([
+      // One indexed lateral price scan per equity, batched into JSON responses.
+      // This avoids dozens of globally sorted historical-price REST calls.
+      // Each instrument gets its own complete (up to 300 bars) lookback.
       Promise.all(
-        chunk(selectedIdsAll, 3).map((batch) =>
-          db
-            .from("prices_daily")
-            .select("asset_id,trade_date,open,high,low,close,adj_close,volume")
-            .in("asset_id", batch)
-            .gte("trade_date", priceStart)
-            .order("trade_date", { ascending: false })
-            // Under PostgREST's 1,000-row response cap for 3 symbols,
-            // and above the 280-session technical lookback.
-            .limit(batch.length * 300),
+        chunk(selectedIdsAll, 20).map((batch) =>
+          db.rpc("get_swing_recent_price_bars", {
+            p_asset_ids: batch,
+            p_from_date: priceStart,
+            p_bars_per_asset: 300,
+          }),
         ),
       ),
       Promise.all(
