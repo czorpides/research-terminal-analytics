@@ -210,6 +210,276 @@ export type Database = {
           },
         ]
       }
+      catalyst_anticipations: {
+        Row: {
+          asset_id: string
+          created_at: string
+          criteria: Json
+          expires_at: string | null
+          first_observed_at: string
+          headline: string
+          hypothesis_key: string
+          hypothesis_type: string
+          id: string
+          last_reviewed_at: string
+          reviewer_note: string
+          source_name: string
+          source_published_at: string
+          source_url: string
+          status: string
+          target_at: string | null
+          updated_at: string
+          verification_note: string | null
+          verification_status: string
+          verified_at: string | null
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          criteria?: Json
+          expires_at?: string | null
+          first_observed_at?: string
+          headline: string
+          hypothesis_key: string
+          hypothesis_type: string
+          id?: string
+          last_reviewed_at?: string
+          reviewer_note?: string
+          source_name: string
+          source_published_at: string
+          source_url: string
+          status?: string
+          target_at?: string | null
+          updated_at?: string
+          verification_note?: string | null
+          verification_status?: string
+          verified_at?: string | null
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          criteria?: Json
+          expires_at?: string | null
+          first_observed_at?: string
+          headline?: string
+          hypothesis_key?: string
+          hypothesis_type?: string
+          id?: string
+          last_reviewed_at?: string
+          reviewer_note?: string
+          source_name?: string
+          source_published_at?: string
+          source_url?: string
+          status?: string
+          target_at?: string | null
+          updated_at?: string
+          verification_note?: string | null
+          verification_status?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalyst_anticipations_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalyst_anticipations_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
+      catalyst_events: {
+        Row: {
+          asset_id: string
+          direction: string
+          effective_at: string | null
+          event_key: string
+          event_type: string
+          evidence: Json
+          evidence_confidence: number | null
+          expires_at: string | null
+          headline: string
+          id: string
+          ingested_at: string
+          known_at: string
+          materiality: number | null
+          novelty: number | null
+          source_name: string
+          source_published_at: string
+          source_tier: string
+          source_url: string
+          status: string
+          summary: string
+          updated_at: string
+          verification_note: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          asset_id: string
+          direction?: string
+          effective_at?: string | null
+          event_key: string
+          event_type: string
+          evidence?: Json
+          evidence_confidence?: number | null
+          expires_at?: string | null
+          headline: string
+          id?: string
+          ingested_at?: string
+          known_at: string
+          materiality?: number | null
+          novelty?: number | null
+          source_name: string
+          source_published_at: string
+          source_tier: string
+          source_url: string
+          status?: string
+          summary?: string
+          updated_at?: string
+          verification_note?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          asset_id?: string
+          direction?: string
+          effective_at?: string | null
+          event_key?: string
+          event_type?: string
+          evidence?: Json
+          evidence_confidence?: number | null
+          expires_at?: string | null
+          headline?: string
+          id?: string
+          ingested_at?: string
+          known_at?: string
+          materiality?: number | null
+          novelty?: number | null
+          source_name?: string
+          source_published_at?: string
+          source_tier?: string
+          source_url?: string
+          status?: string
+          summary?: string
+          updated_at?: string
+          verification_note?: string | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalyst_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalyst_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
+      catalyst_poll_runs: {
+        Row: {
+          finished_at: string | null
+          id: string
+          observed: number
+          source: string
+          started_at: string
+          status: string
+          submitted: number
+          warning: string | null
+        }
+        Insert: {
+          finished_at?: string | null
+          id?: string
+          observed?: number
+          source: string
+          started_at?: string
+          status?: string
+          submitted?: number
+          warning?: string | null
+        }
+        Update: {
+          finished_at?: string | null
+          id?: string
+          observed?: number
+          source?: string
+          started_at?: string
+          status?: string
+          submitted?: number
+          warning?: string | null
+        }
+        Relationships: []
+      }
+      catalyst_source_documents: {
+        Row: {
+          collection_method: string
+          created_at: string
+          first_known_at: string
+          first_observed_at: string
+          id: string
+          matched_asset_id: string | null
+          provider: string
+          published_time_precision: string
+          source_published_at: string
+          source_url: string
+          status: string
+          title: string
+        }
+        Insert: {
+          collection_method?: string
+          created_at?: string
+          first_known_at?: string
+          first_observed_at?: string
+          id?: string
+          matched_asset_id?: string | null
+          provider: string
+          published_time_precision?: string
+          source_published_at: string
+          source_url: string
+          status?: string
+          title: string
+        }
+        Update: {
+          collection_method?: string
+          created_at?: string
+          first_known_at?: string
+          first_observed_at?: string
+          id?: string
+          matched_asset_id?: string | null
+          provider?: string
+          published_time_precision?: string
+          source_published_at?: string
+          source_url?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalyst_source_documents_matched_asset_id_fkey"
+            columns: ["matched_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalyst_source_documents_matched_asset_id_fkey"
+            columns: ["matched_asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
       commodities: {
         Row: {
           code: string
@@ -535,6 +805,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "earnings_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+          {
             foreignKeyName: "earnings_events_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
@@ -734,6 +1011,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equity_technical_screen_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: true
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
           },
         ]
       }
@@ -1030,6 +1314,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fundamental_facts_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+          {
             foreignKeyName: "fundamental_facts_filing_id_fkey"
             columns: ["filing_id"]
             isOneToOne: false
@@ -1109,6 +1400,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fundamental_filings_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+          {
             foreignKeyName: "fundamental_filings_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
@@ -1164,6 +1462,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fundamentals_annual_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+          {
             foreignKeyName: "fundamentals_annual_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
@@ -1210,6 +1515,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fundamentals_quarterly_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
           },
           {
             foreignKeyName: "fundamentals_quarterly_source_id_fkey"
@@ -1719,6 +2031,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "prices_daily_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+          {
             foreignKeyName: "prices_daily_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
@@ -1759,6 +2078,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prices_intraday_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
           },
           {
             foreignKeyName: "prices_intraday_source_id_fkey"
@@ -2098,6 +2424,30 @@ export type Database = {
         }
         Relationships: []
       }
+      research_workspace_snapshots: {
+        Row: {
+          cache_key: string
+          computed_at: string
+          data_asof: string | null
+          model_version: string
+          workspace: Json
+        }
+        Insert: {
+          cache_key: string
+          computed_at?: string
+          data_asof?: string | null
+          model_version: string
+          workspace: Json
+        }
+        Update: {
+          cache_key?: string
+          computed_at?: string
+          data_asof?: string | null
+          model_version?: string
+          workspace?: Json
+        }
+        Relationships: []
+      }
       scheduled_data_events: {
         Row: {
           asset_id: string | null
@@ -2175,6 +2525,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_data_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
           },
         ]
       }
@@ -2473,6 +2830,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "swing_trade_price_snapshots_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
+          },
+          {
             foreignKeyName: "swing_trade_price_snapshots_setup_id_fkey"
             columns: ["setup_id"]
             isOneToOne: false
@@ -2618,6 +2982,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swing_trade_setups_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
           },
         ]
       }
@@ -2854,6 +3225,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "undervaluation_watchlist_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: true
+            referencedRelation: "opportunity_latest_asset_prices"
+            referencedColumns: ["asset_id"]
           },
         ]
       }
@@ -3097,6 +3475,14 @@ export type Database = {
         }
         Relationships: []
       }
+      opportunity_latest_asset_prices: {
+        Row: {
+          asset_id: string | null
+          close: number | null
+          trade_date: string | null
+        }
+        Relationships: []
+      }
       v_current_canonical_observations: {
         Row: {
           id: string | null
@@ -3158,6 +3544,14 @@ export type Database = {
     }
     Functions: {
       get_opportunity_candidate_freshness: { Args: never; Returns: Json }
+      get_swing_recent_price_bars: {
+        Args: {
+          p_asset_ids: string[]
+          p_bars_per_asset?: number
+          p_from_date: string
+        }
+        Returns: Json
+      }
       refresh_equity_technical_screen: { Args: never; Returns: number }
     }
     Enums: {
@@ -3219,12 +3613,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3248,11 +3642,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3273,11 +3667,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3298,11 +3692,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3315,11 +3709,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

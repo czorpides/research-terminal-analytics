@@ -21,6 +21,7 @@ import { Route as AuthenticatedOvervaluationRouteImport } from './routes/_authen
 import { Route as AuthenticatedMacroRouteImport } from './routes/_authenticated/macro'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDataHealthRouteImport } from './routes/_authenticated/data-health'
+import { Route as AuthenticatedCatalystsRouteImport } from './routes/_authenticated/catalysts'
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedAltDataRouteImport } from './routes/_authenticated/alt-data'
 import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
@@ -135,6 +136,11 @@ const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
 const AuthenticatedDataHealthRoute = AuthenticatedDataHealthRouteImport.update({
   id: '/data-health',
   path: '/data-health',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCatalystsRoute = AuthenticatedCatalystsRouteImport.update({
+  id: '/catalysts',
+  path: '/catalysts',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
@@ -450,6 +456,7 @@ export interface FileRoutesByFullPath {
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/calendar': typeof AuthenticatedCalendarRoute
+  '/catalysts': typeof AuthenticatedCatalystsRoute
   '/data-health': typeof AuthenticatedDataHealthRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/macro': typeof AuthenticatedMacroRouteWithChildren
@@ -515,6 +522,7 @@ export interface FileRoutesByTo {
   '/alerts': typeof AuthenticatedAlertsRoute
   '/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/calendar': typeof AuthenticatedCalendarRoute
+  '/catalysts': typeof AuthenticatedCatalystsRoute
   '/data-health': typeof AuthenticatedDataHealthRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/overvaluation': typeof AuthenticatedOvervaluationRoute
@@ -582,6 +590,7 @@ export interface FileRoutesById {
   '/_authenticated/alerts': typeof AuthenticatedAlertsRoute
   '/_authenticated/alt-data': typeof AuthenticatedAltDataRouteWithChildren
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
+  '/_authenticated/catalysts': typeof AuthenticatedCatalystsRoute
   '/_authenticated/data-health': typeof AuthenticatedDataHealthRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
   '/_authenticated/macro': typeof AuthenticatedMacroRouteWithChildren
@@ -651,6 +660,7 @@ export interface FileRouteTypes {
     | '/alerts'
     | '/alt-data'
     | '/calendar'
+    | '/catalysts'
     | '/data-health'
     | '/history'
     | '/macro'
@@ -716,6 +726,7 @@ export interface FileRouteTypes {
     | '/alerts'
     | '/alt-data'
     | '/calendar'
+    | '/catalysts'
     | '/data-health'
     | '/history'
     | '/overvaluation'
@@ -782,6 +793,7 @@ export interface FileRouteTypes {
     | '/_authenticated/alerts'
     | '/_authenticated/alt-data'
     | '/_authenticated/calendar'
+    | '/_authenticated/catalysts'
     | '/_authenticated/data-health'
     | '/_authenticated/history'
     | '/_authenticated/macro'
@@ -955,6 +967,13 @@ declare module '@tanstack/react-router' {
       path: '/data-health'
       fullPath: '/data-health'
       preLoaderRoute: typeof AuthenticatedDataHealthRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/catalysts': {
+      id: '/_authenticated/catalysts'
+      path: '/catalysts'
+      fullPath: '/catalysts'
+      preLoaderRoute: typeof AuthenticatedCatalystsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/calendar': {
@@ -1409,6 +1428,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAlertsRoute: typeof AuthenticatedAlertsRoute
   AuthenticatedAltDataRoute: typeof AuthenticatedAltDataRouteWithChildren
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
+  AuthenticatedCatalystsRoute: typeof AuthenticatedCatalystsRoute
   AuthenticatedDataHealthRoute: typeof AuthenticatedDataHealthRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
   AuthenticatedMacroRoute: typeof AuthenticatedMacroRouteWithChildren
@@ -1427,6 +1447,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAlertsRoute: AuthenticatedAlertsRoute,
   AuthenticatedAltDataRoute: AuthenticatedAltDataRouteWithChildren,
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
+  AuthenticatedCatalystsRoute: AuthenticatedCatalystsRoute,
   AuthenticatedDataHealthRoute: AuthenticatedDataHealthRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
   AuthenticatedMacroRoute: AuthenticatedMacroRouteWithChildren,
