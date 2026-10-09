@@ -19,7 +19,8 @@ export const Route=createFileRoute("/api/public/catalysts/anticipations/review")
     const {data,error}=await db.from("catalyst_anticipations").update({
       verification_status:parsed.data.decision,
       verified_at:parsed.data.decision==="verified"?new Date().toISOString():null,
-      verification_note:parsed.data.verification_note,updated_at:new Date().toISOString(),
+      verification_note:parsed.data.verification_note,
+      last_reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString(),
     }).eq("hypothesis_key",parsed.data.hypothesis_key)
       .eq("verification_status","candidate")
       .select("id,hypothesis_key,verification_status").maybeSingle();
