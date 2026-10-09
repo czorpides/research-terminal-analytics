@@ -48,6 +48,7 @@ function CatalystIntelligencePage() {
         <span className="rounded-full border border-border px-2.5 py-1">Shadow research · no trading bonuses</span>
         <span>Time-of-publication verified · events expire automatically</span>
       </div>
+      <AnticipationBoard symbol={symbol}/>
       {query.isPending && <section role="status" className="rounded-xl border border-border/70 p-5 text-sm">Loading Catalyst Intelligence…</section>}
       {query.isError && (
         <section role="alert" className="rounded-xl border border-[var(--negative)]/40 p-5 text-sm">
@@ -65,7 +66,6 @@ function CatalystIntelligencePage() {
             <span>Index changes / contracts / political statements: source feeds pending</span>
           </div>
         </section>
-        <AnticipationBoard symbol={symbol}/>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           <Metric label="Verified source events" value={query.data.verified} note="Reviewed with source evidence" />
           <Metric label="Active event signals" value={query.data.activeSignals} note="Within event-specific expiry window" />
