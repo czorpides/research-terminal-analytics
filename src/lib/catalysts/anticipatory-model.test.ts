@@ -58,7 +58,7 @@ test("a future requirement cannot leak in while current documents remain visible
   const criteria=sample.criteria.map(c=>c.code==="gaap_latest_quarter"?{...c,observedAt:"2026-10-11T12:00:00Z"}:c);
   const a=assessAnticipation({...sample,criteria},t);
   assert.equal(a.state,"investigate");
-  assert.ok(a.missing.includes("gaap_profitability"));
+  assert.ok(a.missing.includes("gaap_latest_quarter"));
 });
 test("stale observations and passed action windows are never promoted",()=>{
   assert.equal(assessAnticipation(sample,new Date("2026-11-20T12:00:00Z")).state,"stale");
