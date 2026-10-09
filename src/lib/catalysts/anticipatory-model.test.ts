@@ -32,10 +32,10 @@ test("unreviewed hypotheses never become qualifying signals",()=>{
   assert.equal(a.passed,0);
 });
 test("unknown membership and profitability must never silently become passing criteria",()=>{
-  const hypothesis={...sample,criteria:sample.criteria.filter(c=>!["not_current_member","gaap_profitability"].includes(c.code))};
+  const hypothesis={...sample,criteria:sample.criteria.filter(c=>!["not_current_member","gaap_latest_quarter"].includes(c.code))};
   const a=assessAnticipation(hypothesis,t);
   assert.equal(a.state,"investigate");
-  assert.deepEqual(a.missing,["not_current_member","gaap_profitability"]);
+  assert.deepEqual(a.missing,["not_current_member","gaap_latest_quarter"]);
   assert.equal(a.probability,null);
 });
 test("a verified disqualifier vetoes the anticipation",()=>{
@@ -55,7 +55,7 @@ test("future observation is invisible to historical runs",()=>{
   assert.equal(a.passed,0);
 });
 test("a future requirement cannot leak in while current documents remain visible",()=>{
-  const criteria=sample.criteria.map(c=>c.code==="gaap_profitability"?{...c,observedAt:"2026-10-11T12:00:00Z"}:c);
+  const criteria=sample.criteria.map(c=>c.code==="gaap_latest_quarter"?{...c,observedAt:"2026-10-11T12:00:00Z"}:c);
   const a=assessAnticipation({...sample,criteria},t);
   assert.equal(a.state,"investigate");
   assert.ok(a.missing.includes("gaap_profitability"));
