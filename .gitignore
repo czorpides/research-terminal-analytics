@@ -17,9 +17,6 @@ dist-ssr
 *.local
 
 # Environment files are deployment-local; never commit credentials.
-.env
-.env.*
-!.env.example
 
 # Wrangler / Cloudflare
 .wrangler/
