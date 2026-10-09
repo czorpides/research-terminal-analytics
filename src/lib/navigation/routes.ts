@@ -12,6 +12,7 @@
 import {
   LayoutGrid,
   Radar,
+  Crosshair,
   TrendingDown,
   TrendingUp,
   Filter,
@@ -40,6 +41,7 @@ import {
   CloudSun,
   AlertTriangle,
   CalendarDays,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -142,6 +144,32 @@ export const ROUTES: RouteEntry[] = [
     requiredDataSources: ["prices", "fundamentals"],
     requiredModels: ["opportunity.horizons", "impairment", "idiosyncrasy"],
     purpose: "Finds share-price damage that appears greater than business impairment.",
+  },
+  {
+    id: "sw",
+    path: "/swing-trades",
+    name: "Swing Radar",
+    group: "platform",
+    icon: Crosshair,
+    stage: 3,
+    status: "active",
+    enabled: true,
+    requiredDataSources: ["prices", "earnings", "macro"],
+    requiredModels: ["swing.v2", "entry-quality", "risk-controls"],
+    purpose: "Multi-strategy swing trade opportunities and entry-quality monitoring.",
+  },
+  {
+    id: "ci",
+    path: "/catalysts",
+    name: "Catalyst Intelligence",
+    group: "platform",
+    icon: Zap,
+    stage: 3,
+    status: "active",
+    enabled: true,
+    requiredDataSources: ["corporate_events","earnings","index_changes","contracts","official_statements"],
+    requiredModels: ["company.catalyst.shadow.v0.1"],
+    purpose: "Verified, expiring company-event catalysts with audit trails; shadow input to both research Radars.",
   },
   {
     id: "uv",

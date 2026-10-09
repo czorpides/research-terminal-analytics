@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { cachedResearchWorkspace } from "@/lib/research/research-cache.server";
 
 import { FUNDAMENTAL_METRICS } from "@/lib/ingestion/fundamentals/metrics";
 import {
@@ -164,8 +165,7 @@ export interface OpportunityRadarWorkspace {
   modelNote: string;
 }
 
-export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).handler(
-  async (): Promise<OpportunityRadarWorkspace> => {
+async function loadOpportunityRadarWorkspace(): Promise<OpportunityRadarWorkspace> {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { count: activeEquities } = await supabaseAdmin
       .from("assets")
@@ -202,7 +202,9 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
     const countryIds = unique(
       assets.map((asset) => asset.country_id).filter((id): id is string => Boolean(id)),
     );
-    const assetBatches = chunkValues(assetIds, 75);
+    // Keep each PostgREST result under its normal 1,000-row cap (125 × 7 scores
+    // <= 875) while reducing round-trips vs the former 75-asset batches.
+    const assetBatches = chunkValues(assetIds, 125);
 
     const [scorePages, pricePages, industryResult, countryResult, earningsPages] =
       await Promise.all([
@@ -228,12 +230,14 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
         ),
         Promise.all(
           assetBatches.map((batch) =>
-            supabaseAdmin
-              .from("prices_daily")
+            // Additive security-invoker view uses one indexed price lookup per
+            // asset instead of sorting thousands of historical closes.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabaseAdmin as any)
+              .from("opportunity_latest_asset_prices")
               .select("asset_id,trade_date,close")
               .in("asset_id", batch)
-              .order("trade_date", { ascending: false })
-              .limit(batch.length * 6),
+              .limit(batch.length),
           ),
         ),
         industryIds.length
@@ -401,7 +405,27 @@ export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).ha
       modelNote:
         "The model ranks the tracked universe in shadow mode. Price dislocation, Magic Formula and improving-value routes can nominate research candidates; missing evidence lowers confidence and is never silently estimated.",
     };
-  },
+}
+
+export const getOpportunityRadarWorkspace = createServerFn({ method: "GET" }).handler(
+  () => cachedResearchWorkspace("opportunity-core-v1", async () => {
+    const started = Date.now();
+    try {
+      const result = await loadOpportunityRadarWorkspace();
+      console.info("[radar-core] loaded", {
+        elapsedMs: Date.now() - started,
+        equities: result.universe.loaded,
+        candidates: result.candidates.length,
+      });
+      return result;
+    } catch (error) {
+      console.error("[radar-core] failed", {
+        elapsedMs: Date.now() - started,
+        error,
+      });
+      throw error;
+    }
+  }),
 );
 
 type ScoreBag = Partial<
