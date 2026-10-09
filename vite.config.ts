@@ -15,7 +15,7 @@ export default defineConfig({
     tailwindcss(),
     tanstackStart(),
     viteReact(),
-    nitro(),
+    nitro({ output: { dir: "dist" } }),
     mcpPlugin(),
   ],
 });
