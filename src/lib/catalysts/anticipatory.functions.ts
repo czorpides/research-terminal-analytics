@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { assessAnticipation, ANTICIPATION_VERSION,
-  type AnticipationAssessment, type AnticipationHypothesis } from "./anticipatory-model";
+import { assessAnticipation, compareEligibilityEvidence, ANTICIPATION_VERSION,
+  type AnticipationAssessment, type AnticipationHypothesis, type EligibilityProgress } from "./anticipatory-model";
 
 export interface AnticipatoryCandidate {
   id:string;
@@ -15,6 +15,7 @@ export interface AnticipatoryCandidate {
   targetAt:string|null;
   verificationStatus:AnticipationHypothesis["verification_status"];
   assessment:AnticipationAssessment;
+  progress:EligibilityProgress|null;
 }
 export interface AnticipatoryWorkspace {
   mode:"shadow";
@@ -45,7 +46,15 @@ export const getAnticipatoryCatalysts=createServerFn({method:"GET"}).handler(
     if(assetError)throw new Error("Anticipatory asset mapping unavailable");
     const names=new Map((assets??[]).map(a=>[a.id,{symbol:a.symbol,name:a.name}]));
     const now=new Date();
-    const rows=hypotheses.map(h=>{
+    // Keep the latest revision visible while comparing earlier independently verified snapshots.
+    const ordered=[...hypotheses].sort((a,b)=>b.first_observed_at.localeCompare(a.first_observed_at));
+    const byAssetType=new Map<string,AnticipationHypothesis[]>();
+    for(const h of ordered){const key=`${h.asset_id}:${h.hypothesis_type}`;
+      byAssetType.set(key,[...(byAssetType.get(key)??[]),h]);}
+    const current=[...byAssetType.values()].map(all=>({
+      newest:all[0],prior:all.slice(1).find(h=>h.verification_status==="verified")??null,
+    }));
+    const rows=current.map(({newest:h,prior})=>{
       const asset=names.get(h.asset_id);
       return {
         id:h.id,symbol:asset?.symbol??"UNMAPPED",companyName:asset?.name??"Unknown instrument",
@@ -54,6 +63,7 @@ export const getAnticipatoryCatalysts=createServerFn({method:"GET"}).handler(
         firstObservedAt:h.first_observed_at,lastReviewedAt:h.last_reviewed_at,
         targetAt:h.target_at,verificationStatus:h.verification_status,
         assessment:assessAnticipation(h,now),
+        progress:prior?compareEligibilityEvidence(prior,h,now):null,
       };
     });
     // Sort by research readiness, not fabricated expected return.
