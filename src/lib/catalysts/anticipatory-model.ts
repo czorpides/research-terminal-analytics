@@ -8,7 +8,7 @@ export const ANTICIPATION_RULEBOOK = {
   sp500_inclusion: {
     label: "Potential S&P 500 addition",
     methodology: "https://www.spglobal.com/spdji/en/methodology/article/sp-us-indices-methodology/",
-    criteria: ["not_current_member", "us_domicile", "eligible_us_listing", "eligible_security_type", "market_cap_threshold", "float_adjusted_market_cap", "investable_weight_factor", "monthly_share_volume", "float_adjusted_liquidity", "gaap_latest_quarter", "gaap_trailing_four_quarters"],
+    criteria: ["not_current_member", "us_domicile", "eligible_us_listing", "eligible_security_type", "sec_domestic_reporting", "ipo_seasoning_or_exemption", "market_cap_threshold", "float_adjusted_market_cap", "investable_weight_factor", "monthly_share_volume", "float_adjusted_liquidity", "gaap_latest_quarter", "gaap_trailing_four_quarters"],
     refreshDays: 30,
     discretion: "S&P index committee selection is discretionary. Passing published eligibility screens never implies inclusion.",
   },
