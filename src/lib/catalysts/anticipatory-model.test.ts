@@ -81,6 +81,6 @@ test("distinct sources with one hypothesis key do not stack signals",()=>{
 test("Nasdaq has separate current rules and does not reuse S&P committee claim",()=>{
   const rules=ANTICIPATION_RULEBOOK.nasdaq100_reconstitution;
   assert.ok(rules.criteria.includes("rank_at_reference_date"));
-  assert.ok(!rules.criteria.includes("gaap_profitability"));
+  assert.ok(!(rules.criteria as readonly string[]).includes("gaap_profitability"));
   assert.match(rules.discretion,/rank alone/i);
 });
