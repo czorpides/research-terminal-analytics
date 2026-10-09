@@ -230,12 +230,14 @@ async function loadOpportunityRadarWorkspace(): Promise<OpportunityRadarWorkspac
         ),
         Promise.all(
           assetBatches.map((batch) =>
-            supabaseAdmin
-              .from("prices_daily")
+            // Additive security-invoker view uses one indexed price lookup per
+            // asset instead of sorting thousands of historical closes.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabaseAdmin as any)
+              .from("opportunity_latest_asset_prices")
               .select("asset_id,trade_date,close")
               .in("asset_id", batch)
-              .order("trade_date", { ascending: false })
-              .limit(batch.length * 6),
+              .limit(batch.length),
           ),
         ),
         industryIds.length
