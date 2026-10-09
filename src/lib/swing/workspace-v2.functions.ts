@@ -234,7 +234,7 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     if (industryResult.error) throw industryResult.error;
 
     const barsByAsset = groupAdjustedBars(
-      pricePages.flatMap((page: { data?: unknown[] }) => page.data ?? []) as PriceRow[],
+      pricePages.flatMap((page) => page.data ?? []) as PriceRow[],
     );
     const earningsByAsset = groupRows<SwingV2EarningsEvent>(
       earningsPages.flatMap((page: { data?: unknown[] }) => page.data ?? []) as Array<SwingV2EarningsEvent & { asset_id: string }>,
