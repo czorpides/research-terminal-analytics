@@ -53,6 +53,8 @@ jobs:
       - name: Test anticipatory catalyst eligibility and point-in-time safeguards
         run: node --experimental-strip-types --test src/lib/catalysts/anticipatory-model.test.ts
 
+      - name: Test historical candidate and official-outcome validation without lookahead
+        run: node --experimental-strip-types --test src/lib/catalysts/outcome-study.test.ts
       - name: Test S&P official-criteria preflight (source/PIT/member veto)
         run: node --experimental-strip-types --test src/lib/catalysts/sp500-preflight.test.ts
 
