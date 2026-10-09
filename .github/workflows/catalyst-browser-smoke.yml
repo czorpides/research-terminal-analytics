@@ -22,3 +22,5 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Verify page navigation, empty ledger and token gates
         run: node scripts/verify-catalyst-staging.mjs
+
+# Re-run against live Railway staging deployment after rollout.
