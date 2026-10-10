@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { summarizeFundamentalsBatch } from "@/lib/ingestion/fundamentals/batch-health";
 
 const DEFAULT_BATCH_SIZE = 25;
 const MAX_BATCH_SIZE = 100;
@@ -24,21 +25,32 @@ export const Route = createFileRoute("/api/public/ingest/fundamentals")({
         );
 
         try {
-          if (ticker) return Response.json(await runFundamentalsIngest(ticker.toUpperCase()));
+          if (ticker) {
+            const result = await runFundamentalsIngest(ticker.toUpperCase());
+            const health = summarizeFundamentalsBatch([result]);
+            return Response.json({ ...result, outcome: health.outcome }, { status: health.httpStatus });
+          }
 
           const batch = await selectFundamentalBatch({
             limit: integerParam(url, "limit"),
             offset: integerParam(url, "offset"),
           });
           const results = await runAllFundamentalsIngest({ assetIds: batch.assetIds });
+          const health = summarizeFundamentalsBatch(results);
 
-          // Valuation, quality, Piotroski and Magic Formula scores are relative
-          // to the currently populated universe. Refresh them once per batch,
-          // rather than leaving newly ingested evidence invisible to the Radar.
-          const { runFundamentalScoresForAllAssets } = await import("@/lib/scoring/run.server");
-          const scoreRefresh = await runFundamentalScoresForAllAssets();
+          // Zero observations or an FMP entitlement block must never trigger
+          // an expensive universe-wide score refresh.
+          let scoreRefresh: Awaited<ReturnType<
+            typeof import("@/lib/scoring/run.server")["runFundamentalScoresForAllAssets"]
+          >> | null = null;
+          if (health.rowsInserted > 0) {
+            const { runFundamentalScoresForAllAssets } = await import("@/lib/scoring/run.server");
+            scoreRefresh = await runFundamentalScoresForAllAssets();
+          }
 
           return Response.json({
+            outcome: health.outcome,
+            ingestionHealth: health,
             results,
             count: results.length,
             totalActiveEquities: batch.totalActiveEquities,
@@ -48,7 +60,7 @@ export const Route = createFileRoute("/api/public/ingest/fundamentals")({
             nextOffset: batch.nextOffset,
             completeUniversePass: batch.assetIds.length >= batch.totalActiveEquities,
             scoreRefresh,
-          });
+          }, { status: health.httpStatus });
         } catch (e) {
           return new Response(`Ingestion error: ${(e as Error).message}`, { status: 500 });
         }
