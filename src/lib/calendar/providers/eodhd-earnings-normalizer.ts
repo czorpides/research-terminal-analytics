@@ -15,8 +15,9 @@ function numeric(input:unknown):number|null {
   return Number.isFinite(n)?n:null;
 }
 function date(input:unknown):input is string {
-  return typeof input==="string" && /^\d{4}-\d{2}-\d{2}$/.test(input) &&
-    !Number.isNaN(Date.parse(input+"T00:00:00Z"));
+  if(typeof input!=="string" || !/^\d{4}-\d{2}-\d{2}$/.test(input))return false;
+  const d=new Date(input+"T00:00:00Z");
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0,10)===input;
 }
 /**
  * Only normalize evidence returned by an explicitly licensed EODHD earnings
