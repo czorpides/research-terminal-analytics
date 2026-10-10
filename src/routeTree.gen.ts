@@ -66,9 +66,11 @@ import { Route as ApiPublicIngestUsInflationFredRouteImport } from './routes/api
 import { Route as ApiPublicIngestUsGrowthFredRouteImport } from './routes/api/public/ingest/us-growth-fred'
 import { Route as ApiPublicIngestSwingMetalsRouteImport } from './routes/api/public/ingest/swing-metals'
 import { Route as ApiPublicIngestStooqRouteImport } from './routes/api/public/ingest/stooq'
+import { Route as ApiPublicIngestSecAnnualRouteImport } from './routes/api/public/ingest/sec-annual'
 import { Route as ApiPublicIngestMacroNativeRouteImport } from './routes/api/public/ingest/macro-native'
 import { Route as ApiPublicIngestFundamentalsRouteImport } from './routes/api/public/ingest/fundamentals'
 import { Route as ApiPublicIngestFredRouteImport } from './routes/api/public/ingest/fred'
+import { Route as ApiPublicIngestEodhdFinancialCapabilitiesRouteImport } from './routes/api/public/ingest/eodhd-financial-capabilities'
 import { Route as ApiPublicIngestCommoditiesRouteImport } from './routes/api/public/ingest/commodities'
 import { Route as ApiPublicIngestAltdataRouteImport } from './routes/api/public/ingest/altdata'
 import { Route as ApiPublicHistoryVerifyNarrativesRouteImport } from './routes/api/public/history/verify-narratives'
@@ -396,6 +398,12 @@ const ApiPublicIngestStooqRoute = ApiPublicIngestStooqRouteImport.update({
   path: '/api/public/ingest/stooq',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIngestSecAnnualRoute =
+  ApiPublicIngestSecAnnualRouteImport.update({
+    id: '/api/public/ingest/sec-annual',
+    path: '/api/public/ingest/sec-annual',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicIngestMacroNativeRoute =
   ApiPublicIngestMacroNativeRouteImport.update({
     id: '/api/public/ingest/macro-native',
@@ -413,6 +421,12 @@ const ApiPublicIngestFredRoute = ApiPublicIngestFredRouteImport.update({
   path: '/api/public/ingest/fred',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicIngestEodhdFinancialCapabilitiesRoute =
+  ApiPublicIngestEodhdFinancialCapabilitiesRouteImport.update({
+    id: '/api/public/ingest/eodhd-financial-capabilities',
+    path: '/api/public/ingest/eodhd-financial-capabilities',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicIngestCommoditiesRoute =
   ApiPublicIngestCommoditiesRouteImport.update({
     id: '/api/public/ingest/commodities',
@@ -498,9 +512,11 @@ export interface FileRoutesByFullPath {
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
+  '/api/public/ingest/eodhd-financial-capabilities': typeof ApiPublicIngestEodhdFinancialCapabilitiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
+  '/api/public/ingest/sec-annual': typeof ApiPublicIngestSecAnnualRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/ingest/swing-metals': typeof ApiPublicIngestSwingMetalsRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
@@ -564,9 +580,11 @@ export interface FileRoutesByTo {
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
+  '/api/public/ingest/eodhd-financial-capabilities': typeof ApiPublicIngestEodhdFinancialCapabilitiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
+  '/api/public/ingest/sec-annual': typeof ApiPublicIngestSecAnnualRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/ingest/swing-metals': typeof ApiPublicIngestSwingMetalsRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
@@ -633,9 +651,11 @@ export interface FileRoutesById {
   '/api/public/history/verify-narratives': typeof ApiPublicHistoryVerifyNarrativesRoute
   '/api/public/ingest/altdata': typeof ApiPublicIngestAltdataRoute
   '/api/public/ingest/commodities': typeof ApiPublicIngestCommoditiesRoute
+  '/api/public/ingest/eodhd-financial-capabilities': typeof ApiPublicIngestEodhdFinancialCapabilitiesRoute
   '/api/public/ingest/fred': typeof ApiPublicIngestFredRoute
   '/api/public/ingest/fundamentals': typeof ApiPublicIngestFundamentalsRoute
   '/api/public/ingest/macro-native': typeof ApiPublicIngestMacroNativeRoute
+  '/api/public/ingest/sec-annual': typeof ApiPublicIngestSecAnnualRoute
   '/api/public/ingest/stooq': typeof ApiPublicIngestStooqRoute
   '/api/public/ingest/swing-metals': typeof ApiPublicIngestSwingMetalsRoute
   '/api/public/ingest/us-growth-fred': typeof ApiPublicIngestUsGrowthFredRoute
@@ -702,9 +722,11 @@ export interface FileRouteTypes {
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
+    | '/api/public/ingest/eodhd-financial-capabilities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
+    | '/api/public/ingest/sec-annual'
     | '/api/public/ingest/stooq'
     | '/api/public/ingest/swing-metals'
     | '/api/public/ingest/us-growth-fred'
@@ -768,9 +790,11 @@ export interface FileRouteTypes {
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
+    | '/api/public/ingest/eodhd-financial-capabilities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
+    | '/api/public/ingest/sec-annual'
     | '/api/public/ingest/stooq'
     | '/api/public/ingest/swing-metals'
     | '/api/public/ingest/us-growth-fred'
@@ -836,9 +860,11 @@ export interface FileRouteTypes {
     | '/api/public/history/verify-narratives'
     | '/api/public/ingest/altdata'
     | '/api/public/ingest/commodities'
+    | '/api/public/ingest/eodhd-financial-capabilities'
     | '/api/public/ingest/fred'
     | '/api/public/ingest/fundamentals'
     | '/api/public/ingest/macro-native'
+    | '/api/public/ingest/sec-annual'
     | '/api/public/ingest/stooq'
     | '/api/public/ingest/swing-metals'
     | '/api/public/ingest/us-growth-fred'
@@ -866,9 +892,11 @@ export interface RootRouteChildren {
   ApiPublicHistoryVerifyNarrativesRoute: typeof ApiPublicHistoryVerifyNarrativesRoute
   ApiPublicIngestAltdataRoute: typeof ApiPublicIngestAltdataRoute
   ApiPublicIngestCommoditiesRoute: typeof ApiPublicIngestCommoditiesRoute
+  ApiPublicIngestEodhdFinancialCapabilitiesRoute: typeof ApiPublicIngestEodhdFinancialCapabilitiesRoute
   ApiPublicIngestFredRoute: typeof ApiPublicIngestFredRoute
   ApiPublicIngestFundamentalsRoute: typeof ApiPublicIngestFundamentalsRoute
   ApiPublicIngestMacroNativeRoute: typeof ApiPublicIngestMacroNativeRoute
+  ApiPublicIngestSecAnnualRoute: typeof ApiPublicIngestSecAnnualRoute
   ApiPublicIngestStooqRoute: typeof ApiPublicIngestStooqRoute
   ApiPublicIngestSwingMetalsRoute: typeof ApiPublicIngestSwingMetalsRoute
   ApiPublicIngestUsGrowthFredRoute: typeof ApiPublicIngestUsGrowthFredRoute
@@ -1284,6 +1312,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicIngestStooqRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/ingest/sec-annual': {
+      id: '/api/public/ingest/sec-annual'
+      path: '/api/public/ingest/sec-annual'
+      fullPath: '/api/public/ingest/sec-annual'
+      preLoaderRoute: typeof ApiPublicIngestSecAnnualRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ingest/macro-native': {
       id: '/api/public/ingest/macro-native'
       path: '/api/public/ingest/macro-native'
@@ -1303,6 +1338,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/ingest/fred'
       fullPath: '/api/public/ingest/fred'
       preLoaderRoute: typeof ApiPublicIngestFredRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/ingest/eodhd-financial-capabilities': {
+      id: '/api/public/ingest/eodhd-financial-capabilities'
+      path: '/api/public/ingest/eodhd-financial-capabilities'
+      fullPath: '/api/public/ingest/eodhd-financial-capabilities'
+      preLoaderRoute: typeof ApiPublicIngestEodhdFinancialCapabilitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/ingest/commodities': {
@@ -1479,9 +1521,12 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHistoryVerifyNarrativesRoute: ApiPublicHistoryVerifyNarrativesRoute,
   ApiPublicIngestAltdataRoute: ApiPublicIngestAltdataRoute,
   ApiPublicIngestCommoditiesRoute: ApiPublicIngestCommoditiesRoute,
+  ApiPublicIngestEodhdFinancialCapabilitiesRoute:
+    ApiPublicIngestEodhdFinancialCapabilitiesRoute,
   ApiPublicIngestFredRoute: ApiPublicIngestFredRoute,
   ApiPublicIngestFundamentalsRoute: ApiPublicIngestFundamentalsRoute,
   ApiPublicIngestMacroNativeRoute: ApiPublicIngestMacroNativeRoute,
+  ApiPublicIngestSecAnnualRoute: ApiPublicIngestSecAnnualRoute,
   ApiPublicIngestStooqRoute: ApiPublicIngestStooqRoute,
   ApiPublicIngestSwingMetalsRoute: ApiPublicIngestSwingMetalsRoute,
   ApiPublicIngestUsGrowthFredRoute: ApiPublicIngestUsGrowthFredRoute,
