@@ -52,6 +52,12 @@ jobs:
       - name: Verify fundamental batch failure-status semantics
         run: node --test src/lib/ingestion/fundamentals/*.test.ts
 
+      - name: Verify SEC original 10-K evidence provenance and annual periods
+        run: node --test src/lib/ingestion/sec/*.test.ts
+
+      - name: Verify licensed earnings calendar mapping and date precision
+        run: node --test src/lib/calendar/providers/eodhd-earnings-normalizer.test.ts
+
   analytics:
     name: Python analytics tests
     runs-on: ubuntu-latest
