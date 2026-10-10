@@ -49,6 +49,9 @@ jobs:
       - name: Run Opportunity Radar and fundamental model tests
         run: npm run test:opportunity
 
+      - name: Verify fundamental batch failure-status semantics
+        run: node --test src/lib/ingestion/fundamentals/*.test.ts
+
   analytics:
     name: Python analytics tests
     runs-on: ubuntu-latest

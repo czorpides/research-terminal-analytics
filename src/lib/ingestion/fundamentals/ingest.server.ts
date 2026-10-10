@@ -8,7 +8,7 @@ import {
   providerSymbolForAsset,
   type AssetProviderIdentity,
 } from "@/lib/ingestion/providers/asset-symbols.server";
-import { canUse, recordCall } from "@/lib/ingestion/providers/quota.server";
+import { canUse, getQuota, recordCall } from "@/lib/ingestion/providers/quota.server";
 import { STATEMENT_METRICS, type StatementMetricCode } from "@/lib/opportunity/fundamental-models";
 import { FUNDAMENTAL_METRICS } from "./metrics";
 
@@ -311,7 +311,7 @@ async function ingestFundamentalsForAsset(asset: AssetProviderIdentity): Promise
     const rowsInserted = rows.length + statements.factsInserted;
 
     await markProviderSymbolVerified(asset, "fmp", providerSymbol);
-    await supabaseAdmin
+    const { error: successStatusError } = await supabaseAdmin
       .from("ingestion_runs")
       .update({
         status: "success",
@@ -329,6 +329,7 @@ async function ingestFundamentalsForAsset(asset: AssetProviderIdentity): Promise
         } as unknown as Json,
       })
       .eq("id", runId);
+    if (successStatusError) throw successStatusError;
 
     return {
       status: "success",
@@ -342,14 +343,26 @@ async function ingestFundamentalsForAsset(asset: AssetProviderIdentity): Promise
     };
   } catch (e) {
     if (e instanceof FmpQuotaError || e instanceof FmpEntitlementError) {
-      await supabaseAdmin
+      // ingestion_status enum has no "skipped" value. The previous invalid
+      // update silently failed and left months of abandoned "running" rows.
+      const { error: completionError } = await supabaseAdmin
         .from("ingestion_runs")
         .update({
-          status: "skipped" as unknown as "failed",
+          status: "failed",
           finished_at: new Date().toISOString(),
           error: e.message,
         })
         .eq("id", runId);
+      if (completionError) {
+        return {
+          status: "failed",
+          symbol: asset.symbol,
+          providerSymbol,
+          runId,
+          rowsInserted: 0,
+          error: "Unable to record terminal fundamentals run status: " + completionError.message,
+        };
+      }
       return {
         status: "skipped",
         symbol: asset.symbol,
@@ -360,10 +373,20 @@ async function ingestFundamentalsForAsset(asset: AssetProviderIdentity): Promise
       };
     }
     const message = failureMessage(e);
-    await supabaseAdmin
+    const { error: failedStatusError } = await supabaseAdmin
       .from("ingestion_runs")
       .update({ status: "failed", finished_at: new Date().toISOString(), error: message })
       .eq("id", runId);
+    if (failedStatusError) {
+      return {
+        status: "failed",
+        symbol: asset.symbol,
+        providerSymbol,
+        runId,
+        rowsInserted: 0,
+        error: "Fundamentals failed and completion logging failed: " + failedStatusError.message,
+      };
+    }
     return {
       status: "failed",
       symbol: asset.symbol,
@@ -397,6 +420,22 @@ export async function runAllFundamentalsIngest(
       .eq("asset_class", "equity");
     if (error) throw error;
     assetIds = (data ?? []).map((a) => String(a.id));
+  }
+
+  // A recorded account-level HTTP 402 for this paid endpoint cannot be
+  // repaired by repeatedly querying different symbols on the same UTC day.
+  // This gate is specific to FMP key-metrics-ttm, not other FMP endpoints.
+  const quota = await getQuota("fmp");
+  const paidEndpointBlocked = quota?.last_status === "entitlement" &&
+    /key-metrics-ttm HTTP 402/i.test(quota.last_error ?? "");
+  if (paidEndpointBlocked) {
+    return assetIds.map((assetId) => ({
+      status: "skipped" as const,
+      symbol: assetId,
+      runId: "",
+      rowsInserted: 0,
+      reason: "FMP key-metrics-ttm entitlement unavailable (HTTP 402); batch suspended until quota day changes.",
+    }));
   }
 
   const out: FundamentalsIngestResult[] = [];
