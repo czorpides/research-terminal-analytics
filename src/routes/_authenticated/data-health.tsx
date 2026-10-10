@@ -13,6 +13,7 @@ import {
 import { getSourceFreshness } from "@/lib/freshness/freshness.functions";
 import { getGrowthHealth } from "@/lib/panels/growth-health.functions";
 import { getFundamentalsPipelineHealth } from "@/lib/panels/fundamentals-health.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -47,6 +48,9 @@ function DataHealth() {
   const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
   const [running, setRunning] = useState(false);
+  const [ingestAction, setIngestAction] = useState<"sec" | "eodhd" | null>(null);
+  const [ingestResult, setIngestResult] = useState<string | null>(null);
+
   const { data } = useQuery({
     queryKey: ["data-health"],
     queryFn: () => fetchOverview(),
@@ -88,6 +92,65 @@ function DataHealth() {
       await qc.invalidateQueries({ queryKey: ["data-health"] });
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function onManualSourceAction(kind: "sec" | "eodhd") {
+    if (ingestAction) return;
+    setIngestAction(kind);
+    setIngestResult(null);
+    try {
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session.session?.access_token)
+        throw new Error("Sign in to your owner account before running a source check.");
+      const url = kind === "sec"
+        ? "/api/public/ingest/sec-annual"
+        : "/api/public/ingest/eodhd-financial-capabilities";
+      // Exactly one known active US equity (MSFT), not an automated backfill.
+      const body = kind === "sec"
+        ? { assetIds: ["e8b1a94b-b7e7-4fb9-981b-72eeee9139db"] }
+        : {};
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + session.session.access_token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok && response.status !== 207)
+        throw new Error(typeof json?.error === "string"
+          ? json.error : "Source request failed (HTTP " + response.status + ")");
+      if (kind === "sec") {
+        const result = json as {
+          filingsInserted?: number;
+          factsInserted?: number;
+          results?: Array<{symbol?:string;status?:string;reason?:string}>;
+        };
+        const first = result.results?.[0];
+        setIngestResult("SEC original 10-K: " + (first?.symbol ?? "MSFT") +
+          " — " + (first?.status ?? "unknown") +
+          "; new filings " + (result.filingsInserted ?? 0) +
+          "; new facts " + (result.factsInserted ?? 0) +
+          (first?.reason ? "; " + first.reason : "") +
+          ". No changes to Radar scores.");
+        await qc.invalidateQueries({ queryKey: ["fundamentals-pipeline-health"] });
+      } else {
+        const result = json as {
+          configured?:boolean;
+          capabilities?: Array<{capability:string;available:boolean;itemsReturned:number;reason:string}>;
+        };
+        const description = result.capabilities?.map((x) =>
+          x.capability + ": " + (x.available ? "available" : "unavailable") +
+          " (" + x.itemsReturned + " rows; " + x.reason + ")"
+        ).join(" · ");
+        setIngestResult(description || "EODHD financial/earnings entitlement not available.");
+      }
+    } catch (e) {
+      setIngestResult(e instanceof Error ? e.message : "Source check failed.");
+    } finally {
+      setIngestAction(null);
     }
   }
 
@@ -139,6 +202,34 @@ function DataHealth() {
             )}
           </div>
         )}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="Official-source recovery · manual"
+        eyebrow="Owner only · no recurring provider jobs"
+        description="Import one monitored US company's official original 10-K facts, or test whether the existing EODHD plan includes financial statements and earnings calendars."
+        className="mb-6"
+      >
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={ingestAction !== null}
+            onClick={() => void onManualSourceAction("sec")}
+          >
+            {ingestAction === "sec" ? "Checking SEC…" : "Import MSFT SEC 10-K sample"}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={ingestAction !== null}
+            onClick={() => void onManualSourceAction("eodhd")}
+          >
+            {ingestAction === "eodhd" ? "Checking entitlement…" : "Check EODHD coverage"}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          SEC: up to three original 10-K years for one company, with first-observed timestamps and no ranking changes.
+          EODHD: at most two billed quota requests, no stored earnings records or subscription upgrades.
+        </p>
+        {ingestResult && <p role="status" className="mt-3 text-xs">{ingestResult}</p>}
       </DashboardPanel>
 
       {calendar && (
