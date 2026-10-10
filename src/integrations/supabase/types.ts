@@ -3442,6 +3442,28 @@ export type Database = {
         }
         Relationships: []
       }
+      fundamentals_pipeline_health: {
+        Row: {
+          active_equities: number | null
+          assets_with_current_metrics: number | null
+          assets_with_filings: number | null
+          current_metric_rows: number | null
+          earnings_event_count: number | null
+          failed_fundamentals_runs_7d: number | null
+          filing_count: number | null
+          fmp_last_call_at: string | null
+          fmp_last_error: string | null
+          fmp_last_status: string | null
+          last_attempted_fundamentals_run: string | null
+          last_completed_fundamentals_run: string | null
+          latest_filing_ingested: string | null
+          latest_metric_asof: string | null
+          stale_fundamentals_runs: number | null
+          successful_fundamentals_runs_7d: number | null
+          upcoming_earnings_events: number | null
+        }
+        Relationships: []
+      }
       latest_asset_fundamentals: {
         Row: {
           as_of: string | null
