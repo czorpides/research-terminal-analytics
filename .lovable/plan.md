@@ -1,88 +1,49 @@
-# Stage 2 — Transformation Framework + US Inflation Engine
+# Diagnosis: Why the ingest endpoints still return 503
 
-Scope guardrails
-- PCA and HMM stay inactive; keep existing DB contracts and stub endpoints.
-- Do not mutate accepted Growth Engine outputs. If the Growth pipeline migrates to the shared framework, run it in shadow (write to a `shadow=true` model_run) and compare vs accepted outputs (tolerance ≤1e-6 on Kalman level, ≤1e-4 on transforms). Cut over only after parity is proven; otherwise Growth keeps using its existing path.
-- No recurring Inflation cron until one green end-to-end manual run.
+## Finding (confirmed from platform docs, no edits made)
 
-## Part A — Reusable transformation framework
+**Project Settings → Secrets on Lovable Cloud are Supabase Edge Function secrets.** The platform's own documentation states the 100-secret cap is "Supabase Edge Function Secret caps" — those values are injected into the Supabase Edge Function runtime only.
 
-Location: `src/lib/transforms/` (TS, deterministic, pure).
-- `types.ts` — `TransformName`, `TransformSpec { formula, inputs, frequency, minHistory, lookback, seasonal, direction, unit, version }`, `TransformResult { name, points, spec, asOf, inputsHash }`.
-- `catalog.ts` — one implementation per transform: level, absChg, pctChg, mom, qoq, wow, yoy, chg3mAnn, chg6mAnn, rollingMean(w), ewma(halflife), momentum, acceleration, zscoreHistorical, zscoreRolling(w), percentileHistorical, surpriseScore, revisionScore, breadthDiffusion, kalmanLevel, kalmanSlope, kalmanCI. Kalman transforms delegate to the existing Fly.io service — they are not re-implemented locally.
-- `runner.ts` — `runTransforms(series, registryRow, opts)` — reads `indicator_registry.allowed_transformations` (array) and only runs opted-in transforms. Stamps each output with `calcVersion + inputsHash` (reuse `stampCalculation`).
-- `directionality.ts` — shared "higher is good / bad / context-dependent" rules with a `zoneFor(value, spec, context)` helper. Context includes target range (e.g. Fed 2%), momentum, deflation guard.
-- Extend Python analytics service `services/analytics/app/models/transforms.py` with the same catalog for server-side batch use; keep TS as source of truth for panels. Add explicit gating comment.
+The published site's TanStack Start server runtime (Cloudflare Worker) receives exactly **three** server environment variables, and nothing else:
 
-DB migration (single):
-- Add `allowed_transformations text[]` (if not already present — it exists in registry per current schema; verify), `target_range jsonb`, `direction text` (`higher_better|lower_better|context`) to `indicator_registry` where missing.
-- Create `public.transform_outputs` (indicator_id, transform_name, as_of_date, value, calc_version, inputs_hash, model_run_id, created_at) with unique(indicator_id, transform_name, as_of_date, calc_version). Full GRANT + RLS.
-- Extend `model_runs` allowed `model_key` to include `transform_batch` and `inflation_pressure_score`.
+| Variable | Server (`process.env`) |
+|---|---|
+| Supabase URL | `SUPABASE_URL` |
+| Public Key | `SUPABASE_PUBLISHABLE_KEY` |
+| Service Role | `SUPABASE_SERVICE_ROLE_KEY` |
 
-Unit tests (Vitest): `src/lib/transforms/__tests__/catalog.test.ts` with known series (linear, sinusoidal, step) validating every transform against hand-calculated expected values. `test_transforms.py` already exists — add parity tests for the new names.
+Custom secrets like `SEC_EDGAR_USER_AGENT` and `INTERNAL_JOB_TOKEN` are **not** injected into `process.env` of the published TanStack/Cloudflare SSR process. That is why both endpoints still return 503 (their "token absent" branch) even though the secrets are saved and the project was redeployed. The secrets are safe and correctly stored — they are simply not visible to that runtime. This is a platform limitation, not a misconfiguration, and no amount of re-publishing changes it.
 
-## Part B — US Inflation Engine
+## Consequences
 
-### Indicators (FRED unless noted)
-Headline CPI (CPIAUCSL), Core CPI (CPILFESL), Headline PCE (PCEPI), Core PCE (PCEPILFE), PPI final demand (PPIACO / PPIFIS), Average Hourly Earnings (CES0500000003), Atlanta Fed Wage Tracker (FRBATLWGT12MMUMHWGO), Shelter CPI (CUSR0000SAH1), Import prices (IR), 5y5y forward breakeven (T5YIFR), 10y breakeven (T10YIE), Michigan 1y expectations (MICH), NY Fed 1y SCE (proxy via FRED where available), CRB / BCOM commodity index (via existing commodity ingest), Cass freight index proxy (fallback to FRED DTB3-style freight series or mark unavailable), ISM prices (NAPMPRI where licensable — else mark inactive).
+- The current code path (`process.env['INTERNAL_JOB_TOKEN']` inside the route handler) can never succeed on the published Lovable site as-is.
+- No user action in Project Settings can fix this — there is no UI to inject custom env vars into the Cloudflare Worker runtime.
 
-Seed via migration: rows in `indicator_registry` with `engine='inflation'`, `group` in {goods, services, shelter, energy, food, wages, imported, expectations, commodities, freight, survey}, `source`, `series_code_native`, `frequency`, `unit`, `release_calendar`, `revision_policy`, `allowed_transformations`, `target_range` (e.g. `{ "value": 2.0, "band": [1.5, 2.5] }`), `direction: 'context'`.
+## Safe solutions (pick one; all require a small code change, none touch data/jobs/auth)
 
-Vintage handling: reuse existing `raw_observations` + `data_vintages` snapshot-on-ingest. Document that CPI/PCE historical vintages are NOT true ALFRED PIT until backfilled — add a `vintage_quality` column (`snapshot|revision_tracked|real_time_verified`) on registry.
+**Option A — Database-backed job token (recommended, smallest change).**
+Store the token hash in a private `public.job_secrets` table (RLS locked, service-role only). The route handler loads `supabaseAdmin` inside the handler (after verifying the caller) and compares the incoming bearer token against the stored hash. The operator sets the row once via a one-time SQL insert I provide. No plaintext token in code; rotation is a SQL update.
 
-### Ingestion
-- New file `src/lib/ingestion/fred/inflation-ingest.server.ts` — mirror `growth-ingest.server.ts`. Per-indicator hash guard, vintage insert on change, 30-year backfill support.
-- Public endpoint `src/routes/api/public/ingest/us-inflation-fred.ts` — same shape as growth endpoint, supports `?scope=monthly|weekly|expectations|safety|revisions&pipeline=1&years=30`.
-- Commodities/freight pulled from existing commodity ingest if present; otherwise mark data source `unavailable` (no fabricated data).
+**Option B — Supabase Vault.**
+Same idea, using the managed `vault` schema: store `INTERNAL_JOB_TOKEN` as a vault secret, read it server-side via `supabaseAdmin`. Slightly more moving parts than A.
 
-### Analytics pipeline
-- `src/lib/analytics/inflation-pipeline.server.ts` — orchestrates: fetch raw_observations (paginated) → run transform batch (TS) → call Fly.io Kalman for level/slope/CI → write `transform_outputs` + `model_outputs` under one `model_run_id`. Per-indicator hash guard reused from growth pipeline (extract to `src/lib/analytics/hash-guard.server.ts`).
-- Inflation Pressure Score (`src/lib/scoring/inflation-pressure.server.ts`): deterministic sum of weighted contributions. If any weight input is missing, reduce confidence penalty and return status=`insufficient_data` for that component — never substitute a default score. Persist contribution ledger to `model_outputs.payload`.
+**Option C — Move the two ingest jobs into Supabase Edge Functions.**
+Edge Functions **do** receive the Project Settings secrets, so `SEC_EDGAR_USER_AGENT` / `INTERNAL_JOB_TOKEN` would work there unchanged. But this project's architecture standard is TanStack server routes (per prior decisions), so this would be an exception and duplicates deployment surface.
 
-### UI
-- Route `src/routes/_authenticated/macro.inflation.tsx` — grouped panels (Headline, Core, Shelter, Wages, Expectations, Commodities & Freight, Composite). Each panel uses existing `ResearchPanel` + `TrendChart`, with Kalman trend, CI, target band, percentile zones, contribution ledger for the composite.
-- Growth×Inflation Map: new panel `src/lib/panels/growth-inflation-map.functions.ts` + component `src/components/research/GrowthInflationMap.tsx`. Four-quadrant scatter with current dot, 1w/1m/3m trails, confidence rings. Added to Macro Overview.
-- AI interpretation: reuse Lovable AI Gateway; system prompt hard-limits to explain/interpret only (no numeric calculation, no invented data, must cite `asOf` + calc_version). Rendered per panel + on the map.
-- Sidebar: add "Inflation Engine" and "Growth & Inflation Map" entries with status badges (In Development until acceptance passes; Live after).
+## Recommended plan (if approved)
 
-### Screener integration (shadow only)
-- Migration: add columns to `assets`: `inflation_sensitivity`, `wage_cost_sensitivity`, `commodity_input_sensitivity`, `pricing_power`, `interest_rate_sensitivity`, `duration_sensitivity`, `geographic_inflation_exposure` (all nullable numeric or jsonb where richer). Populate via a shadow scorer `src/lib/scoring/inflation-alignment.shadow.server.ts` writing to `model_outputs` with `shadow=true`. Do NOT mutate any radar/screener rankings.
+1. Create migration: `public.job_secrets` table (name text PK, token_hash text, updated_at), RLS enabled, no anon/authenticated policies, service-role only.
+2. Edit the two route handlers (`/api/public/ingest/sec-annual`, `/api/public/ingest/eodhd-financial-capabilities`): replace the `process.env` read with a `supabaseAdmin` lookup of the SHA-256 hash of the presented token. Keep the same 503/401/200 semantics.
+3. Provide the operator a one-time SQL snippet to insert the token hash (token value chosen by the operator, never printed by me).
+4. `SEC_EDGAR_USER_AGENT`: move the literal string `"ResearchTerminal czorpides@gmail.com"` into the same table (or hardcode — it is not secret, just contact info SEC requires).
+5. Publish, then verify: unauthenticated POST → 401 (not 503), confirming the token is now readable.
 
-### Scheduling
-- Do not install cron this stage. Provide the SQL in a documented block inside the endpoint file / plan output for later activation after acceptance.
+## What is NOT needed
 
-### Health monitoring
-- Extend `data_health_alerts` view to include `engine` filter; add Inflation Engine block to `/data-health` mirroring Growth Engine block.
+- No new credentials from the user beyond choosing the token value once.
+- No database data changes, no cron/job changes, no auth changes.
+- No further secret-manager entries.
 
-## Deliverables checklist (matches user's report requirements)
-1. Shared transform modules (TS + Python parity).
-2. Formulas list + Vitest/pytest results.
-3. Indicator registry rows added, with sources.
-4. Historical coverage report (per indicator, first_date → last_date, row count).
-5. Vintage coverage (snapshot vs verified PIT).
-6. Transform output row counts.
-7. Kalman run summary (per indicator: converged, loglik, n_obs).
-8. Inflation Pressure Score contribution ledger (first live run).
-9. Panels/charts inventory.
-10. Growth×Inflation Map screenshot + inputs table.
-11. Shadow stock alignment fields populated.
-12. Health checks (Data Health block).
-13. Warnings/limitations/missing data (freight, ISM if unavailable; vintage quality caveats).
-14. Stage 2 acceptance readiness verdict.
+## User step strictly required
 
-## Execution order
-1. Migration: registry columns, `transform_outputs`, asset shadow columns, seed inflation indicators.
-2. Framework: `src/lib/transforms/*` + tests.
-3. Extract shared hash-guard helper; refactor growth-pipeline to import it (no behavior change).
-4. Inflation ingest + endpoint; run 30y backfill manually via curl once endpoint is live.
-5. Inflation pipeline + Pressure Score; one manual end-to-end run.
-6. UI: Inflation route, Growth×Inflation map, sidebar, AI interpretations.
-7. Shadow stock alignment scorer.
-8. Health panel additions.
-9. Acceptance report.
-
-## Open assumptions (will proceed unless you flag)
-- Freight index: use FRED `TRUCKD11` if accessible, else mark unavailable rather than substituting.
-- ISM prices: mark inactive/licensable — no fabricated data.
-- Consensus/surprise data: no free source integrated yet → `surpriseScore` returns null with confidence penalty until a provider is wired.
-- Growth pipeline stays on its current code path; framework migration deferred to a follow-up parity PR.
+Only one: after the code change ships, run the one-time SQL insert of the token hash (or paste the token into a throwaway settings form if you prefer I build one). Everything else is code I can write.
