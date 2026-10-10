@@ -58,6 +58,9 @@ jobs:
       - name: Verify licensed earnings calendar mapping and date precision
         run: node --test src/lib/calendar/providers/eodhd-earnings-normalizer.test.ts
 
+      - name: Verify owner-only provider operation bearer policy
+        run: node --test src/lib/security/owner-bearer.test.ts
+
   analytics:
     name: Python analytics tests
     runs-on: ubuntu-latest
