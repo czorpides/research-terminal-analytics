@@ -8,7 +8,7 @@ import {
   providerSymbolForAsset,
   type AssetProviderIdentity,
 } from "@/lib/ingestion/providers/asset-symbols.server";
-import { canUse, recordCall } from "@/lib/ingestion/providers/quota.server";
+import { canUse, getQuota, recordCall } from "@/lib/ingestion/providers/quota.server";
 import { STATEMENT_METRICS, type StatementMetricCode } from "@/lib/opportunity/fundamental-models";
 import { FUNDAMENTAL_METRICS } from "./metrics";
 
@@ -397,6 +397,22 @@ export async function runAllFundamentalsIngest(
       .eq("asset_class", "equity");
     if (error) throw error;
     assetIds = (data ?? []).map((a) => String(a.id));
+  }
+
+  // A recorded account-level HTTP 402 for this paid endpoint cannot be
+  // repaired by repeatedly querying different symbols on the same UTC day.
+  // This gate is specific to FMP key-metrics-ttm, not other FMP endpoints.
+  const quota = await getQuota("fmp");
+  const paidEndpointBlocked = quota?.last_status === "entitlement" &&
+    /key-metrics-ttm HTTP 402/i.test(quota.last_error ?? "");
+  if (paidEndpointBlocked) {
+    return assetIds.map((assetId) => ({
+      status: "skipped" as const,
+      symbol: assetId,
+      runId: "",
+      rowsInserted: 0,
+      reason: "FMP key-metrics-ttm entitlement unavailable (HTTP 402); batch suspended until quota day changes.",
+    }));
   }
 
   const out: FundamentalsIngestResult[] = [];
