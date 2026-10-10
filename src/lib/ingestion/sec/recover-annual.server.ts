@@ -26,7 +26,16 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
   filingsInserted: number;
   factsInserted: number;
 }> {
-  const agent = process.env.SEC_EDGAR_USER_AGENT?.trim();
+  // The public SEC contact identity is stored server-side, not bundled into
+  // client JS. Lovable's TanStack worker cannot read Edge-Function secrets.
+  // This table is NOT a store for private provider API tokens.
+  const config = await (supabaseAdmin as any)
+    .from("research_provider_settings")
+    .select("value")
+    .eq("name", "sec_edgar_user_agent")
+    .maybeSingle();
+  if (config.error) throw new Error("SEC contact settings unavailable: " + config.error.message);
+  const agent = typeof config.data?.value === "string" ? config.data.value.trim() : "";
   if (!agent || agent.length < 12 || !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(agent))
     throw new Error("SEC_EDGAR_USER_AGENT requires an identifiable organisation and contact email");
   if (!Array.isArray(assetIds) || assetIds.length < 1 || assetIds.length > SEC_MAX_ASSETS ||
