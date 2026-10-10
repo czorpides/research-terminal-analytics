@@ -48,6 +48,12 @@ test("ambiguous values for same accession and frame must be omitted",()=>{
   assert.equal(rows.some(z=>z.metricCode===STATEMENT_METRICS.totalAssets),false);
   assert.equal(rows.find(z=>z.metricCode===STATEMENT_METRICS.netIncome)?.value,-3);
 });
+test("impossible SEC reporting dates are rejected",()=>{
+ const fake={...baseSubmissions,filings:{recent:{...baseSubmissions.filings.recent,
+   reportDate:["2026-02-31","2025-06-28"]}}};
+ assert.equal(selectSecAnnualFilings(320193,"AAPL",fake,
+   data({NetIncomeLoss:{units:{USD:[fy(10)]}}})).length,0);
+});
 test("10-K/A does not silently overwrite the original",()=>{
  const x=selectSecAnnualFilings(320193,"AAPL",{
    cik:320193,tickers:["AAPL"],filings:{recent:{
