@@ -1,0 +1,24 @@
+name: Research Terminal staging browser journey
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/railway-staging-internal-auth]
+    paths:
+      - "scripts/verify-staging-pages.mjs"
+      - ".github/workflows/staging-browser-journey.yml"
+permissions:
+  contents: read
+jobs:
+  browser:
+    name: Anonymous multi-page navigation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - name: Navigate main research routes without sign-in
+        run: node scripts/verify-staging-pages.mjs

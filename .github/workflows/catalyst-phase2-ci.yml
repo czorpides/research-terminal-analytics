@@ -1,0 +1,56 @@
+name: Catalyst Phase 2 source checks
+on:
+  push:
+    branches:
+      - feature/catalyst-source-polling
+  pull_request:
+    branches:
+      - feature/catalyst-intelligence-foundation
+permissions:
+  contents: read
+jobs:
+  source-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - name: Build and TypeScript check
+        run: |
+          npm run build
+          npx tsc --noEmit
+      - name: Prove standalone Railway cron Docker context and idle entrypoint
+        run: |
+          docker build --file cron/Dockerfile --tag catalyst-staging-cron:check cron
+          docker run --rm --env INTERNAL_JOB_TOKEN=staging-ci-example-token-longer-than-32 catalyst-staging-cron:check
+      - name: Unit-test independently reviewed anticipatory evidence
+        run: node --experimental-strip-types --test src/lib/catalysts/anticipatory-model.test.ts
+      - name: Test historical candidate and official-outcome validation without lookahead
+        run: node --experimental-strip-types --test src/lib/catalysts/outcome-study.test.ts
+      - name: Test S&P inclusion preflight source and eligibility gates
+        run: node --experimental-strip-types --test src/lib/catalysts/sp500-preflight.test.ts
+      - name: Test point-in-time SEC GAAP profitability source and bounded reader
+        run: |
+          node --experimental-strip-types --test src/lib/catalysts/providers/sec-gaap-continuing.test.ts
+          node --experimental-strip-types --test src/lib/catalysts/providers/sec-gaap-continuing.server.test.ts
+      - name: Unit-test official source adapters and bounded scheduler
+        run: |
+          node --experimental-strip-types --test src/lib/catalysts/providers/sp-index-feed.test.ts
+          node --test scripts/catalyst-source-cron.test.mjs
+      - name: Verify source endpoints retain protected writes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ('src/routes/api/public/catalysts/poll-sp-index.ts', 'src/routes/api/public/catalysts/ingest-sec.ts'):
+            contents = Path(name).read_text()
+            assert 'authorizeInternalJobRequest(request)' in contents
+            assert 'status:401' in contents
+          for name in ('src/lib/catalysts/providers/sp-index-feed.server.ts', 'src/routes/api/public/catalysts/poll-sp-index.ts'):
+            contents = Path(name).read_text()
+            assert 'verified_at:new Date()' not in contents
+          print('PASS: source discovery cannot bypass verification')
+          PY

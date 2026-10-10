@@ -2,11 +2,12 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/catalyst-intelligence-foundation]
   push:
     branches:
       - main
       - chatgpt/stage2-calibration-review
+      - feature/catalyst-source-polling
 
 permissions:
   contents: read
@@ -42,6 +43,35 @@ jobs:
 
       - name: Run TypeScript check against generated routes
         run: npx tsc --noEmit
+
+      - name: Verify radar research caching and retry
+        run: node --experimental-strip-types --test src/lib/research/research-cache.test.ts
+
+      - name: Test verified corporate catalysts and anti-lookahead safeguards
+        run: node --experimental-strip-types --test src/lib/catalysts/company-event-model.test.ts
+
+      - name: Test anticipatory catalyst eligibility and point-in-time safeguards
+        run: node --experimental-strip-types --test src/lib/catalysts/anticipatory-model.test.ts
+
+      - name: Test historical candidate and official-outcome validation without lookahead
+        run: node --experimental-strip-types --test src/lib/catalysts/outcome-study.test.ts
+      - name: Test S&P official-criteria preflight (source/PIT/member veto)
+        run: node --experimental-strip-types --test src/lib/catalysts/sp500-preflight.test.ts
+
+      - name: Test point-in-time SEC GAAP profitability source and bounded reader
+        run: |
+          node --experimental-strip-types --test src/lib/catalysts/providers/sec-gaap-continuing.test.ts
+          node --experimental-strip-types --test src/lib/catalysts/providers/sec-gaap-continuing.server.test.ts
+      - name: Test official SEC filing intake without network access
+        run: node --experimental-strip-types --test src/lib/catalysts/providers/sec-edgar.test.ts
+
+      - name: Test independent catalyst review authorization
+        run: node --experimental-strip-types --test src/lib/catalysts/review-auth.test.ts
+
+      - name: Test official index announcements and source scheduler
+        run: |
+          node --experimental-strip-types --test src/lib/catalysts/providers/sp-index-feed.test.ts
+          node --test scripts/catalyst-source-cron.test.mjs
 
       - name: Run Opportunity Radar and fundamental model tests
         run: npm run test:opportunity

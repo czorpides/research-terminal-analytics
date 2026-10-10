@@ -1,0 +1,70 @@
+name: Privileged endpoint authentication
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/security/**"
+      - "src/routes/api/public/**"
+      - ".github/workflows/internal-auth.yml"
+  push:
+    branches: [fix/railway-staging-internal-auth]
+
+permissions:
+  contents: read
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test internal-only bearer authentication
+        run: node --experimental-strip-types --test src/lib/security/internal-job-auth.test.ts
+      - name: Test owner bootstrap password verification
+        run: node --experimental-strip-types --test src/lib/auth/owner.test.ts
+      - name: Verify staging read-only boundary and open route
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          start = Path("src/start.ts").read_text()
+          middleware = Path("src/lib/security/staging-readonly.middleware.ts").read_text()
+          route = Path("src/routes/_authenticated/route.tsx").read_text()
+          auth = Path("src/routes/auth.tsx").read_text()
+          assert "functionMiddleware: [stagingReadOnlyFunctions]" in start
+          assert 'request?.method === "GET"' in middleware
+          assert "authorizeInternalJobRequest(request)" in middleware
+          assert "beforeLoad" not in route
+          assert "signInWithPassword" not in auth
+          assert 'navigate({ to: "/", replace: true })' in auth
+          for path, name in (
+            ("src/lib/equities/explorer.functions.ts", "getEquityExplorer"),
+            ("src/lib/panels/growth-engine.functions.ts", "getGrowthEngine"),
+            ("src/lib/panels/macro.functions.ts", "getMacroPanelsForRegion"),
+          ):
+            s = Path(path).read_text()
+            assert f'{name} = createServerFn({{ method: "GET" }})' in s, path
+          print("PASS: staging pages are open, reads allowed, writes require job token")
+          PY
+      - name: Verify the identified administrative routes no longer trust public keys
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          paths = [
+              "verify/run.ts", "scores/run.ts", "providers/ping.ts",
+              "ingest/fred.ts", "ingest/altdata.ts", "ingest/commodities.ts",
+              "ingest/swing-metals.ts", "ingest/macro-native.ts",
+              "ingest/us-labour-fred.ts", "ingest/us-market-fred.ts",
+              "models/us-market-regime.ts", "ingest/us-liquidity-fred.ts",
+              "ingest/us-inflation-fred.ts", "history/verify-narratives.ts",
+              "ingest/us-growth-fred.ts", "radars/undervaluation/refresh.ts",
+              "ingest/fundamentals.ts", "ingest/stooq.ts"
+          ]
+          root = Path("src/routes/api/public")
+          for route in paths:
+              body = (root / route).read_text()
+              assert 'authorizeInternalJobRequest(request)' in body, route
+              assert 'request.headers.get("apikey")' not in body, route
+          print(f"PASS: {len(paths)} privileged routes require internal bearer token")
+          PY

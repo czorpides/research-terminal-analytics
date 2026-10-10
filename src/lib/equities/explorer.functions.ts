@@ -129,7 +129,7 @@ interface ScoreRow {
   computed_at: string;
 }
 
-export const getEquityExplorer = createServerFn({ method: "POST" })
+export const getEquityExplorer = createServerFn({ method: "GET" })
   .inputValidator((input: EquityExplorerInput) => inputSchema.parse(input))
   .handler(async ({ data }): Promise<EquityExplorerResult> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
