@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectSecAnnualFilings, extractAnnualFacts } from "./normalize-annual.ts";
-import { STATEMENT_METRICS } from "@/lib/opportunity/fundamental-models";
+import { STATEMENT_METRICS } from "../../opportunity/fundamental-models.ts";
 
 const accn="0000320193-25-000079";
 const year="2025-09-27";
