@@ -12,6 +12,7 @@ import {
 } from "@/lib/panels/data-health.functions";
 import { getSourceFreshness } from "@/lib/freshness/freshness.functions";
 import { getGrowthHealth } from "@/lib/panels/growth-health.functions";
+import { getFundamentalsPipelineHealth } from "@/lib/panels/fundamentals-health.functions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -41,6 +42,7 @@ function DataHealth() {
   const runVerifier = useServerFn(triggerVerifierRun);
   const fetchFreshness = useServerFn(getSourceFreshness);
   const fetchGrowth = useServerFn(getGrowthHealth);
+  const fetchFundamentals = useServerFn(getFundamentalsPipelineHealth);
   const fetchPhase45 = useServerFn(getPhase45Health);
   const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
@@ -54,6 +56,13 @@ function DataHealth() {
     queryKey: ["source-freshness"],
     queryFn: () => fetchFreshness(),
     refetchInterval: 60_000,
+  });
+  const { data: fundamentals, error: fundamentalHealthError } = useQuery({
+    queryKey: ["fundamentals-pipeline-health"],
+    queryFn: () => fetchFundamentals(),
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
+    retry: 1,
   });
   const { data: growth } = useQuery({
     queryKey: ["stage1-growth-health"],
@@ -89,6 +98,48 @@ function DataHealth() {
         title="Is the underlying data trustworthy right now?"
         purpose="The reliability framework driving every panel's confidence score. Owner-only administration lives here."
       />
+
+      <DashboardPanel
+        title="Fundamentals and earnings evidence"
+        eyebrow="Measured coverage · provider diagnostics"
+        description="Separates ingested SEC/FMP statement evidence, metric coverage and earnings calendars. A successful cron enqueue is not an ingestion result."
+        className="mb-6"
+      >
+        {fundamentalHealthError ? (
+          <div className="text-xs text-[var(--negative)]">
+            Fundamentals coverage telemetry is unavailable: {fundamentalHealthError.message}
+          </div>
+        ) : !fundamentals ? (
+          <div className="text-xs text-muted-foreground">Loading measured coverage…</div>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <div className="grid gap-3 sm:grid-cols-4">
+              {[
+                ["Assets with current metrics", fundamentals.assetsWithCurrentMetrics],
+                ["Assets with filing history", fundamentals.assetsWithFilings],
+                ["Earnings calendar entries", fundamentals.earningsEventCount],
+                ["Interrupted ingestion runs", fundamentals.staleFundamentalsRuns],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded border border-border/70 p-2">
+                  <div className="text-muted-foreground">{label}</div>
+                  <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="text-muted-foreground">
+              Monitored equities: {fundamentals.activeEquities.toLocaleString()} · Filing records: {fundamentals.filingCount.toLocaleString()} · Latest filing ingestion: {fundamentals.latestFilingIngested ? new Date(fundamentals.latestFilingIngested).toLocaleDateString() : "none"}
+            </div>
+            <div className="text-muted-foreground">
+              FMP provider: {fundamentals.fmpLastStatus ?? "unknown"} · Successful ingestion runs (7d): {fundamentals.successfulRuns7d} · Failed runs (7d): {fundamentals.failedRuns7d}
+            </div>
+            {fundamentals.warnings.length > 0 && (
+              <ul className="list-disc space-y-1 pl-4 text-[var(--warning)]">
+                {fundamentals.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
+      </DashboardPanel>
 
       {calendar && (
         <DashboardPanel
