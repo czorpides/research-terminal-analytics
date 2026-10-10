@@ -21,7 +21,8 @@ test("refuses malformed and duplicate events",()=>{
   {code:"AAOI.US",report_date:"2026-11-05",actual:1},
   {code:"AAOI.US",report_date:"2026-11-05",actual:1},
   {code:"AAOI.MOON",report_date:"2026-11-05"},
-  {code:"BAD.US",report_date:"invalid"}
+  {code:"BAD.US",report_date:"invalid"},
+  {code:"BAD.US",report_date:"2026-02-31"}
  ]});
  assert.equal(r.length,1);
 });
