@@ -161,8 +161,9 @@ function getStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => typeof item === "string" ? item : "") : [];
 }
 function isoDate(value: string | undefined): value is string {
-  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    Number.isFinite(Date.parse(value + "T00:00:00Z"));
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + "T00:00:00Z");
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0,10) === value;
 }
 function annualDuration(start: string | undefined, end: string | undefined): boolean {
   if (!isoDate(start) || !isoDate(end)) return false;
