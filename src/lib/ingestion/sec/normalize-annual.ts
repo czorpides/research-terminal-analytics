@@ -1,4 +1,4 @@
-import { STATEMENT_METRICS, type StatementMetricCode } from "@/lib/opportunity/fundamental-models";
+import { STATEMENT_METRICS, type StatementMetricCode } from "../../opportunity/fundamental-models.ts";
 
 export interface SecAnnualFiling {
   accession: string;
