@@ -9,7 +9,7 @@ import { chromium } from "playwright";
 const origin = (
   process.argv[2] || "https://research-terminal-analytics.lovable.app"
 ).replace(/\/$/, "");
-const paths = ["/auth", "/catalysts", "/swing-trades", "/radar"];
+const paths = ["/", "/auth", "/catalysts", "/swing-trades", "/radar"];
 const browser = await chromium.launch({ headless: true });
 let warningCount = 0;
 try {
