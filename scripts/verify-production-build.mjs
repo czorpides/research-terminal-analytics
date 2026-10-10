@@ -55,6 +55,45 @@ const publicKey =
   readDotEnv("VITE_SUPABASE_PUBLISHABLE_KEY");
 assert.match(publicUrl, /^https:\/\/[A-Za-z0-9.-]+/, "Public Supabase URL absent from build configuration");
 assert.ok(publicKey.length >= 10, "Public Supabase publishable key absent");
+// Until Lovable supplies public VITE_* config directly to the build, the
+// repository tracks only the six non-secret values needed by the client.
+// Reject newly added private keys or accidental cross-database configuration.
+if (existsSync(".env")) {
+  const allowed = new Set([
+    "SUPABASE_PROJECT_ID",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_URL",
+    "VITE_SUPABASE_PROJECT_ID",
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+    "VITE_SUPABASE_URL",
+  ]);
+  const keys = readFileSync(".env", "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .map((line) => line.split("=")[0]);
+  assert.ok(
+    keys.every((key) => allowed.has(key)),
+    "Tracked .env contains an unapproved entry (possibly a server-only secret)",
+  );
+  const id = readDotEnv("SUPABASE_PROJECT_ID");
+  assert.ok(id && id === readDotEnv("VITE_SUPABASE_PROJECT_ID"), "Supabase project IDs differ");
+  assert.equal(
+    readDotEnv("SUPABASE_URL"),
+    readDotEnv("VITE_SUPABASE_URL"),
+    "Server and browser Supabase URLs differ",
+  );
+  assert.equal(
+    readDotEnv("SUPABASE_PUBLISHABLE_KEY"),
+    readDotEnv("VITE_SUPABASE_PUBLISHABLE_KEY"),
+    "Server and browser publishable keys differ",
+  );
+  assert.equal(
+    new URL(publicUrl).hostname.split(".")[0],
+    id,
+    "Configured Supabase URL does not match the pinned project ID",
+  );
+}
 const host = new URL(publicUrl).hostname;
 const emittedScripts = publicFiles.filter((x) => x.endsWith(".js"));
 assert.ok(
