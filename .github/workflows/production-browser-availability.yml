@@ -1,0 +1,32 @@
+name: Production browser availability
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-browser-availability.yml"
+      - "scripts/verify-production-browser.mjs"
+  workflow_dispatch:
+  schedule:
+    # Twice per day; safe GET checks, no owner credentials or writes.
+    - cron: "17 7,19 * * *"
+permissions:
+  contents: read
+concurrency:
+  group: production-browser-monitor
+  cancel-in-progress: false
+jobs:
+  live-browser:
+    name: Check real rendered pages, JS/CSS and login redirects
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install browser test runner
+        run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Check published Research Terminal (read-only)
+        run: node scripts/verify-production-browser.mjs https://research-terminal-analytics.lovable.app

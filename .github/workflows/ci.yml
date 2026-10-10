@@ -40,6 +40,9 @@ jobs:
       - name: Build production application and generate route tree
         run: npm run build
 
+      - name: Verify browser assets and production configuration in build output
+        run: node scripts/verify-production-build.mjs
+
       - name: Run TypeScript check against generated routes
         run: npx tsc --noEmit
 
