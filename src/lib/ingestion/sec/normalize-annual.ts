@@ -43,6 +43,7 @@ export function selectSecAnnualFilings(
   submissionsInput: unknown,
   companyFactsInput: unknown,
   limit = 3,
+  historicalRows: readonly unknown[] = [],
 ): SecAnnualFiling[] {
   if (!Number.isSafeInteger(cik) || cik <= 0) throw new Error("Invalid issuer CIK");
   const submissions = submissionsInput as SecSubmissions;
@@ -51,43 +52,67 @@ export function selectSecAnnualFilings(
     throw new Error("SEC issuer CIK does not match both official responses");
   if (!submissions.tickers?.some((item) => item.toUpperCase() === ticker.toUpperCase()))
     throw new Error("SEC submissions do not currently identify the requested stock ticker");
-  const rows = submissions.filings?.recent;
-  if (!rows) return [];
-  const accesses = getStrings(rows.accessionNumber);
-  const forms = getStrings(rows.form);
-  const periods = getStrings(rows.reportDate);
-  const filed = getStrings(rows.filingDate);
-  const accepted = getStrings(rows.acceptanceDateTime);
-  const primary = getStrings(rows.primaryDocument);
-  if (!accesses.length || accesses.length !== forms.length ||
-      accesses.length !== periods.length || accesses.length !== filed.length)
-    throw new Error("Malformed SEC submissions columnar filing arrays");
+  const recent = submissions.filings?.recent;
+  if (!recent) return [];
+  const rows = [recent, ...historicalRows].map(parseSecFilingRows);
 
   const gaap = companyFacts.facts?.["us-gaap"];
   if (!gaap) return [];
   const seen = new Set<string>();
   const output: SecAnnualFiling[] = [];
-  for (let i = 0; i < accesses.length; i++) {
-    if (forms[i] !== "10-K" || !isoDate(periods[i]) || !isoDate(filed[i]))
-      continue;
-    const accn = accesses[i];
-    if (!/^\d{10}-\d{2}-\d{6}$/.test(accn)) continue;
-    if (seen.has(periods[i])) continue; // retain the earliest original in recent list
-    const facts = extractAnnualFacts(gaap, accn, periods[i]);
-    if (!facts.length) continue;
-    const attachment = primary[i] ?? "";
-    output.push({
-      accession: accn,
-      periodEnd: periods[i],
-      filedDate: filed[i],
-      acceptanceLocal: accepted[i] || null,
-      primaryDocument: /^[a-zA-Z0-9_.-]+$/.test(attachment) ? attachment : null,
-      facts,
-    });
-    seen.add(periods[i]);
-    if (output.length >= Math.max(1, Math.min(10, limit))) break;
+  // Iterate official recent indexes first, then explicitly selected older
+  // submissions files. The same period can appear in multiple files.
+  // Never invent 10-K metadata that is absent from the corresponding index.
+  for (const index of rows) {
+    for (let i = 0; i < index.accesses.length; i++) {
+      if (index.forms[i] !== "10-K" || !isoDate(index.periods[i]) || !isoDate(index.filed[i]))
+        continue;
+      const accn = index.accesses[i];
+      if (!/^\d{10}-\d{2}-\d{6}$/.test(accn)) continue;
+      if (seen.has(index.periods[i])) continue;
+      const facts = extractAnnualFacts(gaap, accn, index.periods[i]);
+      if (!facts.length) continue;
+      const attachment = index.primary[i] ?? "";
+      output.push({
+        accession: accn,
+        periodEnd: index.periods[i],
+        filedDate: index.filed[i],
+        acceptanceLocal: index.accepted[i] || null,
+        primaryDocument: /^[a-zA-Z0-9_.-]+$/.test(attachment) ? attachment : null,
+        facts,
+      });
+      seen.add(index.periods[i]);
+    }
   }
+  // Older historical SEC index files are not guaranteed to arrive in
+  // reverse chronology. Select the three latest original report periods.
+  output.sort((a,b) => b.periodEnd.localeCompare(a.periodEnd));
+  output.splice(Math.max(1, Math.min(10, limit)));
   return output;
+}
+
+interface ParsedSecFilingRows {
+  accesses: string[];
+  forms: string[];
+  periods: string[];
+  filed: string[];
+  accepted: string[];
+  primary: string[];
+}
+function parseSecFilingRows(input: unknown): ParsedSecFilingRows {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("Malformed SEC submissions filing index");
+  const rows = input as Record<string, unknown>;
+  const accesses = getStrings(rows.accessionNumber);
+  const forms = getStrings(rows.form);
+  const periods = getStrings(rows.reportDate);
+  const filed = getStrings(rows.filingDate);
+  if (!accesses.length || accesses.length !== forms.length ||
+      accesses.length !== periods.length || accesses.length !== filed.length)
+    throw new Error("Malformed SEC submissions columnar filing arrays");
+  const accepted = getStrings(rows.acceptanceDateTime);
+  const primary = getStrings(rows.primaryDocument);
+  return { accesses, forms, periods, filed, accepted, primary };
 }
 
 const MAPPING: Array<{
