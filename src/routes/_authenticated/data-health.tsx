@@ -13,6 +13,7 @@ import {
 import { getSourceFreshness } from "@/lib/freshness/freshness.functions";
 import { getGrowthHealth } from "@/lib/panels/growth-health.functions";
 import { getFundamentalsPipelineHealth } from "@/lib/panels/fundamentals-health.functions";
+import { getSecEvidenceCoverage } from "@/lib/panels/sec-coverage.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ function DataHealth() {
   const fetchFreshness = useServerFn(getSourceFreshness);
   const fetchGrowth = useServerFn(getGrowthHealth);
   const fetchFundamentals = useServerFn(getFundamentalsPipelineHealth);
+  const fetchSecEvidence = useServerFn(getSecEvidenceCoverage);
   const fetchPhase45 = useServerFn(getPhase45Health);
   const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
@@ -66,6 +68,12 @@ function DataHealth() {
     queryFn: () => fetchFundamentals(),
     refetchInterval: 5 * 60_000,
     refetchOnWindowFocus: true,
+    retry: 1,
+  });
+  const { data: secEvidence, error: secEvidenceError } = useQuery({
+    queryKey: ["sec-official-filing-coverage"],
+    queryFn: () => fetchSecEvidence(),
+    refetchInterval: 5 * 60_000,
     retry: 1,
   });
   const { data: growth } = useQuery({
@@ -136,6 +144,7 @@ function DataHealth() {
           (first?.reason ? "; " + first.reason : "") +
           ". No changes to Radar scores.");
         await qc.invalidateQueries({ queryKey: ["fundamentals-pipeline-health"] });
+        await qc.invalidateQueries({ queryKey: ["sec-official-filing-coverage"] });
       } else {
         const result = json as {
           configured?:boolean;
@@ -218,6 +227,7 @@ function DataHealth() {
           skipped + " unsupported, " + unchanged + " unchanged." +
           (failure ? " Paused at " + failure.symbol + ": " + (failure.reason ?? "provider error") : ""));
         await qc.invalidateQueries({ queryKey: ["fundamentals-pipeline-health"] });
+        await qc.invalidateQueries({ queryKey: ["sec-official-filing-coverage"] });
         if (failure) return;
       }
       setIngestResult("SEC pilot completed: " + visited + " issuers, " +
@@ -287,7 +297,7 @@ function DataHealth() {
       <DashboardPanel
         title="Official-source recovery · manual"
         eyebrow="Owner only · no recurring provider jobs"
-        description="Official SEC filings: one-company verification or a controlled ten-issuer pilot. Paid EODHD fundamentals and earnings calendars are currently not entitled."
+        description="Original 10-K filings: one-company verification or manually controlled ten-issuer batches from a curated 100-ticker pool. EODHD financial and earnings subscriptions remain unavailable."
         className="mb-6"
       >
         <div className="flex flex-wrap gap-2">
@@ -314,10 +324,72 @@ function DataHealth() {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           SEC: up to three original 10-K years for one company, with first-observed timestamps and no ranking changes.
-          SEC pilot: ten curated US issuers, up to five sequential two-company batches. Keep this page open until completion.
+          SEC coverage: 100 curated candidate tickers. Each click processes at most ten eligible issuers in five sequential two-company batches. Keep this page open until completion.
           EODHD recheck: optional, up to two metered requests; premium statements and earnings dates are currently unavailable.
         </p>
         {ingestResult && <p role="status" className="mt-3 text-xs">{ingestResult}</p>}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="SEC filing completeness"
+        eyebrow="Read-only evidence audit · not scoring data"
+        description="Shows how many original 10-K years and source-matched core metrics were recovered. Four core metrics observed does not imply a complete annual report."
+        className="mb-6"
+      >
+        {secEvidenceError ? (
+          <p className="text-xs text-[var(--negative)]">
+            SEC coverage telemetry unavailable: {secEvidenceError.message}
+          </p>
+        ) : !secEvidence ? (
+          <p className="text-xs text-muted-foreground">Loading SEC evidence completeness…</p>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {[
+                ["SEC-covered issuers", secEvidence.rows.length],
+                ["At least 3 years", secEvidence.completeThreeYears],
+                ["Latest year has 4 core tags", secEvidence.latestCoreObserved],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded border border-border/70 p-2">
+                  <div className="text-muted-foreground">{label}</div>
+                  <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-muted-foreground">
+              Incomplete three-year history: {secEvidence.incompleteHistory}. The report
+              counts only original SEC filings and observed direct US-GAAP tags.
+              Financial sector metrics are not evaluated as industrial-company ratios.
+            </p>
+            <div className="overflow-x-auto rounded border border-border/70">
+              <table className="w-full min-w-[500px] text-left">
+                <thead><tr className="text-muted-foreground">
+                  <th className="p-2">Issuer</th>
+                  <th className="p-2">10-K years</th>
+                  <th className="p-2">Latest core tags / 4</th>
+                  <th className="p-2">Total facts</th>
+                  <th className="p-2">Newest period</th>
+                </tr></thead>
+                <tbody>
+                  {secEvidence.rows.slice(0, 20).map((r) => (
+                    <tr className="border-t border-border/50" key={r.symbol}>
+                      <td className="p-2 font-semibold">{r.symbol}</td>
+                      <td className="p-2 tabular-nums">{r.filingYears}</td>
+                      <td className="p-2 tabular-nums">{r.latestCoreCount} / 4</td>
+                      <td className="p-2 tabular-nums">{r.totalFacts}</td>
+                      <td className="p-2">{r.lastPeriodEnd ?? "unknown"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {secEvidence.rows.length > 20 && (
+              <p className="text-muted-foreground">
+                Showing 20 least-covered issuers; remaining evidence stays in the protected database.
+              </p>
+            )}
+          </div>
+        )}
       </DashboardPanel>
 
       {calendar && (
