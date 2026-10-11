@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { forceManualRedirect, requireNonRedirectResponse } from "@/lib/ingestion/providers/edge-safe-redirect";
 import type { Json } from "@/integrations/supabase/types";
-import { selectSecAnnualFilings, type SecAnnualFiling } from "./normalize-annual";
+import { indexedSecOriginalAnnualPeriods, selectSecAnnualFilings, type SecAnnualFiling } from "./normalize-annual";
 import { chooseSecHistoricFiles } from "./historic-index";
 import { hasThreeConsecutiveSecYears } from "./pilot-plan";
 
@@ -116,11 +116,32 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
       const status:SecRecoveryResult["status"]=filingsInserted?"updated":
         filings.length?"unchanged":"skipped";
       const threeYearHistory=hasThreeConsecutiveSecYears(filings.map(f => f.periodEnd));
+      // Distinguish annual 10-K metadata missing from an archive shard
+      // versus a 10-K found but yielding no permitted direct US-GAAP tags.
+      // This is an observation only, never permission to infer values.
+      const recentIndex = (submissions as {
+        filings?: { recent?: unknown };
+      })?.filings?.recent;
+      const indexedPeriods = indexedSecOriginalAnnualPeriods(
+        [recentIndex, ...archives].filter(x => x !== undefined),
+      );
+      const mostRecentYear = Number((filings[0]?.periodEnd ??
+        indexedPeriods[0] ?? "").slice(0,4));
+      const missingMapped = indexedPeriods.filter(period =>
+        Number(period.slice(0,4)) >= mostRecentYear-2 &&
+        Number(period.slice(0,4)) <= mostRecentYear &&
+        !filings.some(f => f.periodEnd === period),
+      );
       const reason=!threeYearHistory
         ? "Incomplete 3-consecutive-year original 10-K history: " +
           filings.map(f => f.periodEnd).join(", ") +
           " after checking " + archiveFilesChecked +
-          " historical indexes; unavailable reporting periods not inferred"
+          " targeted historical indexes; " +
+          (missingMapped.length
+            ? "10-K metadata observed but no supported accession-matched facts for " +
+              missingMapped.slice(0,3).join(", ")
+            : "missing periods not observed in fetched original 10-K indexes") +
+          "; no dates or values inferred"
         : "";
       const terminalStatus=threeYearHistory?"success":"partial";
       await finishRun(runId,terminalStatus,factsInserted,reason);
