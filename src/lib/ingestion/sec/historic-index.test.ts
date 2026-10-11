@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chooseSecHistoricFiles } from "./historic-index.ts";
 import { selectSecAnnualFilings } from "./normalize-annual.ts";
+import { hasThreeConsecutiveSecYears } from "./pilot-plan.ts";
+
 
 const cik=19617;
 const three=[2025,2024,2023].map((year)=>({
@@ -45,4 +47,12 @@ test("repeated and unsorted archive rows do not create duplicate annual periods"
 });
 test("invalid archive arrays fail closed",()=>{
  assert.throws(()=>selectSecAnnualFilings(cik,"JPM",current,facts,3,[{accessionNumber:["x"],form:[]}]),/Malformed/);
+});
+
+test("three nonconsecutive original 10-K years still require an archive probe", () => {
+  const gap=["2025-12-31","2023-12-31","2022-12-31"];
+  assert.equal(gap.length,3);
+  assert.equal(hasThreeConsecutiveSecYears(gap),false);
+  const filled=["2025-12-31","2024-12-31","2023-12-31"];
+  assert.equal(hasThreeConsecutiveSecYears(filled),true);
 });
