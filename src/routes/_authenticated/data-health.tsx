@@ -48,7 +48,7 @@ function DataHealth() {
   const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
   const [running, setRunning] = useState(false);
-  const [ingestAction, setIngestAction] = useState<"sec" | "eodhd" | null>(null);
+  const [ingestAction, setIngestAction] = useState<"sec" | "eodhd" | "pilot" | null>(null);
   const [ingestResult, setIngestResult] = useState<string | null>(null);
 
   const { data } = useQuery({
@@ -154,6 +154,86 @@ function DataHealth() {
     }
   }
 
+  async function onBoundedSecPilot() {
+    if (ingestAction) return;
+    setIngestAction("pilot");
+    setIngestResult("Preparing up to ten previously uncovered SEC issuers…");
+    let visited = 0;
+    let filings = 0;
+    let facts = 0;
+    let skipped = 0;
+    let unchanged = 0;
+    try {
+      const { data: auth, error: sessionError } = await supabase.auth.getSession();
+      const access = auth.session?.access_token;
+      if (sessionError || !access)
+        throw new Error("Sign in as the owner to run the SEC pilot.");
+      const headers = {
+        "Authorization": "Bearer " + access,
+        "Content-Type": "application/json",
+      };
+      const planResponse = await fetch("/api/public/ingest/sec-pilot-candidates", {
+        headers, cache: "no-store",
+      });
+      const plan = await planResponse.json().catch(() => null) as {
+        error?: string;
+        candidates?: Array<{assetId: string; symbol: string}>;
+      } | null;
+      if (!planResponse.ok)
+        throw new Error(plan?.error ?? "Unable to prepare SEC pilot.");
+      const candidates = plan?.candidates ?? [];
+      if (!Array.isArray(candidates) || candidates.length > 10)
+        throw new Error("SEC pilot plan does not respect the ten-company limit.");
+      if (!candidates.length) {
+        setIngestResult("The curated SEC pilot has no further uncovered eligible companies. No imports performed.");
+        return;
+      }
+      for (let offset = 0; offset < candidates.length; offset += 2) {
+        const pair = candidates.slice(offset, offset + 2);
+        setIngestResult(
+          "SEC pilot: processing " + pair.map(x => x.symbol).join(" / ") +
+          " (completed " + visited + "/" + candidates.length + ")…",
+        );
+        const response = await fetch("/api/public/ingest/sec-annual", {
+          method: "POST", headers,
+          body: JSON.stringify({ assetIds: pair.map(x => x.assetId) }),
+        });
+        const result = await response.json().catch(() => null) as {
+          error?: string; filingsInserted?: number; factsInserted?: number;
+          results?: Array<{symbol:string;status:string;reason?:string}>;
+        } | null;
+        if (!response.ok && response.status !== 207)
+          throw new Error(result?.error ?? "SEC import failed (HTTP " + response.status + ")");
+        const issuerResults = result?.results ?? [];
+        if (issuerResults.length !== pair.length)
+          throw new Error("Incomplete issuer result; resume after investigation.");
+        filings += Math.max(0, Number(result?.filingsInserted ?? 0));
+        facts += Math.max(0, Number(result?.factsInserted ?? 0));
+        skipped += issuerResults.filter(x => x.status === "skipped").length;
+        unchanged += issuerResults.filter(x => x.status === "unchanged").length;
+        visited += pair.length;
+        const failure = issuerResults.find(x => x.status === "failed");
+        setIngestResult("SEC pilot: " + visited + "/" + candidates.length +
+          " issuers; " + filings + " filings, " + facts + " facts; " +
+          skipped + " unsupported, " + unchanged + " unchanged." +
+          (failure ? " Paused at " + failure.symbol + ": " + (failure.reason ?? "provider error") : ""));
+        await qc.invalidateQueries({ queryKey: ["fundamentals-pipeline-health"] });
+        if (failure) return;
+      }
+      setIngestResult("SEC pilot completed: " + visited + " issuers, " +
+        filings + " original 10-K filings, " + facts + " facts, " +
+        skipped + " unsupported, " + unchanged +
+        " unchanged. No score changes; verify evidence before expansion.");
+    } catch (e) {
+      setIngestResult("SEC pilot paused after " + visited +
+        " issuers; " + filings + " filings and " + facts +
+        " facts: " + (e instanceof Error ? e.message : "Unexpected error") +
+        ". Previously completed reports are retained; restart to resume.");
+    } finally {
+      setIngestAction(null);
+    }
+  }
+
   return (
     <AppShell>
       <SectionHeader
@@ -207,7 +287,7 @@ function DataHealth() {
       <DashboardPanel
         title="Official-source recovery · manual"
         eyebrow="Owner only · no recurring provider jobs"
-        description="Import one monitored US company's official original 10-K facts, or test whether the existing EODHD plan includes financial statements and earnings calendars."
+        description="Official SEC filings: one-company verification or a controlled ten-issuer pilot. Paid EODHD fundamentals and earnings calendars are currently not entitled."
         className="mb-6"
       >
         <div className="flex flex-wrap gap-2">
@@ -220,6 +300,13 @@ function DataHealth() {
           <Button
             variant="outline"
             disabled={ingestAction !== null}
+            onClick={() => void onBoundedSecPilot()}
+          >
+            {ingestAction === "pilot" ? "SEC pilot running…" : "Import next 10 US SEC issuers"}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={ingestAction !== null}
             onClick={() => void onManualSourceAction("eodhd")}
           >
             {ingestAction === "eodhd" ? "Checking entitlement…" : "Check EODHD coverage"}
@@ -227,7 +314,8 @@ function DataHealth() {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           SEC: up to three original 10-K years for one company, with first-observed timestamps and no ranking changes.
-          EODHD: at most two billed quota requests, no stored earnings records or subscription upgrades.
+          SEC pilot: ten curated US issuers, up to five sequential two-company batches. Keep this page open until completion.
+          EODHD recheck: optional, up to two metered requests; premium statements and earnings dates are currently unavailable.
         </p>
         {ingestResult && <p role="status" className="mt-3 text-xs">{ingestResult}</p>}
       </DashboardPanel>
