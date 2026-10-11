@@ -14,6 +14,7 @@ import { getSourceFreshness } from "@/lib/freshness/freshness.functions";
 import { getGrowthHealth } from "@/lib/panels/growth-health.functions";
 import { getFundamentalsPipelineHealth } from "@/lib/panels/fundamentals-health.functions";
 import { getSecEvidenceCoverage } from "@/lib/panels/sec-coverage.functions";
+import type { SecControlPlan, SecControlledMode } from "@/lib/ingestion/sec/controlled-plan";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,8 +51,9 @@ function DataHealth() {
   const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
   const [running, setRunning] = useState(false);
-  const [ingestAction, setIngestAction] = useState<"sec" | "eodhd" | "pilot" | null>(null);
+  const [ingestAction, setIngestAction] = useState<"sec" | "eodhd" | "preview" | "repair" | "expand" | null>(null);
   const [ingestResult, setIngestResult] = useState<string | null>(null);
+  const [secPlans, setSecPlans] = useState<{repair:SecControlPlan;expand:SecControlPlan}|null>(null);
 
   const { data } = useQuery({
     queryKey: ["data-health"],
@@ -169,82 +171,148 @@ function DataHealth() {
     }
   }
 
-  async function onBoundedSecPilot() {
-    if (ingestAction) return;
-    setIngestAction("pilot");
-    setIngestResult("Preparing up to ten previously uncovered SEC issuers…");
-    let visited = 0;
-    let filings = 0;
-    let facts = 0;
-    let skipped = 0;
-    let unchanged = 0;
-    try {
-      const { data: auth, error: sessionError } = await supabase.auth.getSession();
-      const access = auth.session?.access_token;
-      if (sessionError || !access)
-        throw new Error("Sign in as the owner to run the SEC pilot.");
-      const headers = {
-        "Authorization": "Bearer " + access,
+  async function secOwnerHeaders() {
+    const { data: auth, error } = await supabase.auth.getSession();
+    const token = auth.session?.access_token;
+    if(error || !token) throw new Error("Sign in as the owner to access SEC import controls.");
+    return {
+      token,
+      headers: {
+        Authorization: "Bearer " + token,
         "Content-Type": "application/json",
-      };
-      const planResponse = await fetch("/api/public/ingest/sec-pilot-candidates", {
-        headers, cache: "no-store",
-      });
-      const plan = await planResponse.json().catch(() => null) as {
-        error?: string;
-        candidates?: Array<{assetId: string; symbol: string}>;
-      } | null;
-      if (!planResponse.ok)
-        throw new Error(plan?.error ?? "Unable to prepare SEC pilot.");
-      const candidates = plan?.candidates ?? [];
-      if (!Array.isArray(candidates) || candidates.length > 10)
-        throw new Error("SEC pilot plan does not respect the ten-company limit.");
-      if (!candidates.length) {
-        setIngestResult("The curated SEC pilot has no further uncovered eligible companies. No imports performed.");
+      },
+    };
+  }
+
+  async function fetchControlledPlan(
+    mode:SecControlledMode,
+    headers:Record<string,string>,
+  ):Promise<SecControlPlan> {
+    const response = await fetch("/api/public/ingest/sec-pilot-candidates?mode="+mode,{
+      headers,cache:"no-store",
+    });
+    const result = await response.json().catch(()=>null) as SecControlPlan & {error?:string}|null;
+    if(!response.ok)throw new Error(result?.error || "SEC plan unavailable");
+    const max = mode==="repair" ? 2 : 10;
+    if(!result || result.mode!==mode || result.maxPerRun!==max ||
+       result.maxPerRequest!==2 || !Array.isArray(result.candidates) ||
+       result.candidates.length>max ||
+       result.candidates.some(x=>typeof x.assetId!=="string" ||
+         typeof x.symbol!=="string" || !Number.isInteger(x.existingYears))) {
+      throw new Error("Malformed SEC plan; no import permitted.");
+    }
+    return result;
+  }
+
+  async function onPreviewSecWaves() {
+    if(ingestAction)return;
+    setIngestAction("preview");
+    setSecPlans(null);
+    setIngestResult("Reading SEC history repair and new-company plans without contacting SEC…");
+    try {
+      const { headers } = await secOwnerHeaders();
+      const [repair,expand]=await Promise.all([
+        fetchControlledPlan("repair",headers),
+        fetchControlledPlan("expand",headers),
+      ]);
+      setSecPlans({repair,expand});
+      setIngestResult("Preview only: "+repair.candidates.length+" history repairs; "+
+        expand.candidates.length+" unstarted issuers available. Confirm a separate manual action below.");
+    } catch(e) {
+      setIngestResult("SEC preview unavailable: "+(e instanceof Error?e.message:"Unexpected error"));
+    } finally {
+      setIngestAction(null);
+    }
+  }
+
+  async function onRunSecControlled(mode:SecControlledMode) {
+    if(ingestAction || !secPlans)return;
+    const approved=secPlans[mode];
+    setIngestAction(mode);
+    setSecPlans(null); // A second run always requires a fresh, explicit preview.
+    let visited=0,filings=0,facts=0,skipped=0,unchanged=0;
+    const explanations:string[]=[];
+    try {
+      const {token,headers}=await secOwnerHeaders();
+      // Re-read the plan immediately before work. A change in live coverage,
+      // cooldown or issuer identity invalidates the earlier preview.
+      const current=await fetchControlledPlan(mode,headers);
+      const fingerprint=(p:SecControlPlan)=>JSON.stringify(
+        p.candidates.map(c=>[c.assetId,c.symbol,c.existingYears,c.periodEnds]),
+      );
+      if(fingerprint(approved)!==fingerprint(current))
+        throw new Error("The SEC plan changed since preview; preview again before importing.");
+      const candidates=current.candidates;
+      if(!candidates.length) {
+        setIngestResult("No "+mode+" candidates available. No SEC provider requests made.");
         return;
       }
-      for (let offset = 0; offset < candidates.length; offset += 2) {
-        const pair = candidates.slice(offset, offset + 2);
-        setIngestResult(
-          "SEC pilot: processing " + pair.map(x => x.symbol).join(" / ") +
-          " (completed " + visited + "/" + candidates.length + ")…",
-        );
-        const response = await fetch("/api/public/ingest/sec-annual", {
-          method: "POST", headers,
-          body: JSON.stringify({ assetIds: pair.map(x => x.assetId) }),
+      for(let offset=0;offset<candidates.length;offset+=2) {
+        const pair=candidates.slice(offset,offset+2);
+        setIngestResult("SEC "+mode+": "+pair.map(p=>p.symbol).join(" / ")+
+          " (starting "+(visited+1)+" of "+candidates.length+")…");
+        const response=await fetch("/api/public/ingest/sec-annual",{
+          method:"POST",headers,
+          body:JSON.stringify({assetIds:pair.map(p=>p.assetId)}),
         });
-        const result = await response.json().catch(() => null) as {
-          error?: string; filingsInserted?: number; factsInserted?: number;
-          results?: Array<{symbol:string;status:string;reason?:string}>;
-        } | null;
-        if (!response.ok && response.status !== 207)
-          throw new Error(result?.error ?? "SEC import failed (HTTP " + response.status + ")");
-        const issuerResults = result?.results ?? [];
-        if (issuerResults.length !== pair.length)
-          throw new Error("Incomplete issuer result; resume after investigation.");
-        filings += Math.max(0, Number(result?.filingsInserted ?? 0));
-        facts += Math.max(0, Number(result?.factsInserted ?? 0));
-        skipped += issuerResults.filter(x => x.status === "skipped").length;
-        unchanged += issuerResults.filter(x => x.status === "unchanged").length;
-        visited += pair.length;
-        const failure = issuerResults.find(x => x.status === "failed");
-        setIngestResult("SEC pilot: " + visited + "/" + candidates.length +
-          " issuers; " + filings + " filings, " + facts + " facts; " +
-          skipped + " unsupported, " + unchanged + " unchanged." +
-          (failure ? " Paused at " + failure.symbol + ": " + (failure.reason ?? "provider error") : ""));
-        await qc.invalidateQueries({ queryKey: ["fundamentals-pipeline-health"] });
-        await qc.invalidateQueries({ queryKey: ["sec-official-filing-coverage"] });
-        if (failure) return;
+        const result=await response.json().catch(()=>null) as {
+          error?:string;filingsInserted?:number;factsInserted?:number;
+          results?:Array<{symbol:string;status:string;reason?:string;
+            filingsInserted:number;factsInserted:number}>;
+        }|null;
+        if(!response.ok && response.status!==207)
+          throw new Error(result?.error ?? "SEC request failed (HTTP "+response.status+")");
+        const outcomes=result?.results ?? [];
+        if(outcomes.length!==pair.length ||
+           outcomes.some((out,i)=>out.symbol!==pair[i]?.symbol ||
+             !["updated","unchanged","skipped","failed"].includes(out.status)))
+          throw new Error("SEC returned mismatched issuer results; stop and investigate.");
+        const newFiles=Number(result?.filingsInserted);
+        const newFacts=Number(result?.factsInserted);
+        if(!Number.isSafeInteger(newFiles) || newFiles<0 ||
+           !Number.isSafeInteger(newFacts) || newFacts<0)
+          throw new Error("SEC totals are invalid; stop and investigate.");
+        filings+=newFiles;facts+=newFacts;
+        skipped+=outcomes.filter(x=>x.status==="skipped").length;
+        unchanged+=outcomes.filter(x=>x.status==="unchanged").length;
+        visited+=pair.length;
+        // Coverage is re-read from the protected database rather than
+        // assuming HTTP 200 or returned ingestion counts mean full history.
+        const evidence=await fetchSecEvidence({data:{accessToken:token}});
+        for(const p of pair) {
+          const row=evidence.rows.find(x=>x.symbol===p.symbol);
+          const outcome=outcomes.find(x=>x.symbol===p.symbol)!;
+          if(!row && outcome.status!=="skipped")
+            throw new Error("No persisted SEC coverage for "+p.symbol+"; pause for investigation.");
+          if(row && row.filingYears < p.existingYears)
+            throw new Error("SEC coverage unexpectedly declined for "+p.symbol);
+          explanations.push(p.symbol+": "+p.existingYears+"→"+
+            (row?.filingYears ?? 0)+" FY, "+
+            (row?.threeYearHistory?"3-year history available":"partial/unavailable")+
+            (outcome.reason?" ("+outcome.reason+")":""));
+          if(row && row.ledgerStatus!=="no_structural_flags")
+            throw new Error("SEC ledger QA requires review for "+p.symbol+
+              "; stop before importing the next pair.");
+        }
+        await qc.invalidateQueries({queryKey:["fundamentals-pipeline-health"]});
+        await qc.invalidateQueries({queryKey:["sec-official-filing-coverage"]});
+        setIngestResult("SEC "+mode+": "+visited+"/"+candidates.length+
+          " issuers; "+filings+" new filings and "+facts+" facts. "+
+          explanations.join(" | "));
+        const failed=outcomes.find(x=>x.status==="failed");
+        if(failed)
+          throw new Error(failed.symbol+" SEC error: "+(failed.reason??"unknown")+
+            "; previous completed filing writes remain in place.");
       }
-      setIngestResult("SEC pilot completed: " + visited + " issuers, " +
-        filings + " original 10-K filings, " + facts + " facts, " +
-        skipped + " unsupported, " + unchanged +
-        " unchanged. No score changes; verify evidence before expansion.");
-    } catch (e) {
-      setIngestResult("SEC pilot paused after " + visited +
-        " issuers; " + filings + " filings and " + facts +
-        " facts: " + (e instanceof Error ? e.message : "Unexpected error") +
-        ". Previously completed reports are retained; restart to resume.");
+      setIngestResult("SEC "+mode+" completed: "+visited+" issuers; "+filings+
+        " new filings, "+facts+" new facts; "+skipped+" skipped, "+
+        unchanged+" unchanged. "+explanations.join(" | ")+
+        ". Figures still require official filing reconciliation; Radar scores unchanged.");
+    } catch(e) {
+      setIngestResult("SEC "+mode+" PAUSED after "+visited+" issuers, "+
+        filings+" filings, "+facts+" facts: "+
+        (e instanceof Error?e.message:"Unexpected error")+
+        ". Preview again to resume; no automatic retries.");
     } finally {
       setIngestAction(null);
     }
@@ -316,9 +384,9 @@ function DataHealth() {
           <Button
             variant="outline"
             disabled={ingestAction !== null}
-            onClick={() => void onBoundedSecPilot()}
+            onClick={() => void onPreviewSecWaves()}
           >
-            {ingestAction === "pilot" ? "SEC pilot running…" : "Import next 10 US SEC issuers"}
+            {ingestAction === "preview" ? "Checking SEC history…" : "Preview SEC repair & expansion"}
           </Button>
           <Button
             variant="outline"
@@ -330,10 +398,31 @@ function DataHealth() {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           SEC: up to three original 10-K years for one company, with first-observed timestamps and no ranking changes.
-          SEC coverage: 100 curated candidate tickers. Each click processes at most ten eligible issuers in five sequential two-company batches. Keep this page open until completion.
+          SEC coverage: 100 curated candidate tickers. Preview is read-only. Explicit repair runs handle at most 2 incomplete issuers; expansion runs handle at most 10 previously untouched issuers in two-company calls. Keep this page open during imports. Preview again after each run.
           EODHD recheck: optional, up to two metered requests; premium statements and earnings dates are currently unavailable.
         </p>
-        {ingestResult && <p role="status" className="mt-3 text-xs">{ingestResult}</p>}
+        {secPlans && (
+          <div className="mt-3 space-y-2 rounded border border-border/70 p-3 text-xs">
+            <p className="font-semibold">Manual SEC wave preview — no imports performed</p>
+            <p>Existing three-year histories: {secPlans.repair.alreadyCovered}. Existing incomplete histories: {secPlans.repair.incompleteHistory}. Not yet imported: {secPlans.expand.untouched}. Identity verified: {secPlans.expand.verifiedIdentities}/100; cooldown: {secPlans.repair.coolingDown}; QA blocked: {secPlans.repair.integrityBlocked}.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(["repair","expand"] as const).map(mode => (
+                <div key={mode} className="space-y-2 rounded border border-border/50 p-2">
+                  <p className="font-semibold">{mode==="repair"?"Historical repairs":"Untouched-company expansion"}</p>
+                  <p>{secPlans[mode].candidates.length ?
+                    secPlans[mode].candidates.map(x =>
+                      x.symbol+(mode==="repair"?" ("+x.existingYears+" FY currently)":"")
+                    ).join(", ") : "None currently eligible"}</p>
+                  <Button size="sm" variant="outline"
+                    disabled={ingestAction!==null || secPlans[mode].candidates.length===0}
+                    onClick={()=>void onRunSecControlled(mode)}
+                  >{mode==="repair"?"Run up to 2 history repairs":"Import up to 10 new issuers"}</Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {ingestResult && <p role="status" className="mt-3 whitespace-pre-wrap text-xs">{ingestResult}</p>}
       </DashboardPanel>
 
       <DashboardPanel
