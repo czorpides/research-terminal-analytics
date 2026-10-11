@@ -75,7 +75,7 @@ DECLARE
 BEGIN
   IF p_owner_id IS NULL OR p_asset_ids IS NULL OR
      coalesce(array_length(p_asset_ids,1),0) NOT BETWEEN 1 AND 10 OR
-     p_asset_ids @> ARRAY[NULL::uuid] THEN
+     EXISTS(SELECT 1 FROM unnest(p_asset_ids) AS u(id) WHERE u.id IS NULL) THEN
     RAISE EXCEPTION 'Invalid bounded owner-approved SEC queue';
   END IF;
   PERFORM pg_advisory_xact_lock(2026,2081);
@@ -184,7 +184,7 @@ DECLARE v_job public.sec_queue_jobs%ROWTYPE;
 DECLARE v_status text;
 BEGIN
   IF p_job_id IS NULL OR p_lease_token IS NULL OR
-     p_outcome NOT IN ('succeeded','partial','failed','retryable') OR
+      (p_outcome IS NULL OR p_outcome NOT IN ('succeeded','partial','failed','retryable')) OR
      p_filings IS NULL OR p_facts IS NULL OR
      p_filings<0 OR p_facts<0 THEN RAISE EXCEPTION 'Invalid SEC queue completion'; END IF;
   SELECT * INTO v_job FROM public.sec_queue_jobs
