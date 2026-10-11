@@ -195,3 +195,24 @@ function annualDuration(start: string | undefined, end: string | undefined): boo
   const days = (Date.parse(end + "T00:00:00Z") - Date.parse(start + "T00:00:00Z")) / 86_400_000;
   return days >= 330 && days <= 400;
 }
+
+/**
+ * Read-only diagnostic: original 10-K period metadata seen in official
+ * submission indexes, independent of XBRL facts. A period can be indexed
+ * without any directly supported CompanyFacts metric for that accession.
+ */
+export function indexedSecOriginalAnnualPeriods(
+  indexes: readonly unknown[],
+): string[] {
+  const found = new Set<string>();
+  for (const source of indexes) {
+    const index=parseSecFilingRows(source);
+    for(let i=0;i<index.accesses.length;i++) {
+      if(index.forms[i]!=="10-K" ||
+        !isoDate(index.periods[i]) || !isoDate(index.filed[i]) ||
+        !/^\\d{10}-\\d{2}-\\d{6}$/.test(index.accesses[i] ?? ""))continue;
+      found.add(index.periods[i]!);
+    }
+  }
+  return [...found].sort().reverse();
+}
