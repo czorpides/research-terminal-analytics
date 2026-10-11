@@ -14,6 +14,7 @@ import { getSourceFreshness } from "@/lib/freshness/freshness.functions";
 import { getGrowthHealth } from "@/lib/panels/growth-health.functions";
 import { getFundamentalsPipelineHealth } from "@/lib/panels/fundamentals-health.functions";
 import { getSecEvidenceCoverage } from "@/lib/panels/sec-coverage.functions";
+import { getSecSemanticQualityReview } from "@/lib/panels/sec-semantic-quality.functions";
 import type { SecControlPlan, SecControlledMode } from "@/lib/ingestion/sec/controlled-plan";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +48,7 @@ function DataHealth() {
   const fetchGrowth = useServerFn(getGrowthHealth);
   const fetchFundamentals = useServerFn(getFundamentalsPipelineHealth);
   const fetchSecEvidence = useServerFn(getSecEvidenceCoverage);
+  const fetchSecSemanticAudit = useServerFn(getSecSemanticQualityReview);
   const fetchPhase45 = useServerFn(getPhase45Health);
   const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
@@ -93,6 +95,17 @@ function DataHealth() {
     refetchInterval: 5 * 60_000,
     retry: 1,
   });
+  const { data: secSemanticAudit, error: secSemanticError } = useQuery({
+    queryKey:["sec-semantic-quality-review"],
+    queryFn:async()=>{
+      const {data:auth,error}=await supabase.auth.getSession();
+      const accessToken=auth.session?.access_token;
+      if(error||!accessToken)throw new Error("Owner sign-in required for SEC semantic quality");
+      return fetchSecSemanticAudit({data:{accessToken}});
+    },
+    refetchInterval:5*60_000,retry:1,
+  });
+
   const { data: secQueue } = useQuery({
     queryKey:["sec-queue-owner"],
     queryFn:async()=>{
@@ -688,6 +701,77 @@ function DataHealth() {
             {secEvidence.rows.length > 20 && (
               <p className="text-muted-foreground">
                 Showing 20 least-covered issuers; remaining evidence stays in the protected database.
+              </p>
+            )}
+          </div>
+        )}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="SEC accounting quality and model readiness"
+        eyebrow="Phase 2J · original SEC evidence · read-only"
+        description="Accounting semantics, three-year metric availability and share-count comparability. No SEC source figures are cleared for investment scoring."
+        className="mb-6"
+      >
+        {secSemanticError ? (
+          <p className="text-xs text-[var(--negative)]">
+            Semantic quality review unavailable: {secSemanticError.message}
+          </p>
+        ) : !secSemanticAudit ? (
+          <p className="text-xs text-muted-foreground">
+            Loading original SEC financial-semantic diagnostics…
+          </p>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                ["Source history / integrity issues",secSemanticAudit.requiresSourceRepair],
+                ["Missing core annual metrics",secSemanticAudit.missingCoreMetrics],
+                ["Tag/share comparability alerts",secSemanticAudit.shareOrTagReview],
+                ["Approved for scoring",secSemanticAudit.modelReady],
+              ].map(([label,value])=>
+                <div key={String(label)} className="rounded border border-border/70 p-2">
+                  <div className="text-muted-foreground">{label}</div>
+                  <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+                </div>
+              )}
+            </div>
+            <p className="text-muted-foreground">
+              {secSemanticAudit.issuers} issuers checked. Automated source checks
+              do not establish net-income attribution, revenue definition,
+              consolidation perimeter, stock-split adjustments or audited numerical
+              reconciliation. {secSemanticAudit.awaitingReconciliation} have no
+              major automated defects but still require accounting review.
+              Unavailable diagnostics: {secSemanticAudit.unavailable}.
+            </p>
+            <div className="overflow-x-auto rounded border border-border/70">
+              <table className="w-full min-w-[610px] text-left">
+                <thead><tr className="text-muted-foreground">
+                  <th className="p-2">Issuer</th>
+                  <th className="p-2">Semantic status</th>
+                  <th className="p-2">Core metrics (min FY)</th>
+                  <th className="p-2">Evidence requiring review</th>
+                </tr></thead>
+                <tbody>
+                  {secSemanticAudit.rows.slice(0,30).map(r=>
+                    <tr className="border-t border-border/50" key={r.symbol}>
+                      <td className="p-2 font-semibold">{r.symbol}</td>
+                      <td className="p-2">{r.status.replaceAll("_"," ")}</td>
+                      <td className="p-2 tabular-nums">{r.coreYears}/3</td>
+                      <td className="p-2 text-muted-foreground">
+                        {r.diagnostics.length?r.diagnostics.join(" · "):
+                          "Reported tags still require accounting and numerical reconciliation"}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {secSemanticAudit.rows.length>30&&(
+              <p className="text-muted-foreground">
+                Showing the 30 highest-priority issuer reviews; the full review
+                remains in the owner-protected database. Source completeness is
+                not authorisation to update Radar or valuation models.
               </p>
             )}
           </div>
