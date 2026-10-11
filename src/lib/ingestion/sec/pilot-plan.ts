@@ -1,12 +1,18 @@
 /**
- * Pilot only: deliberately varied US sectors and fiscal-year ends.
- * A second button press skips companies with existing SEC ledger filings.
- * Do not confuse this curated cohort with a representative 3,000-stock backfill.
+ * Phase 2E: curated 100-ticker US pilot candidate pool, not a complete SEC
+ * census or valuation universe. The production registry and SEC ticker/CIK
+ * evidence must still verify each candidate before any actual import.
+ * Each manual invocation is bounded to ten unique, eligible companies.
  */
 export const PILOT_SYMBOLS = [
-  "ADBE", "AMZN", "COST", "GOOGL", "JPM",
-  "KO", "LLY", "META", "NFLX", "NVDA",
-  "ORCL", "PG", "TSLA", "UNH", "V",
+  "ADBE", "AMZN", "COST", "GOOGL", "JPM", "KO", "LLY", "META", "NFLX", "NVDA", "ORCL", "PG", "TSLA", "UNH", "V",
+  "AAPL", "MSFT", "AMD", "AVGO", "QCOM", "INTC", "IBM", "CSCO", "TXN", "MU", "AMAT", "KLAC", "LRCX", "SNPS", "CDNS", "CRM", "NOW", "INTU",
+  "BAC", "C", "WFC", "GS", "MS", "BLK", "SCHW", "AXP", "SPGI", "MCO", "CME", "ICE", "COF", "PNC",
+  "WMT", "TGT", "HD", "LOW", "MCD", "SBUX", "NKE", "DIS", "CMCSA", "PEP", "TJX", "ROST", "BKNG", "ABNB", "UBER", "DASH",
+  "JNJ", "PFE", "MRK", "ABBV", "ABT", "TMO", "DHR", "BMY", "AMGN", "GILD", "ISRG", "SYK",
+  "CAT", "DE", "HON", "UNP", "UPS", "FDX", "RTX", "LMT", "NOC", "BA", "MMM", "EMR", "GE",
+  "XOM", "CVX", "COP", "SLB", "VLO", "NEE", "DUK", "SO", "AEP",
+  "PLD", "EQIX", "O",
 ] as const;
 
 export interface SecPilotAsset {
