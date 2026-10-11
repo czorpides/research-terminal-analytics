@@ -6,7 +6,7 @@ import { summarizeSecLedgerIntegrity } from "./quality-summary";
 /** Always recomputed in production before an owner enqueues work.
  * No public client-supplied stock symbols / CIKs are authoritative.
  */
-export async function getSecQueueExpansionPlan() {
+export async function getSecQueueExpansionPlan(maxCandidates:10|100=10) {
   const [assets,source,integrity]=await Promise.all([
     supabaseAdmin.from("assets")
       .select("id,symbol,exchange,currency").eq("active",true)
@@ -59,7 +59,7 @@ export async function getSecQueueExpansionPlan() {
   }
   for(const a of active.data as {asset_id:string}[]??[]) cooldown.add(a.asset_id);
   return planSecControlledWave({
-    mode:"expand",assets:assets.data??[],
+    mode:"expand",maxCandidates,assets:assets.data??[],
     periodsByAsset:periods,coolingAssetIds:cooldown,
     integrityBlockedAssetIds:integrityBlocked,
   });
