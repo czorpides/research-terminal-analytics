@@ -21,7 +21,7 @@ Against the **actual Lovable Cloud production database**, not the unrelated exte
 
 The view is `security_invoker=true`, exposed to `service_role` only; no anonymous or authenticated SELECT. It is separate from the completeness view and **does not** modify observations, ingestion runs, Radar scores, jobs or recommendations.
 
-The Data Health SEC grid now shows the number of issuers requiring structural review and individual per-issuer issue counts. `No structural flags` means internal consistency only; it does **not** certify original figures, fiscal-year applicability, accounting policy, completeness of balance sheet, or investability. Missing/malformed audit data must be labelled `unavailable`, never clean.
+The Data Health server function also re-verifies the owner Supabase Auth token on every read; the token travels in a POST body, not a GET URL. The Data Health SEC grid now shows the number of issuers requiring structural review and individual per-issuer issue counts. `No structural flags` means internal consistency only; it does **not** certify original figures, fiscal-year applicability, accounting policy, completeness of balance sheet, or investability. Missing/malformed audit data must be labelled `unavailable`, never clean.
 
 ## Release order / acceptance checks
 
