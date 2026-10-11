@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chooseSecHistoricFiles } from "./historic-index.ts";
-import { selectSecAnnualFilings } from "./normalize-annual.ts";
+import { selectSecAnnualFilings, indexedSecOriginalAnnualPeriods } from "./normalize-annual.ts";
 import { hasThreeConsecutiveSecYears } from "./pilot-plan.ts";
 
 
@@ -97,4 +97,12 @@ test("targeted selection stays same-CIK and bounded with malformed SEC metadata"
   assert.deepEqual(chosen,["CIK0000019617-submissions-009.json","CIK0000019617-submissions-010.json"]);
   assert.deepEqual(chooseSecHistoricFiles({filings:{files}},cik,2026,0,"2026-02-13"),[]);
   assert.deepEqual(chooseSecHistoricFiles({filings:{files}},320193,2026,4,"2026-02-13"),[]);
+});
+
+test("index presence diagnostic separates official filing metadata from mapped direct facts",()=>{
+ const periods=indexedSecOriginalAnnualPeriods([current.filings.recent,archive]);
+ assert.deepEqual(periods,["2025-12-31","2024-12-31","2023-12-31"]);
+ const noFacts=selectSecAnnualFilings(cik,"JPM",current,{cik,facts:{"us-gaap":{}}},3,[archive]);
+ assert.equal(noFacts.length,0);
+ assert.equal(periods.length,3); // metadata is real even if facts are unknown
 });
