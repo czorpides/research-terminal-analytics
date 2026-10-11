@@ -15,7 +15,7 @@ export const Route = createFileRoute("/api/public/ingest/sec-pilot-candidates")(
 
         try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          const { PILOT_SYMBOLS, pickSecPilotCandidates } = await import(
+          const { PILOT_SYMBOLS, pickSecPilotCandidates, hasThreeConsecutiveSecYears } = await import(
             "@/lib/ingestion/sec/pilot-plan"
           );
           const [assets, source] = await Promise.all([
@@ -32,18 +32,20 @@ export const Route = createFileRoute("/api/public/ingest/sec-pilot-candidates")(
           const candidateIds = (assets.data ?? []).map(row => row.id);
           const previous = candidateIds.length
             ? await supabaseAdmin.from("fundamental_filings")
-                .select("asset_id").eq("source_id", source.data.id)
+                .select("asset_id,period_end").eq("source_id", source.data.id)
                 .in("asset_id", candidateIds)
             : { data: [], error: null };
           if (previous.error) throw new Error("Unable to read existing SEC filing coverage");
-          const periodCounts = new Map<string, number>();
+          const periodCounts = new Map<string,string[]>();
           for (const row of previous.data ?? []) {
-            periodCounts.set(row.asset_id, (periodCounts.get(row.asset_id) ?? 0) + 1);
+            const dates=periodCounts.get(row.asset_id) ?? [];
+            dates.push(String(row.period_end));
+            periodCounts.set(row.asset_id,dates);
           }
-          // An interrupted original 10-K import may have written only one
-          // or two years. Those issuers must remain eligible for a retry.
+          // Distinct rows are not evidence of 3 consecutive fiscal years.
+          // Firms with a missing middle year are still eligible for repair.
           const coveredIds = [...periodCounts.entries()]
-            .filter(([, years]) => years >= 3)
+            .filter(([,years]) => hasThreeConsecutiveSecYears(years))
             .map(([assetId]) => assetId);
           // Without a cooldown, issuers for which SEC exposes only one or
           // two eligible 10-K years will be requested on every next click.
