@@ -1,7 +1,7 @@
 import {
   PILOT_SYMBOLS, hasThreeConsecutiveSecYears,
   type SecPilotAsset,
-} from "./pilot-plan";
+} from "./pilot-plan.ts";
 
 export type SecControlledMode = "repair" | "expand";
 export const SEC_CONTROLLED_LIMITS: Record<SecControlledMode, number> = {
