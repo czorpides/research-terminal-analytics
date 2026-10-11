@@ -210,7 +210,7 @@ export function indexedSecOriginalAnnualPeriods(
     for(let i=0;i<index.accesses.length;i++) {
       if(index.forms[i]!=="10-K" ||
         !isoDate(index.periods[i]) || !isoDate(index.filed[i]) ||
-        !/^\\d{10}-\\d{2}-\\d{6}$/.test(index.accesses[i] ?? ""))continue;
+        !/^\d{10}-\d{2}-\d{6}$/.test(index.accesses[i] ?? ""))continue;
       found.add(index.periods[i]!);
     }
   }
