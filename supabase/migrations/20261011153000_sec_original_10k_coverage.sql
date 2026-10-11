@@ -17,6 +17,7 @@ filing_counts AS (
   SELECT asset_id, count(*)::integer filing_years,
          min(period_end) first_period_end,
          max(period_end) last_period_end,
+         array_agg(period_end ORDER BY period_end DESC) AS recent_year_ends,
          max(known_at) last_observed_at
   FROM filings GROUP BY asset_id
 ),
@@ -45,7 +46,10 @@ SELECT a.id asset_id,a.symbol,
   coalesce(t.total_fact_count,0)::integer total_fact_count,
   coalesce(l.latest_core_count,0)::integer latest_core_count,
   coalesce(l.latest_fact_count,0)::integer latest_fact_count,
-  (c.filing_years>=3) three_year_history_available,
+  (c.filing_years>=3 AND
+    (c.recent_year_ends[1] - c.recent_year_ends[2]) BETWEEN 330 AND 400 AND
+    (c.recent_year_ends[2] - c.recent_year_ends[3]) BETWEEN 330 AND 400
+  ) three_year_history_available,
   (coalesce(l.latest_core_count,0)=4) latest_core_observed
 FROM filing_counts c
 JOIN public.assets a ON a.id=c.asset_id
