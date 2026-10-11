@@ -87,7 +87,9 @@ export async function checkEodhdFinancialEntitlements():Promise<{
       }
     }catch(e){
       result.push({capability:spec.capability,available:false,httpStatus:null,
-        reason:e instanceof Error?e.name:"Network probe failed",itemsReturned:0});
+        reason:e instanceof Error && e.message.includes("redirect refused")
+          ? "Provider redirect blocked; entitlement cannot be verified without forwarding credentials"
+          : e instanceof Error ? e.name : "Network probe failed",itemsReturned:0});
     }
   }
   return {configured:true,capabilities:result};
