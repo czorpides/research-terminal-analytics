@@ -56,3 +56,45 @@ test("three nonconsecutive original 10-K years still require an archive probe", 
   const filled=["2025-12-31","2024-12-31","2023-12-31"];
   assert.equal(hasThreeConsecutiveSecYears(filled),true);
 });
+
+test("targets FY2024 and FY2023 filing-date archive shards instead of four newest",()=>{
+  // Dense issuer: the latest four continuation shards are from late 2026.
+  // Original SEC 10-Ks were filed in February 2025 and February 2024.
+  const files=[
+    ["001","2026-09-01","2026-10-10"],
+    ["002","2026-07-01","2026-08-31"],
+    ["003","2026-05-01","2026-06-30"],
+    ["004","2026-03-01","2026-04-30"],
+    ["005","2025-02-14","2025-02-25"],
+    ["006","2025-01-15","2025-02-13"],
+    ["007","2024-02-16","2024-02-29"],
+    ["008","2024-01-15","2024-02-15"],
+  ].map(([num,filingFrom,filingTo])=>({
+    name:"CIK0000019617-submissions-"+num+".json",
+    filingFrom,filingTo,
+  }));
+  const source={filings:{files}};
+  const oldSelection=chooseSecHistoricFiles(source,cik,2026,4);
+  assert.deepEqual(oldSelection,files.slice(0,4).map(x=>x.name));
+  const targeted=chooseSecHistoricFiles(source,cik,2026,4,"2026-02-13");
+  assert.deepEqual(targeted,[
+    "CIK0000019617-submissions-006.json",
+    "CIK0000019617-submissions-008.json",
+    "CIK0000019617-submissions-005.json",
+    "CIK0000019617-submissions-007.json",
+  ]);
+  assert.equal(targeted.length,4);
+});
+test("targeted selection stays same-CIK and bounded with malformed SEC metadata",()=>{
+  const files=[
+    {name:"CIK0000019617-submissions-010.json",filingFrom:"2024-01-01",filingTo:"2024-03-01"},
+    {name:"CIK0000019617-submissions-009.json",filingFrom:"2025-01-01",filingTo:"2025-03-01"},
+    {name:"CIK9999999999-submissions-001.json",filingFrom:"2024-01-01",filingTo:"2024-03-01"},
+    {name:"CIK0000019617-submissions-008.json",filingFrom:"2026-04-01",filingTo:"2025-01-01"},
+    {name:"CIK0000019617-submissions-007.json",filingFrom:"invalid",filingTo:"2050-01-01"},
+  ];
+  const chosen=chooseSecHistoricFiles({filings:{files}},cik,2026,2,"2026-02-13");
+  assert.deepEqual(chosen,["CIK0000019617-submissions-009.json","CIK0000019617-submissions-010.json"]);
+  assert.deepEqual(chooseSecHistoricFiles({filings:{files}},cik,2026,0,"2026-02-13"),[]);
+  assert.deepEqual(chooseSecHistoricFiles({filings:{files}},320193,2026,4,"2026-02-13"),[]);
+});
