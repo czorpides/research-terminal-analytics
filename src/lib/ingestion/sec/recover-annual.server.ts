@@ -94,7 +94,9 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
       const archives:unknown[]=[];
       let archiveFilesChecked=0;
       if (!hasThreeConsecutiveSecYears(filings.map(f => f.periodEnd))) {
-        const archiveNames=chooseSecHistoricFiles(submissions,cik,new Date().getUTCFullYear(),4);
+        const archiveNames=chooseSecHistoricFiles(
+          submissions,cik,new Date().getUTCFullYear(),4,filings[0]?.filedDate,
+        );
         for(const archiveName of archiveNames) {
           // Exact names are validated by the historic-index helper. The
           // provider URL cannot come from a client payload.
