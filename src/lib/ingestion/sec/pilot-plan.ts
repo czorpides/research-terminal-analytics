@@ -50,3 +50,23 @@ export function pickSecPilotCandidates(
   }
   return out;
 }
+
+/**
+ * An uninterrupted three-year source history requires three most-recent
+ * original year ends roughly one annual reporting cycle apart. Three
+ * arbitrary periods (for example 2021, 2023, 2025) do not meet this gate.
+ */
+export function hasThreeConsecutiveSecYears(periodEnds: readonly string[]): boolean {
+  const dates = [...new Set(periodEnds.filter((value) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    !Number.isNaN(Date.parse(value + "T00:00:00Z")),
+  ))].sort().reverse();
+  if (dates.length < 3) return false;
+  for (let index = 0; index < 2; index++) {
+    const current = Date.parse(dates[index]! + "T00:00:00Z");
+    const previous = Date.parse(dates[index + 1]! + "T00:00:00Z");
+    const days = (current - previous) / 86_400_000;
+    if (days < 330 || days > 400) return false;
+  }
+  return true;
+}
