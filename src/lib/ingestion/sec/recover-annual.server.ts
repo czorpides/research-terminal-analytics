@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { forceManualRedirect, requireNonRedirectResponse } from "@/lib/ingestion/providers/edge-safe-redirect";
 import type { Json } from "@/integrations/supabase/types";
 import { selectSecAnnualFilings, type SecAnnualFiling } from "./normalize-annual";
 
@@ -172,11 +173,11 @@ async function secFetch<T=unknown>(url:string,agent:string):Promise<T> {
   const parsed=new URL(url);
   if(parsed.protocol!=="https:"||!["data.sec.gov","www.sec.gov"].includes(parsed.hostname))
     throw new Error("Rejected external SEC fetch host");
-  const response=await fetch(url,{
-    redirect:"error",
+  const response=await fetch(url,forceManualRedirect({
     headers:{"User-Agent":agent,"Accept":"application/json","Accept-Encoding":"gzip, deflate"},
     signal:AbortSignal.timeout(20000)
-  });
+  }));
+  requireNonRedirectResponse(response,"SEC EDGAR");
   if(!response.ok)throw new Error("SEC HTTP "+response.status+" at "+parsed.pathname);
   const body=await response.text();
   if(body.length>24_000_000)throw new Error("SEC response exceeds bounded limit");
