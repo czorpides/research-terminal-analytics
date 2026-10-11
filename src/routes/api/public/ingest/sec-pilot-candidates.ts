@@ -36,7 +36,15 @@ export const Route = createFileRoute("/api/public/ingest/sec-pilot-candidates")(
                 .in("asset_id", candidateIds)
             : { data: [], error: null };
           if (previous.error) throw new Error("Unable to read existing SEC filing coverage");
-          const coveredIds = (previous.data ?? []).map(row => row.asset_id);
+          const periodCounts = new Map<string, number>();
+          for (const row of previous.data ?? []) {
+            periodCounts.set(row.asset_id, (periodCounts.get(row.asset_id) ?? 0) + 1);
+          }
+          // An interrupted original 10-K import may have written only one
+          // or two years. Those issuers must remain eligible for a retry.
+          const coveredIds = [...periodCounts.entries()]
+            .filter(([, years]) => years >= 3)
+            .map(([assetId]) => assetId);
           const candidates = pickSecPilotCandidates(
             assets.data ?? [], coveredIds, 10,
           );
