@@ -51,8 +51,11 @@ export function planSecControlledWave(input: {
   periodsByAsset: ReadonlyMap<string, readonly string[]>;
   coolingAssetIds: ReadonlySet<string>;
   integrityBlockedAssetIds: ReadonlySet<string>;
+  /** Server-only override for one-time finite 100-name pilot authorization. */
+  maxCandidates?: 10 | 100;
 }): SecControlPlan {
   const { mode, assets, periodsByAsset, coolingAssetIds, integrityBlockedAssetIds } = input;
+  const max = mode === "expand" && input.maxCandidates === 100 ? 100 : SEC_CONTROLLED_LIMITS[mode];
   const candidates: SecPlanCandidate[] = [];
   let verifiedIdentities=0, alreadyCovered=0, incompleteHistory=0, untouched=0;
   let coolingDown=0, integrityBlocked=0;
@@ -74,7 +77,7 @@ export function planSecControlledWave(input: {
     else untouched++;
     if (coolingAssetIds.has(asset.id)) coolingDown++;
     if (integrityBlockedAssetIds.has(asset.id)) integrityBlocked++;
-    if (candidates.length >= SEC_CONTROLLED_LIMITS[mode] ||
+    if (candidates.length >= max ||
         covered || coolingAssetIds.has(asset.id) ||
         integrityBlockedAssetIds.has(asset.id)) continue;
     if ((mode === "repair" && !partial) ||
@@ -90,7 +93,7 @@ export function planSecControlledWave(input: {
     mode, candidates, pilotSize: PILOT_SYMBOLS.length,
     verifiedIdentities, alreadyCovered, incompleteHistory, untouched,
     coolingDown, integrityBlocked, maxPerRequest: 2,
-    maxPerRun: SEC_CONTROLLED_LIMITS[mode],
+    maxPerRun: max,
     status: candidates.length ? "ready" : "none_eligible",
   };
 }

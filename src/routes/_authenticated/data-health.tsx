@@ -55,6 +55,13 @@ function DataHealth() {
   const [ingestResult, setIngestResult] = useState<string | null>(null);
   const [queueAction,setQueueAction]=useState(false);
   const [queueMessage,setQueueMessage]=useState<string|null>(null);
+  const [finitePreview,setFinitePreview]=useState<{
+    candidates:Array<{assetId:string;symbol:string}>;
+    eligible:number;verifiedIdentities:number;curatedPoolSize:number;
+    coveredThreeYear:number;incompleteHistory:number;untouched:number;
+    coolingDown:number;blockedByIntegrity:number;
+  }|null>(null);
+
   const [secPlans, setSecPlans] = useState<{repair:SecControlPlan;expand:SecControlPlan}|null>(null);
 
   const { data } = useQuery({
@@ -242,6 +249,52 @@ function DataHealth() {
     } finally {
       setIngestAction(null);
     }
+  }
+
+  async function previewFiniteSecBackfill() {
+    if(queueAction||ingestAction)return;
+    setQueueAction(true);setFinitePreview(null);setQueueMessage(null);
+    try{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-finite-backfill",{
+        headers,cache:"no-store",
+      });
+      const data=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(data?.error??"SEC backfill preview failed");
+      if(!data||!Array.isArray(data.candidates)||data.eligible!==data.candidates.length||
+         data.eligible>100||!Number.isInteger(data.eligible)||
+         data.candidates.some((x:unknown)=>typeof x!=="object"||x===null||
+           typeof (x as {assetId?:unknown}).assetId!=="string"||
+           typeof (x as {symbol?:unknown}).symbol!=="string"))
+        throw new Error("Malformed finite SEC preview; approval blocked");
+      setFinitePreview(data);
+    }catch(e){
+      setQueueMessage("Finite preview unavailable: "+
+        (e instanceof Error?e.message:"unexpected error"));
+    }finally{setQueueAction(false)}
+  }
+
+  async function approveFiniteSecBackfill() {
+    if(!finitePreview?.candidates.length||queueAction||queueActive||!secQueue)return;
+    setQueueAction(true);setQueueMessage(null);
+    const requested=finitePreview.candidates.map(c=>c.assetId);
+    setFinitePreview(null); // no accidental second approval
+    try{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-finite-backfill",{
+        method:"POST",headers,body:JSON.stringify({assetIds:requested}),
+      });
+      const data=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(data?.error??"Finite authorisation rejected");
+      setQueueMessage("One-time SEC backfill approved: "+data.accepted+
+        " issuers in wave "+data.waveId+
+        ". Work continues even if the browser closes; no further batches are auto-created.");
+      await qc.invalidateQueries({queryKey:["sec-queue-owner"]});
+    }catch(e){
+      setQueueMessage("Finite SEC approval was not accepted: "+
+        (e instanceof Error?e.message:"unexpected error")+
+        ". Preview again to retry.");
+    }finally{setQueueAction(false)}
   }
 
   async function onCreateSecQueue() {
@@ -492,11 +545,50 @@ function DataHealth() {
           </div>
         )}
         {ingestResult && <p role="status" className="mt-3 whitespace-pre-wrap text-xs">{ingestResult}</p>}
+        <div className="mt-3 space-y-2 rounded border border-border/70 p-3 text-xs">
+          <p className="font-semibold">Phase 2I · one-time pilot completion</p>
+          <p className="text-muted-foreground">
+            Preview and approve all remaining eligible, untouched issuers in the fixed
+            100-name SEC pilot with one action. Each company still runs separately
+            through the existing leased worker, rate limits and retry controls.
+            Incomplete filings, ambiguous identities and semantic exceptions
+            are never guessed or added automatically. No financial scoring changes.
+          </p>
+          <Button size="sm" variant="outline"
+            disabled={queueAction||ingestAction!==null||queueActive||!secQueue}
+            onClick={()=>void previewFiniteSecBackfill()}>
+            {queueAction?"Checking…":"Preview remaining eligible SEC issuers"}
+          </Button>
+          {finitePreview&&(
+            <div className="space-y-2 rounded border border-border/50 p-2">
+              <p className="font-semibold">
+                One-time authorisation: {finitePreview.eligible} eligible issuers
+              </p>
+              <p>Verified identities: {finitePreview.verifiedIdentities}/{finitePreview.curatedPoolSize}.
+                Existing three-year histories: {finitePreview.coveredThreeYear}.
+                Incomplete existing history: {finitePreview.incompleteHistory}.
+                Not yet imported: {finitePreview.untouched}.
+                In cooldown: {finitePreview.coolingDown}.
+                QA blocked: {finitePreview.blockedByIntegrity}.</p>
+              <p className="text-muted-foreground">
+                {finitePreview.candidates.map(c=>c.symbol).join(", ")||"No companies eligible."}
+              </p>
+              <Button size="sm" disabled={queueAction||queueActive||!secQueue||
+                finitePreview.eligible===0}
+                onClick={()=>void approveFiniteSecBackfill()}>
+                Approve one-time {finitePreview.eligible}-company SEC backfill
+              </Button>
+              <Button size="sm" variant="outline" disabled={queueAction}
+                onClick={()=>setFinitePreview(null)}>Dismiss preview</Button>
+            </div>
+          )}
+        </div>
         <div className="mt-3 rounded border border-border/70 p-3 text-xs">
           <p className="font-semibold">Phase 2H · persistent SEC queue</p>
           <p className="mt-1 text-muted-foreground">
-            Owner-approved batches only, maximum ten companies per wave. A
-            server-side worker processes one queued issuer at a time. No
+            Owner-approved jobs only: manual waves have a ten-company limit,
+            while a one-time finite backfill may cover the approved remainder.
+            The server-side worker processes one queued issuer at a time. No
             automatic discovery and no Radar score updates. Closing this page
             will not cancel an approved wave.
           </p>
