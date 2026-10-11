@@ -131,7 +131,7 @@ function DataHealth() {
   }
 
   async function onManualSourceAction(kind: "sec" | "eodhd") {
-    if (ingestAction) return;
+    if (ingestAction || (kind==="sec" && queueActive)) return;
     setIngestAction(kind);
     setIngestResult(null);
     try {
@@ -287,7 +287,7 @@ function DataHealth() {
   }
 
   async function onRunSecControlled(mode:SecControlledMode) {
-    if(ingestAction || !secPlans)return;
+    if(ingestAction || queueAction || queueActive || !secPlans)return;
     const approved=secPlans[mode];
     setIngestAction(mode);
     setSecPlans(null); // A second run always requires a fresh, explicit preview.
@@ -475,7 +475,7 @@ function DataHealth() {
                       x.symbol+(mode==="repair"?" ("+x.existingYears+" FY currently)":"")
                     ).join(", ") : "None currently eligible"}</p>
                   <Button size="sm" variant="outline"
-                    disabled={ingestAction!==null || secPlans[mode].candidates.length===0}
+                    disabled={ingestAction!==null || queueAction || queueActive || secPlans[mode].candidates.length===0}
                     onClick={()=>void onRunSecControlled(mode)}
                   >{mode==="repair"?"Run up to 2 history repairs":"Import up to 10 new issuers (browser-dependent)"}</Button>
                   {mode==="expand"&&(
