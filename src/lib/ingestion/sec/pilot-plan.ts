@@ -35,7 +35,7 @@ export function pickSecPilotCandidates(
     const matches = assets.filter(a =>
       a.symbol.toUpperCase() === symbol &&
       a.currency === "USD" &&
-      SEC_US_EXCHANGES.has(a.exchange),
+      a.exchange !== null && SEC_US_EXCHANGES.has(a.exchange),
     );
     // Never guess between ambiguous issuer identities or aliases.
     if (matches.length !== 1 || covered.has(matches[0]!.id)) continue;
