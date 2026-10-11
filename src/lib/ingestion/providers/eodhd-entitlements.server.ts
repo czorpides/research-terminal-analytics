@@ -1,5 +1,6 @@
 import { canUse, recordCall } from "./quota.server";
 import { parseEodhdEarnings } from "@/lib/calendar/providers/eodhd-earnings-normalizer";
+import { forceManualRedirect, requireNonRedirectResponse } from "./edge-safe-redirect";
 
 export interface EodhdCapabilityStatus {
   capability: "annual_income_statements" | "earnings_calendar";
@@ -46,7 +47,8 @@ export async function checkEodhdFinancialEntitlements():Promise<{
     Object.entries(spec.params).forEach(([k,v])=>url.searchParams.set(k,v));
     url.searchParams.set("api_token",key);
     try{
-      const response=await fetch(url,{redirect:"error",signal:AbortSignal.timeout(15_000)});
+      const response=await fetch(url,forceManualRedirect({signal:AbortSignal.timeout(15_000)}));
+      requireNonRedirectResponse(response,"EODHD");
       const status=response.status;
       const statusClass= status===402 || status===403 ? "entitlement" :
         status===429 ? "rate_limit" : status===401 ? "auth" :
