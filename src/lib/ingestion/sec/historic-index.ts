@@ -78,7 +78,7 @@ export function chooseSecHistoricFiles(
   return selected;
 }
 function validDate(v:string):boolean {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(v))return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;
   const date=new Date(v+"T00:00:00Z");
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0,10)===v;
 }
