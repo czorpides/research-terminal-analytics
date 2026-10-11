@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { forceManualRedirect, requireNonRedirectResponse } from "@/lib/ingestion/providers/edge-safe-redirect";
 import type { Json } from "@/integrations/supabase/types";
 import { selectSecAnnualFilings, type SecAnnualFiling } from "./normalize-annual";
+import { chooseSecHistoricFiles } from "./historic-index";
 
 const SEC_BASE = "https://data.sec.gov";
 const SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
@@ -86,7 +87,23 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
       runId=String(run.id);
       const submissions=await secFetch(SEC_BASE+"/submissions/CIK"+padded+".json",agent);
       const companyFacts=await secFetch(SEC_BASE+"/api/xbrl/companyfacts/CIK"+padded+".json",agent);
-      const filings=selectSecAnnualFilings(cik,symbol,submissions,companyFacts,SEC_MAX_ANNUAL);
+      let filings=selectSecAnnualFilings(cik,symbol,submissions,companyFacts,SEC_MAX_ANNUAL);
+      const archives:unknown[]=[];
+      let archiveFilesChecked=0;
+      if (filings.length < SEC_MAX_ANNUAL) {
+        const archiveNames=chooseSecHistoricFiles(submissions,cik,new Date().getUTCFullYear(),4);
+        for(const archiveName of archiveNames) {
+          // Exact names are validated by the historic-index helper. The
+          // provider URL cannot come from a client payload.
+          const archive=await secFetch(SEC_BASE+"/submissions/"+archiveName,agent);
+          archives.push(archive);
+          archiveFilesChecked++;
+          filings=selectSecAnnualFilings(
+            cik,symbol,submissions,companyFacts,SEC_MAX_ANNUAL,archives,
+          );
+          if(filings.length>=SEC_MAX_ANNUAL)break;
+        }
+      }
       let filingsInserted=0,factsInserted=0;
       for(const filing of filings) {
         const counts=await persistSecFiling({assetId,sourceId,cik,filing});
@@ -94,8 +111,12 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
       }
       const status:SecRecoveryResult["status"]=filingsInserted?"updated":
         filings.length?"unchanged":"skipped";
-      const reason=filings.length?"": "No original, report-matched 10-K annual XBRL facts; not inferred";
-      await finishRun(runId,status==="skipped"?"partial":"success",factsInserted,reason);
+      const reason=filings.length < SEC_MAX_ANNUAL
+        ? "Only " + filings.length + "/3 original, accession-matched 10-K years available" +
+          " after checking " + archiveFilesChecked + " historical indexes; missing years not inferred"
+        : "";
+      const terminalStatus = filings.length < SEC_MAX_ANNUAL ? "partial" : "success";
+      await finishRun(runId,terminalStatus,factsInserted,reason);
       results.push({symbol,status,filingsInserted,factsInserted,...(reason?{reason}:{})});
     } catch(e) {
       const reason=e instanceof Error?e.message:String(e);
