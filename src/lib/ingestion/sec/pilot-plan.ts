@@ -12,8 +12,8 @@ export const PILOT_SYMBOLS = [
 export interface SecPilotAsset {
   id: string;
   symbol: string;
-  exchange: string;
-  currency: string;
+  exchange: string | null;
+  currency: string | null;
 }
 export interface SecPilotCandidate {
   assetId: string;
