@@ -77,6 +77,8 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
     const cik=Number(matches[0].cik_str);
     const padded=String(cik).padStart(10,"0");
     let runId:string|null=null;
+    // Keep observed partial writes visible even if a later filing fails.
+    let filingsInserted=0,factsInserted=0;
     try {
       const {data:run,error:runError}=await supabaseAdmin.from("ingestion_runs")
         .insert({
@@ -105,7 +107,6 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
           if(hasThreeConsecutiveSecYears(filings.map(f => f.periodEnd)))break;
         }
       }
-      let filingsInserted=0,factsInserted=0;
       for(const filing of filings) {
         const counts=await persistSecFiling({assetId,sourceId,cik,filing});
         filingsInserted+=counts.filingsInserted;factsInserted+=counts.factsInserted;
@@ -124,8 +125,11 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
       results.push({symbol,status,filingsInserted,factsInserted,...(reason?{reason}:{})});
     } catch(e) {
       const reason=e instanceof Error?e.message:String(e);
-      if(runId) await finishRun(runId,"failed",0,reason);
-      results.push({symbol,status:"failed",filingsInserted:0,factsInserted:0,reason:reason.slice(0,240)});
+      // Earlier original filings in this same issuer pass may already have
+      // committed. Do not report those persisted source facts as zero.
+      if(runId) await finishRun(runId,"failed",factsInserted,reason);
+      results.push({symbol,status:"failed",filingsInserted,factsInserted,
+        reason:reason.slice(0,240)});
     }
   }
   return {results,filingsInserted:results.reduce((a,v)=>a+v.filingsInserted,0),
