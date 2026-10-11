@@ -555,7 +555,7 @@ function DataHealth() {
             are never guessed or added automatically. No financial scoring changes.
           </p>
           <Button size="sm" variant="outline"
-            disabled={queueAction||ingestAction||queueActive||!secQueue}
+            disabled={queueAction||ingestAction!==null||queueActive||!secQueue}
             onClick={()=>void previewFiniteSecBackfill()}>
             {queueAction?"Checking…":"Preview remaining eligible SEC issuers"}
           </Button>
