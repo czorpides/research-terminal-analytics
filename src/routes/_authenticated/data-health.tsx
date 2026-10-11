@@ -72,7 +72,13 @@ function DataHealth() {
   });
   const { data: secEvidence, error: secEvidenceError } = useQuery({
     queryKey: ["sec-official-filing-coverage"],
-    queryFn: () => fetchSecEvidence(),
+    queryFn: async () => {
+      const { data: auth, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = auth.session?.access_token;
+      if (sessionError || !accessToken)
+        throw new Error("Owner sign-in required for SEC evidence audit");
+      return fetchSecEvidence({ data: { accessToken } });
+    },
     refetchInterval: 5 * 60_000,
     retry: 1,
   });
