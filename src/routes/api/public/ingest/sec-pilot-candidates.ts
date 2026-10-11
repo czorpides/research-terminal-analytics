@@ -45,13 +45,42 @@ export const Route = createFileRoute("/api/public/ingest/sec-pilot-candidates")(
           const coveredIds = [...periodCounts.entries()]
             .filter(([, years]) => years >= 3)
             .map(([assetId]) => assetId);
+          // Without a cooldown, issuers for which SEC exposes only one or
+          // two eligible 10-K years will be requested on every next click.
+          // Recent no-progress/error attempts require separate review.
+          const since = new Date(Date.now() - 30*60_000).toISOString();
+          const recentRuns = await supabaseAdmin.from("ingestion_runs")
+            .select("started_at,rows_ingested,details,status")
+            .eq("source_id", source.data.id)
+            .eq("data_category", "fundamentals")
+            .gte("started_at", since)
+            .order("started_at", { ascending: false })
+            .limit(250);
+          if (recentRuns.error) throw new Error("Unable to check SEC retry cooldown");
+          const lastAttempt = new Map<string,{rows:number,status:string}>();
+          for (const run of recentRuns.data ?? []) {
+            const detail = run.details;
+            const id = detail && typeof detail === "object" && !Array.isArray(detail)
+              ? (detail as Record<string,unknown>).assetId : null;
+            if (typeof id !== "string" || lastAttempt.has(id)) continue;
+            lastAttempt.set(id, {
+              rows: Number(run.rows_ingested ?? 0),
+              status: String(run.status),
+            });
+          }
+          const coolingIds = [...lastAttempt.entries()]
+            .filter(([,last]) => last.rows === 0 &&
+              (last.status === "success" || last.status === "partial" ||
+                last.status === "failed"))
+            .map(([id]) => id);
           const candidates = pickSecPilotCandidates(
-            assets.data ?? [], coveredIds, 10,
+            assets.data ?? [], [...coveredIds, ...coolingIds], 10,
           );
           return Response.json({
             candidates,
             pilotSize: PILOT_SYMBOLS.length,
             alreadyCovered: new Set(coveredIds).size,
+            coolingDown: coolingIds.length,
             maxPerRequest: 2,
             status: candidates.length ? "ready" : "pilot_complete_or_unavailable",
           }, { headers: { "Cache-Control": "no-store" } });
