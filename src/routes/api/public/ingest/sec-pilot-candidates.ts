@@ -89,8 +89,8 @@ export const Route = createFileRoute("/api/public/ingest/sec-pilot-candidates")(
           }
           const cooling=new Set<string>();
           for(const [id,last] of lastAttempt) {
-            if(last.status==="running" ||
-               (last.rows===0 && ["success","partial","failed"].includes(last.status)))
+            if(last.status==="running" || last.status==="failed" ||
+               (last.rows===0 && ["success","partial"].includes(last.status)))
               cooling.add(id);
           }
           const plan=planSecControlledWave({
