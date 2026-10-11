@@ -34,8 +34,9 @@ interface DbIntegrityRow {
 }
 
 /** Source diagnostics only: an intact ledger does not prove numerical accuracy. */
-export const getSecEvidenceCoverage = createServerFn({ method: "GET" })
-  .handler(async (): Promise<{
+export const getSecEvidenceCoverage = createServerFn({ method: "POST" })
+  .inputValidator((input: { accessToken?: string }) => input)
+  .handler(async ({ data }): Promise<{
     rows: SecEvidenceCoverageRow[];
     completeThreeYears: number;
     latestCoreObserved: number;
@@ -43,6 +44,16 @@ export const getSecEvidenceCoverage = createServerFn({ method: "GET" })
     integrityReviewIssuers: number;
     integrityUnavailableIssuers: number;
   }> => {
+    // Read-only evidence still needs owner authorization: the server uses the
+    // service-role key, and React route guards alone cannot protect serverFns.
+    // POST keeps the bearer token out of GET URLs and query logs.
+    const { checkOwnerAccess } = await import("@/lib/security/owner-access.server");
+    if (typeof data.accessToken !== "string" || !data.accessToken)
+      throw new Error("Authenticated owner session required for SEC evidence");
+    const owner = await checkOwnerAccess(new Request("https://internal.invalid/sec-coverage", {
+      headers: { Authorization: "Bearer " + data.accessToken },
+    }));
+    if (!owner.ok) throw new Error(owner.error);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [coverage, integrity] = await Promise.all([
       supabaseAdmin
