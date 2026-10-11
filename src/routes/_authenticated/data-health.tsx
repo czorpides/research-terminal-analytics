@@ -53,6 +53,8 @@ function DataHealth() {
   const [running, setRunning] = useState(false);
   const [ingestAction, setIngestAction] = useState<"sec" | "eodhd" | "preview" | "repair" | "expand" | null>(null);
   const [ingestResult, setIngestResult] = useState<string | null>(null);
+  const [queueAction,setQueueAction]=useState(false);
+  const [queueMessage,setQueueMessage]=useState<string|null>(null);
   const [secPlans, setSecPlans] = useState<{repair:SecControlPlan;expand:SecControlPlan}|null>(null);
 
   const { data } = useQuery({
@@ -84,6 +86,23 @@ function DataHealth() {
     refetchInterval: 5 * 60_000,
     retry: 1,
   });
+  const { data: secQueue } = useQuery({
+    queryKey:["sec-queue-owner"],
+    queryFn:async()=>{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-queue",{headers,cache:"no-store"});
+      if(!response.ok)throw new Error("SEC queue unavailable");
+      return await response.json() as {
+        waves:Array<{id:string;state:string;created_at:string}>;
+        jobs:Array<{id:string;wave_id:string;symbol:string;state:string;
+          attempts:number;new_filings:number;new_facts:number;error:string|null}>;
+      };
+    },
+    refetchInterval:20_000,retry:1,
+  });
+  const queueActive=secQueue?.waves?.some(w=>
+    ["queued","running","paused"].includes(w.state))??false;
+
   const { data: growth } = useQuery({
     queryKey: ["stage1-growth-health"],
     queryFn: () => fetchGrowth(),
@@ -112,7 +131,7 @@ function DataHealth() {
   }
 
   async function onManualSourceAction(kind: "sec" | "eodhd") {
-    if (ingestAction) return;
+    if (ingestAction || (kind==="sec" && queueActive)) return;
     setIngestAction(kind);
     setIngestResult(null);
     try {
@@ -225,8 +244,50 @@ function DataHealth() {
     }
   }
 
+  async function onCreateSecQueue() {
+    if(ingestAction||queueAction||queueActive||!secPlans?.expand.candidates.length)return;
+    setQueueAction(true);
+    setQueueMessage(null);
+    try{
+      const {headers}=await secOwnerHeaders();
+      const data={action:"enqueue",
+        assetIds:secPlans.expand.candidates.map(c=>c.assetId)};
+      const response=await fetch("/api/public/ingest/sec-queue",{
+        method:"POST",headers,body:JSON.stringify(data),
+      });
+      const result=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(result?.error??"Queue approval refused");
+      setSecPlans(null);
+      setQueueMessage("Approved "+result.accepted+" issuers in persistent wave "+
+        result.waveId+". You may close the browser; progress is stored.");
+      await qc.invalidateQueries({queryKey:["sec-queue-owner"]});
+    }catch(e){
+      setQueueMessage("Queue approval paused: "+
+        (e instanceof Error?e.message:"Unknown error")+
+        ". No background jobs launched.");
+    }finally{setQueueAction(false)}
+  }
+
+  async function onControlSecQueue(waveId:string,action:"pause"|"resume"|"cancel") {
+    if(queueAction)return;
+    setQueueAction(true);setQueueMessage(null);
+    try{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-queue",{
+        method:"POST",headers,body:JSON.stringify({action,waveId}),
+      });
+      const r=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(r?.error??"Queue action refused");
+      setQueueMessage("SEC wave "+action+" accepted: "+r.state+
+        ". Already-running issuer may finish.");
+      await qc.invalidateQueries({queryKey:["sec-queue-owner"]});
+    }catch(e){
+      setQueueMessage(e instanceof Error?e.message:"Queue action failed");
+    }finally{setQueueAction(false)}
+  }
+
   async function onRunSecControlled(mode:SecControlledMode) {
-    if(ingestAction || !secPlans)return;
+    if(ingestAction || queueAction || queueActive || !secPlans)return;
     const approved=secPlans[mode];
     setIngestAction(mode);
     setSecPlans(null); // A second run always requires a fresh, explicit preview.
@@ -414,15 +475,61 @@ function DataHealth() {
                       x.symbol+(mode==="repair"?" ("+x.existingYears+" FY currently)":"")
                     ).join(", ") : "None currently eligible"}</p>
                   <Button size="sm" variant="outline"
-                    disabled={ingestAction!==null || secPlans[mode].candidates.length===0}
+                    disabled={ingestAction!==null || queueAction || queueActive || secPlans[mode].candidates.length===0}
                     onClick={()=>void onRunSecControlled(mode)}
-                  >{mode==="repair"?"Run up to 2 history repairs":"Import up to 10 new issuers"}</Button>
+                  >{mode==="repair"?"Run up to 2 history repairs":"Import up to 10 new issuers (browser-dependent)"}</Button>
+                  {mode==="expand"&&(
+                    <Button size="sm" variant="secondary"
+                      disabled={ingestAction!==null||queueAction||queueActive||
+                        secPlans.expand.candidates.length===0}
+                      onClick={()=>void onCreateSecQueue()}
+                    >{queueAction?"Saving owner approval…":
+                      "Queue up to 10 for background processing"}</Button>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
         {ingestResult && <p role="status" className="mt-3 whitespace-pre-wrap text-xs">{ingestResult}</p>}
+        <div className="mt-3 rounded border border-border/70 p-3 text-xs">
+          <p className="font-semibold">Phase 2H · persistent SEC queue</p>
+          <p className="mt-1 text-muted-foreground">
+            Owner-approved batches only, maximum ten companies per wave. A
+            server-side worker processes one queued issuer at a time. No
+            automatic discovery and no Radar score updates. Closing this page
+            will not cancel an approved wave.
+          </p>
+          {secQueue?.waves?.length ? secQueue.waves.slice(0,3).map(w=>{
+            const jobs=secQueue.jobs.filter(j=>j.wave_id===w.id);
+            const finished=jobs.filter(j=>["succeeded","partial","failed","cancelled"].includes(j.state)).length;
+            return <div key={w.id} className="mt-3 space-y-1 border-t border-border/50 pt-2">
+              <p className="font-semibold">Wave {w.id.slice(0,8)} · {w.state} ·
+                {" "+finished+"/"+jobs.length+" issuers processed"}</p>
+              <p>{jobs.map(j=>j.symbol+": "+j.state+
+                (j.attempts>1?" (attempt "+j.attempts+"/3)":"")).join(" · ")}</p>
+              <p className="text-muted-foreground">
+                New original 10-K filings: {jobs.reduce((n,j)=>n+j.new_filings,0)};
+                financial facts: {jobs.reduce((n,j)=>n+j.new_facts,0)}.
+              </p>
+              {jobs.filter(j=>j.error).map(j=>
+                <p key={j.id} className="text-[var(--negative)]">
+                  {j.symbol}: {j.error}
+                </p>)}
+              {["queued","running","paused"].includes(w.state)&&
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" disabled={queueAction}
+                    onClick={()=>void onControlSecQueue(w.id,w.state==="paused"?"resume":"pause")}
+                  >{w.state==="paused"?"Resume":"Pause"}</Button>
+                  <Button size="sm" variant="outline" disabled={queueAction}
+                    onClick={()=>void onControlSecQueue(w.id,"cancel")}
+                  >Cancel pending jobs</Button>
+                </div>}
+            </div>;
+          }) : <p className="mt-2 text-muted-foreground">No approved background SEC waves.</p>}
+          {queueMessage&&<p role="status" className="mt-2">{queueMessage}</p>}
+        </div>
+
       </DashboardPanel>
 
       <DashboardPanel
