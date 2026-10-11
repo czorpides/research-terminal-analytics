@@ -331,9 +331,9 @@ function DataHealth() {
       </DashboardPanel>
 
       <DashboardPanel
-        title="SEC filing completeness"
+        title="SEC filing coverage and ledger integrity"
         eyebrow="Read-only evidence audit · not scoring data"
-        description="Shows how many original 10-K years and source-matched core metrics were recovered. Four core metrics observed does not imply a complete annual report."
+        description="Shows recovered original 10-K years, core metric presence and internal ledger consistency. Clean structural checks do not validate the reported figures."
         className="mb-6"
       >
         {secEvidenceError ? (
@@ -344,11 +344,12 @@ function DataHealth() {
           <p className="text-xs text-muted-foreground">Loading SEC evidence completeness…</p>
         ) : (
           <div className="space-y-3 text-xs">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
               {[
                 ["SEC-covered issuers", secEvidence.rows.length],
                 ["At least 3 years", secEvidence.completeThreeYears],
                 ["Latest year has 4 core tags", secEvidence.latestCoreObserved],
+                ["Ledger QA review flags", secEvidence.integrityReviewIssuers],
               ].map(([label, value]) => (
                 <div key={String(label)} className="rounded border border-border/70 p-2">
                   <div className="text-muted-foreground">{label}</div>
@@ -360,6 +361,8 @@ function DataHealth() {
               Incomplete three-year history: {secEvidence.incompleteHistory}. The report
               counts only original SEC filings and observed direct US-GAAP tags.
               Financial sector metrics are not evaluated as industrial-company ratios.
+              Ledger audits unavailable: {secEvidence.integrityUnavailableIssuers}.
+              Zero integrity flags does not validate the amounts against SEC reports.
             </p>
             <div className="overflow-x-auto rounded border border-border/70">
               <table className="w-full min-w-[500px] text-left">
@@ -369,6 +372,7 @@ function DataHealth() {
                   <th className="p-2">Latest core tags / 4</th>
                   <th className="p-2">Total facts</th>
                   <th className="p-2">Newest period</th>
+                  <th className="p-2">Ledger QA</th>
                 </tr></thead>
                 <tbody>
                   {secEvidence.rows.slice(0, 20).map((r) => (
@@ -378,6 +382,10 @@ function DataHealth() {
                       <td className="p-2 tabular-nums">{r.latestCoreCount} / 4</td>
                       <td className="p-2 tabular-nums">{r.totalFacts}</td>
                       <td className="p-2">{r.lastPeriodEnd ?? "unknown"}</td>
+                      <td className={r.ledgerStatus === "review" ? "p-2 text-[var(--negative)]" : "p-2 text-muted-foreground"}>
+                        {r.ledgerStatus === "review" ? `Review (${r.ledgerIssues})` :
+                          r.ledgerStatus === "unavailable" ? "Unavailable" : "No structural flags"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
