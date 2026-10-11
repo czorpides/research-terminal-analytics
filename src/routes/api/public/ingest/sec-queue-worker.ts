@@ -8,6 +8,7 @@ export const Route = createFileRoute("/api/public/ingest/sec-queue-worker")({
   server:{handlers:{POST:async({request})=>{
     const {supabaseAdmin}=await import("@/integrations/supabase/client.server");
     const {timingSafeEqual}=await import("node:crypto");
+    const {retryableSecError,shouldTreatSecAsComplete}=await import("@/lib/ingestion/sec/queue-policy");
     const db=supabaseAdmin as any;
     const supplied=request.headers.get("X-SEC-Queue-Token")??"";
     if(supplied.length!==64||!/^[0-9a-f]{64}$/.test(supplied))
@@ -61,10 +62,13 @@ export const Route = createFileRoute("/api/public/ingest/sec-queue-worker")({
           throw new Error("SEC persisted verification unavailable");
         const flagKeys=["invalid_metadata_filings","empty_filings",
           "duplicate_metrics","inconsistent_fact_rows"] as const;
-        if(flagKeys.some(key=>!Number.isSafeInteger(integrity.data[key])||
-           integrity.data[key]!==0)){
+        const counts=flagKeys.map(key=>Number(integrity.data[key]));
+        if(counts.some(n=>!Number.isSafeInteger(n)||n!==0)){
           outcome="failed";reason="SEC ledger integrity flagged after import";
-        }else if(coverage.data.three_year_history_available===true){
+        }else if(shouldTreatSecAsComplete({
+          originalThreeYears:coverage.data.three_year_history_available,
+          structuralFlags:counts,
+        })){
           outcome="succeeded";
         }else{
           outcome="partial";reason=issuer.reason??"Incomplete original 10-K history";
@@ -91,9 +95,3 @@ export const Route = createFileRoute("/api/public/ingest/sec-queue-worker")({
   }}}
 });
 
-/** Retry only intermittent network/server/rate-limit failures.
- * Semantic SEC/XBRL validation errors require inspection.
- */
-function retryableSecError(reason:string):boolean{
-  return /\b(?:429|50[0-9]|52[0-9])\b|timeout|timed out|fetch failed|network/i.test(reason);
-}
