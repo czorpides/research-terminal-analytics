@@ -4,6 +4,7 @@ import { forceManualRedirect, requireNonRedirectResponse } from "@/lib/ingestion
 import type { Json } from "@/integrations/supabase/types";
 import { selectSecAnnualFilings, type SecAnnualFiling } from "./normalize-annual";
 import { chooseSecHistoricFiles } from "./historic-index";
+import { hasThreeConsecutiveSecYears } from "./pilot-plan";
 
 const SEC_BASE = "https://data.sec.gov";
 const SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
@@ -90,7 +91,7 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
       let filings=selectSecAnnualFilings(cik,symbol,submissions,companyFacts,SEC_MAX_ANNUAL);
       const archives:unknown[]=[];
       let archiveFilesChecked=0;
-      if (filings.length < SEC_MAX_ANNUAL) {
+      if (!hasThreeConsecutiveSecYears(filings.map(f => f.periodEnd))) {
         const archiveNames=chooseSecHistoricFiles(submissions,cik,new Date().getUTCFullYear(),4);
         for(const archiveName of archiveNames) {
           // Exact names are validated by the historic-index helper. The
@@ -101,7 +102,7 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
           filings=selectSecAnnualFilings(
             cik,symbol,submissions,companyFacts,SEC_MAX_ANNUAL,archives,
           );
-          if(filings.length>=SEC_MAX_ANNUAL)break;
+          if(hasThreeConsecutiveSecYears(filings.map(f => f.periodEnd)))break;
         }
       }
       let filingsInserted=0,factsInserted=0;
@@ -111,11 +112,14 @@ export async function recoverSecAnnualFacts(assetIds: string[]): Promise<{
       }
       const status:SecRecoveryResult["status"]=filingsInserted?"updated":
         filings.length?"unchanged":"skipped";
-      const reason=filings.length < SEC_MAX_ANNUAL
-        ? "Only " + filings.length + "/3 original, accession-matched 10-K years available" +
-          " after checking " + archiveFilesChecked + " historical indexes; missing years not inferred"
+      const threeYearHistory=hasThreeConsecutiveSecYears(filings.map(f => f.periodEnd));
+      const reason=!threeYearHistory
+        ? "Incomplete 3-consecutive-year original 10-K history: " +
+          filings.map(f => f.periodEnd).join(", ") +
+          " after checking " + archiveFilesChecked +
+          " historical indexes; unavailable reporting periods not inferred"
         : "";
-      const terminalStatus = filings.length < SEC_MAX_ANNUAL ? "partial" : "success";
+      const terminalStatus=threeYearHistory?"success":"partial";
       await finishRun(runId,terminalStatus,factsInserted,reason);
       results.push({symbol,status,filingsInserted,factsInserted,...(reason?{reason}:{})});
     } catch(e) {
