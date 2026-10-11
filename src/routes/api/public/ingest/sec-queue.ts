@@ -49,9 +49,10 @@ export const Route = createFileRoute("/api/public/ingest/sec-queue")({
             "@/lib/ingestion/sec/queue-plan.server");
           const plan=await getSecQueueExpansionPlan();
           const expected=plan.candidates.map(x=>x.assetId);
-          if(!Array.isArray(body.assetIds)||!expected.length ||
-             expected.length!==body.assetIds.length ||
-             !expected.every((id,i)=>id===body.assetIds![i]))
+          const proposed=body.assetIds;
+          if(!Array.isArray(proposed)||!expected.length ||
+             expected.length!==proposed.length ||
+             !expected.every((id,i)=>id===proposed[i]))
             return Response.json({error:"SEC queue preview stale; refresh and approve current batch"},{
               status:409,
             });
