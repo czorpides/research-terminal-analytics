@@ -6,8 +6,8 @@
 CREATE OR REPLACE VIEW public.sec_model_metric_requirements
 WITH (security_invoker=true) AS
 SELECT * FROM (VALUES
- ('piotroski','STMT_NET_INCOME','Net income',3,'P0','Consolidated vs parent-attributable basis; income and ROA'),
- ('piotroski','STMT_OPERATING_CASH_FLOW','Operating cash flow',3,'P0','Operating activities cash flow: annual duration and continuing businesses'),
+ ('piotroski','STMT_NET_INCOME','Net income',2,'P0','Consolidated vs parent-attributable basis; income and ROA'),
+ ('piotroski','STMT_OPERATING_CASH_FLOW','Operating cash flow',1,'P0','Operating activities cash flow: annual duration and continuing businesses'),
  ('piotroski','STMT_TOTAL_ASSETS','Total assets',3,'P0','Comparable opening/closing total asset denominator'),
  ('piotroski','STMT_REVENUE','Revenue',3,'P0','Issuer top-line scope and banking net revenue differ'),
  ('piotroski','STMT_LONG_TERM_DEBT','Long-term debt',2,'P1','Debt perimeter and liabilities across comparative years'),
@@ -75,6 +75,8 @@ SELECT b.*,
     THEN 'source_history_incomplete'
   WHEN b.model_key='magic_formula' AND b.mapped_industry_code IN ('SEC_FIN','SEC_RE','SEC_UTL')
     THEN 'sector_excluded'
+  WHEN b.metric_code='STMT_WEIGHTED_AVG_SHARES'
+    THEN 'weighted_average_not_year_end_issuance_proxy'
   WHEN b.checked_annual_periods>=b.required_annual_periods
     THEN 'reviewed_evidence_present_not_model_approved'
   WHEN b.observed_annual_periods=0 THEN 'no_eligible_original_tag'
