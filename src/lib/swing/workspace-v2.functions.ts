@@ -15,6 +15,7 @@ import {
   type SwingV2CatalystContext,
 } from "./model-v21";
 import type { SwingBar } from "./model";
+import {buildSwingOpportunityGapAudit,SWING_GAP_WATCHLIST,type SwingOpportunityGapAudit,type SwingGapAuditEvaluation} from "./opportunity-gap-audit";
 import type { SwingExpectationSignal } from "./expectations";
 import {
   PERMANENT_SWING_PRIORITY_SYMBOLS,
@@ -123,6 +124,8 @@ export interface SwingV2Workspace {
     cap: number;
   };
   candidates: SwingV2WorkspaceCandidate[];
+  /** Only present for v2.1 snapshots recomputed after Phase 3A; old cached snapshots may omit. */
+  opportunityGapAudit?: SwingOpportunityGapAudit[];
   methodology: string;
   warnings: string[];
 }
@@ -171,6 +174,11 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     const scores = scoreMap(scorePages.flatMap((page) => page.data ?? []) as unknown as ScoreRow[]);
     const technicalScreen = new Map(screenRows.map((row) => [row.asset_id, row]));
     const selectedIds = selectDeepScanV2(equities, scores, technicalScreen);
+    const watchedEquities=equities.filter(asset=>
+      (SWING_GAP_WATCHLIST as readonly string[]).includes(asset.symbol.toUpperCase()),
+    );
+    const watchedIds=new Set(watchedEquities.map(asset=>asset.id));
+    const gapEvaluations=new Map<string,SwingGapAuditEvaluation>();
     const selectedEquities = equities.filter((asset) => selectedIds.has(asset.id));
     const metals = metalResult.error ? [] : ((metalResult.data ?? []) as AssetRow[]);
     const selectedAssets = [...selectedEquities, ...metals];
@@ -305,6 +313,10 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     const candidates: SwingV2WorkspaceCandidate[] = [];
     for (const asset of selectedAssets) {
       const bars = barsByAsset.get(asset.id) ?? [];
+      if(watchedIds.has(asset.id))gapEvaluations.set(asset.id,{
+        usableBars:bars.length,modelComputed:false,modelScore:null,
+        setupLabel:null,entryState:null,reasons:[],risks:[],
+      });
       if (bars.length < 45) {
         if (isPermanentSwingPriorityAsset(asset.symbol)) {
           warnings.push(`${asset.symbol} has only ${bars.length} usable OHLC bars; permanent metals tracking is not ready.`);
@@ -333,6 +345,11 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
         catalyst,
         macro,
         instrumentType: isMetal ? "commodity" : "equity",
+      });
+      if(watchedIds.has(asset.id)&&setup)gapEvaluations.set(asset.id,{
+        usableBars:bars.length,modelComputed:true,modelScore:setup.rankingScore,
+        setupLabel:setup.setupLabel,entryState:setup.entryState,
+        reasons:[...setup.reasons],risks:[...setup.risks],
       });
       if (!setup) continue;
       // Gold and silver are permanent research assets. Their model score remains
@@ -383,6 +400,17 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
       "",
     );
     const surfaced = surfaceWithPermanentPriority(candidates, 140);
+    const opportunityGapAudit=buildSwingOpportunityGapAudit({
+      asOf:now.toISOString(),
+      assets:watchedEquities.map(asset=>({
+        assetId:asset.id,symbol:asset.symbol,name:asset.name,
+        hasBroadEvidence:technicalScreen.has(asset.id)||hasTechnicalScore(scores.get(asset.id)),
+        technicalScreenAsOf:technicalScreen.get(asset.id)?.as_of??null,
+      })),
+      selectedAssetIds:selectedIds,
+      evaluations:gapEvaluations,
+      shortlistedAssetIds:new Set(surfaced.map(x=>x.assetId)),
+    });
     return {
       asOf: latestDate || new Date().toISOString().slice(0, 10),
       modelVersion: SWING_V2_MODEL_VERSION,
@@ -405,6 +433,7 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
         cap: DEEP_SCAN_CAP,
       },
       candidates: surfaced,
+      opportunityGapAudit,
       methodology:
         "Swing v2.1 is a multi-strategy shadow engine built around tradeability, structure, location, trigger, catalyst and risk/reward. The broad screen allocates deep-scan capacity to 3-6 month lows, drawdowns, negative-to-positive momentum transitions, 200SMA/20SMA/50SMA locations, stabilising damaged names, volume-driven reversals and a smaller clean-breakout lane. Deep analysis combines RSI/MACD, bullish divergence, ADX regime, daily/weekly moving-average confluence, volume contraction then reversal expansion, rejection/engulfing/liquidity-sweep candles, first breakout retests, ATR, structural targets/stops, earnings timing and validated estimate/target revisions. Long-term valuation does not add Swing score. XAUUSD and XAGUSD are permanent priority research assets: they remain in the surfaced observation set without any artificial ranking bonus, and their setup outcomes are tagged against point-in-time real-yield, broad-dollar and volatility conditions. Spot volume is not treated as centralised institutional flow.",
       warnings: unique(warnings).slice(0, 20),
