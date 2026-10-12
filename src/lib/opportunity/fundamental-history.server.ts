@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { eligibleAnnualScoreSourceIds } from "./annual-score-source-policy";
 import {
   STATEMENT_METRICS,
   type AnnualFinancialPeriod,
@@ -33,6 +34,17 @@ export async function loadAnnualFinancialHistory(
   assetIds: string[],
 ): Promise<Map<string, AnnualFinancialPeriod[]>> {
   if (assetIds.length === 0) return new Map();
+
+  // Phase 2J2 scoring embargo: direct original SEC evidence must NOT enter
+  // Piotroski or Magic Formula simply because a background backfill succeeded.
+  // Preserve legacy FMP statement scoring only, until a separate audited
+  // release explicitly approves a comparable SEC accounting taxonomy.
+  const { data: providers, error: providerError } = await supabaseAdmin
+    .from("data_sources").select("id,provider_code")
+    .in("provider_code",["fmp"]);
+  if (providerError) throw providerError;
+  const eligibleSourceIds=eligibleAnnualScoreSourceIds(providers??[]);
+  if (!eligibleSourceIds.length) return new Map();
   const filingData: FilingRow[] = [];
   // Keep every response below the common 1,000-row PostgREST ceiling. A
   // single oversized request could otherwise return a valid but silently
@@ -43,6 +55,7 @@ export async function loadAnnualFinancialHistory(
       .from("fundamental_filings")
       .select("id,asset_id,period_end,known_at,revision_no,is_restatement")
       .in("asset_id", batch)
+      .in("source_id", eligibleSourceIds)
       .eq("fiscal_period", "FY")
       .order("period_end", { ascending: false })
       .order("revision_no", { ascending: false })

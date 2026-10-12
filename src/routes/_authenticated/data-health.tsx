@@ -15,6 +15,7 @@ import { getGrowthHealth } from "@/lib/panels/growth-health.functions";
 import { getFundamentalsPipelineHealth } from "@/lib/panels/fundamentals-health.functions";
 import { getSecEvidenceCoverage } from "@/lib/panels/sec-coverage.functions";
 import { getSecSemanticQualityReview } from "@/lib/panels/sec-semantic-quality.functions";
+import {getSecOriginalBasisEvidence} from "@/lib/panels/sec-basis-evidence.functions";
 import type { SecControlPlan, SecControlledMode } from "@/lib/ingestion/sec/controlled-plan";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,7 @@ function DataHealth() {
   const fetchFundamentals = useServerFn(getFundamentalsPipelineHealth);
   const fetchSecEvidence = useServerFn(getSecEvidenceCoverage);
   const fetchSecSemanticAudit = useServerFn(getSecSemanticQualityReview);
+  const fetchSecBasis = useServerFn(getSecOriginalBasisEvidence);
   const fetchPhase45 = useServerFn(getPhase45Health);
   const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
@@ -102,6 +104,17 @@ function DataHealth() {
       const accessToken=auth.session?.access_token;
       if(error||!accessToken)throw new Error("Owner sign-in required for SEC semantic quality");
       return fetchSecSemanticAudit({data:{accessToken}});
+    },
+    refetchInterval:5*60_000,retry:1,
+  });
+
+  const {data:secBasis,error:secBasisError}=useQuery({
+    queryKey:["sec-accounting-basis-evidence"],
+    queryFn:async()=>{
+      const {data:auth,error}=await supabase.auth.getSession();
+      if(error||!auth.session?.access_token)
+        throw new Error("Owner sign-in required for source-basis review");
+      return fetchSecBasis({data:{accessToken:auth.session.access_token}});
     },
     refetchInterval:5*60_000,retry:1,
   });
@@ -774,6 +787,72 @@ function DataHealth() {
                 not authorisation to update Radar or valuation models.
               </p>
             )}
+          </div>
+        )}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="SEC original filing accounting basis"
+        eyebrow="Phase 2J2 · direct original-filing provenance · scoring embargo"
+        description="Shows how stored source tags should be read and where their reported accounting basis is still ambiguous. No normalized figures or automatic corrections."
+        className="mb-6"
+      >
+        {secBasisError ? (
+          <p className="text-xs text-[var(--negative)]">{secBasisError.message}</p>
+        ) : !secBasis ? (
+          <p className="text-xs text-muted-foreground">Loading source-basis audit…</p>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <p className="text-muted-foreground">
+              Basis ruleset: {secBasis.version}. Every displayed SEC record is
+              excluded from investment scoring until numerical and semantic
+              reconciliation. Missing metrics remain missing.
+            </p>
+            <div className="overflow-x-auto rounded border border-border/70">
+              <table className="w-full min-w-[660px] text-left">
+                <thead><tr className="text-muted-foreground">
+                  <th className="p-2">Company / FY</th>
+                  <th className="p-2">Metric</th>
+                  <th className="p-2">Original SEC tag</th>
+                  <th className="p-2">Accounting basis / caveat</th>
+                  <th className="p-2">Evidence</th>
+                </tr></thead>
+                <tbody>
+                  {secBasis.rows
+                    .filter(x=>x.metricCode==="STMT_REVENUE" ||
+                      x.metricCode==="STMT_NET_INCOME" ||
+                      x.metricCode==="STMT_WEIGHTED_AVG_SHARES")
+                    .sort((a,b)=>{
+                      const priority=(symbol:string)=>
+                        ["WMT","PNC","AVGO","GS","WFC","MS","BLK","SPGI"].indexOf(symbol);
+                      return priority(a.symbol)-priority(b.symbol) ||
+                        b.periodEnd.localeCompare(a.periodEnd) ||
+                        a.metricCode.localeCompare(b.metricCode);
+                    })
+                    .slice(0,50).map(x=>
+                      <tr key={x.symbol+x.periodEnd+x.metricCode}
+                        className="border-t border-border/50">
+                        <td className="p-2 font-semibold">{x.symbol} · {x.periodEnd}</td>
+                        <td className="p-2">{x.metricCode.replace("STMT_","").replaceAll("_"," ")}</td>
+                        <td className="p-2 font-mono text-[10px]">{x.secTag??"not tagged"}</td>
+                        <td className="p-2">
+                          <div>{x.observedBasis.replaceAll("_"," ")}</div>
+                          <p className="text-muted-foreground">{x.unresolvedNote}</p>
+                        </td>
+                        <td className="p-2">{x.sourceUrl?(
+                          <a href={x.sourceUrl} target="_blank" rel="noopener noreferrer"
+                            className="underline">Original 10-K</a>
+                        ):"Source link unavailable"}</td>
+                      </tr>
+                    )}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-muted-foreground">
+              Evidence is displayed as filed, including unadjusted diluted share
+              counts. This table does not infer missing values, bank revenue
+              composition, legal-entity continuity or net-income attribution.
+            </p>
           </div>
         )}
       </DashboardPanel>

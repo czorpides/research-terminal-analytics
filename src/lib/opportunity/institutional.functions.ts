@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { FUNDAMENTAL_METRICS } from "@/lib/ingestion/fundamentals/metrics";
+import {eligibleAnnualScoreSourceIds} from "./annual-score-source-policy";
 import { withAdvancedValuationContext } from "./advanced-valuation";
 import { loadHistoricalValuationHistory } from "./historical-valuation.server";
 import {
@@ -93,6 +94,12 @@ export const getInstitutionalOpportunityWorkspace = createServerFn({ method: "GE
     const industryIds = unique(
       assets.map((asset) => asset.industry_id).filter((value): value is string => Boolean(value)),
     );
+    // Source policy is shared with score calculation: unreconciled original
+    // SEC evidence must not present as ready-made institutional statements.
+    const {data:legacySources,error:legacySourceError}=await supabaseAdmin
+      .from("data_sources").select("id,provider_code").eq("provider_code","fmp");
+    if(legacySourceError)throw legacySourceError;
+    const allowedAnnualSources=eligibleAnnualScoreSourceIds(legacySources??[]);
     const batches = chunkValues(assetIds, 60);
 
     const [fundamentalPages, filingPages, industryResult, historicalValuation] = await Promise.all([
@@ -108,14 +115,16 @@ export const getInstitutionalOpportunityWorkspace = createServerFn({ method: "GE
       ),
       Promise.all(
         batches.map((batch) =>
-          supabaseAdmin
+          allowedAnnualSources.length ? supabaseAdmin
             .from("fundamental_filings")
             .select("asset_id,period_end,known_at,revision_no,is_restatement,raw")
             .in("asset_id", batch)
+            .in("source_id",allowedAnnualSources)
             .eq("fiscal_period", "FY")
             .order("period_end", { ascending: false })
             .order("revision_no", { ascending: false })
-            .limit(batch.length * (MAX_PERIODS_PER_ASSET + 2)),
+            .limit(batch.length * (MAX_PERIODS_PER_ASSET + 2)) :
+            Promise.resolve({data:[],error:null}),
         ),
       ),
       industryIds.length

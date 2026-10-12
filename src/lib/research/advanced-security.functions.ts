@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { FUNDAMENTAL_METRICS } from "@/lib/ingestion/fundamentals/metrics";
+import {eligibleAnnualScoreSourceIds} from "@/lib/opportunity/annual-score-source-policy";
 
 export interface AdvancedPriceBar {
   date: string;
@@ -131,6 +132,14 @@ export const getAdvancedSecurityResearch = createServerFn({ method: "GET" })
     if (assetError) throw assetError;
     if (!asset) return null;
 
+    // The advanced statement preview historically consumed all source
+    // filings. Keep it aligned with the annual scoring embargo: only legacy
+    // statement data appears until SEC basis review is complete.
+    const sourceResult=await db.from("data_sources")
+      .select("id,provider_code").eq("provider_code","fmp");
+    if(sourceResult.error)throw sourceResult.error;
+    const eligibleSources=eligibleAnnualScoreSourceIds(sourceResult.data??[]);
+
     const [industryResult, countryResult, priceResult, fundResult, filingResult, expectationResult, earningsResult, mappingResult] = await Promise.all([
       asset.industry_id
         ? db.from("industries").select("name").eq("id", asset.industry_id).maybeSingle()
@@ -147,13 +156,14 @@ export const getAdvancedSecurityResearch = createServerFn({ method: "GET" })
         .select("metric_code,value_num,as_of")
         .eq("subject_id", data.assetId)
         .in("metric_code", Object.values(FUNDAMENTAL_METRICS)),
-      db.from("fundamental_filings")
+      eligibleSources.length ? db.from("fundamental_filings")
         .select("period_end,known_at,revision_no,is_restatement,raw")
         .eq("asset_id", data.assetId)
+        .in("source_id", eligibleSources)
         .eq("fiscal_period", "FY")
         .order("period_end", { ascending: false })
         .order("revision_no", { ascending: false })
-        .limit(12),
+        .limit(12) : Promise.resolve({data:[],error:null}),
       db.from("analyst_expectation_snapshots")
         .select("provider_code,last_verified_at,confidence,reference_price,fy1_date,fy1_eps_avg,fy1_eps_low,fy1_eps_high,fy1_eps_analysts,fy1_revenue_avg,fy1_revenue_low,fy1_revenue_high,fy1_revenue_analysts,fy2_date,fy2_eps_avg,fy2_revenue_avg,target_consensus,target_median,target_high,target_low,target_last_month_avg,target_last_quarter_avg,target_last_year_avg")
         .eq("asset_id", data.assetId)
