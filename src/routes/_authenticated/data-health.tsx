@@ -114,6 +114,30 @@ function DataHealth() {
     refetchInterval:5*60_000,retry:1,
   });
 
+  const {data:secModelPriorities,error:secModelPrioritiesError}=useQuery({
+    queryKey:["sec-model-metric-priorities-v1"],
+    queryFn:async()=>{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-model-priorities",{
+        headers,cache:"no-store",
+      });
+      if(!response.ok)throw new Error("Model metric dependency review unavailable");
+      return await response.json() as {
+        policy:string;modelScoringEnabled:boolean;
+        automaticModelConsumptionEnabled:boolean;
+        summary:Array<{
+          model_key:string;metric_code:string;metric_label:string;
+          required_annual_periods:number;priority_band:string;
+          accounting_risk:string;covered_issuers:number;
+          complete_history_issuers:number;source_period_coverage_issuers:number;
+          issuer_document_checked_issuers:number;no_tag_issuers:number;
+          history_exceptions:number;unclassified_industries:number;
+        }>;
+      };
+    },
+    refetchInterval:10*60_000,retry:1,
+  });
+
   const {data:secModelReadiness,error:secModelReadinessError}=useQuery({
     queryKey:["sec-model-readiness-coverage"],
     queryFn:async()=>{
@@ -859,6 +883,94 @@ function DataHealth() {
                 not authorisation to update Radar or valuation models.
               </p>
             )}
+          </div>
+        )}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="SEC investment-model metric priorities"
+        eyebrow="Phase 2J5 · actual Piotroski and Magic Formula code dependencies · no scoring"
+        description="Where original SEC data falls short of the financial-statement inputs our existing models really need. Ranked by missing input and accounting-definition risk, not by ticker coverage alone."
+        className="mb-6"
+      >
+        {secModelPrioritiesError ? (
+          <p className="text-xs text-[var(--negative)]">
+            Metric dependency audit unavailable: {secModelPrioritiesError.message}
+          </p>
+        ) : !secModelPriorities ? (
+          <p className="text-xs text-muted-foreground">Loading metric dependencies…</p>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                ["Active SEC models",2],
+                ["Metric dependencies",secModelPriorities.summary.length],
+                ["Zero-covered metrics",secModelPriorities.summary.filter(
+                  x=>x.source_period_coverage_issuers===0).length],
+                ["SEC score-ready metrics",0],
+              ].map(([label,value])=>
+                <div key={String(label)} className="rounded border border-border/70 p-2">
+                  <p className="text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
+                </div>
+              )}
+            </div>
+            <p className="text-muted-foreground">
+              Calculations audited: nine-test Piotroski financial quality and
+              Greenblatt-style Magic Formula. This view does not implement a
+              DCF or replace the separately sourced FUND_PE, EV/EBITDA,
+              ROIC, free-cash-flow-yield and other provider ratio inputs.
+            </p>
+            <div className="overflow-x-auto rounded border border-border/70">
+              <table className="w-full min-w-[750px] text-left">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th className="p-2">Priority</th>
+                    <th className="p-2">Model</th>
+                    <th className="p-2">Required annual input</th>
+                    <th className="p-2">SEC source coverage</th>
+                    <th className="p-2">Issuer-checked</th>
+                    <th className="p-2">Primary accounting risk</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {secModelPriorities.summary.map(x=>
+                    <tr key={x.model_key+x.metric_code}
+                      className="border-t border-border/50">
+                      <td className="p-2 font-semibold">{x.priority_band}</td>
+                      <td className="p-2">
+                        {x.model_key==="piotroski"?"Piotroski":"Magic Formula"}
+                      </td>
+                      <td className="p-2">
+                        <span className="font-semibold">{x.metric_label}</span>
+                        <p className="text-muted-foreground">
+                          {x.required_annual_periods} required original FY
+                          {x.required_annual_periods===1?" observation":" observations"}
+                        </p>
+                      </td>
+                      <td className="p-2 tabular-nums whitespace-nowrap">
+                        {x.source_period_coverage_issuers}/{x.covered_issuers} issuers
+                        <p className="text-muted-foreground">
+                          {x.no_tag_issuers} with no original tag
+                        </p>
+                      </td>
+                      <td className="p-2 tabular-nums">
+                        {x.issuer_document_checked_issuers}/{x.covered_issuers}
+                      </td>
+                      <td className="p-2 text-muted-foreground">{x.accounting_risk}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-muted-foreground">
+              Critical next work: original SEC mapping for EBIT and total debt;
+              gross-profit coverage and definition; year-end share issuance
+              rather than treating diluted weighted-average shares as a
+              substitute; and sector classification before using operating
+              formulas on banks, REITs or utilities. Source-covered does NOT
+              mean issuer-reconciled, sector-comparable or approved for scoring.
+            </p>
           </div>
         )}
       </DashboardPanel>
