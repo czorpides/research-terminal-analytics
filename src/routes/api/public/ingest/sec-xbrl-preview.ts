@@ -66,7 +66,7 @@ export const Route=createFileRoute("/api/public/ingest/sec-xbrl-preview")({
       headers:{"User-Agent":agent,"Accept":"application/json"},
       signal:AbortSignal.timeout(20000),cache:"no-store",
     }));
-    requireNonRedirectResponse(response,"SEC official CompanyFacts");
+    requireNonRedirectResponse(response,"SEC EDGAR");
     if(!response.ok)throw Error("Official SEC XBRL HTTP status "+response.status);
     const raw=await response.text();
     if(raw.length>24_000_000)throw Error("SEC XBRL response exceeds approved bound");
