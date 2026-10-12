@@ -11,7 +11,7 @@ import {
  MAGIC_FORMULA_CALC_VERSION,STATEMENT_METRICS,
  type MagicFormulaRawInput,type MagicFormulaRawResult,
 } from "../../opportunity/fundamental-models.ts";
-import {evaluateSecMagicFormulaDraft,type DraftMagicFormulaAssessment} from "./magic-formula-policy-draft.ts";
+import type {DraftMagicFormulaAssessment} from "./magic-formula-policy-draft.ts";
 import {reviewSecMethodology,type ReviewSubject} from "./sec-methodology-gates.ts";
 import {validateSecIssuerSecondPath} from "./sec-independent-codepath-checks.ts";
 export const SEC_2J23_VERSION="sec.governance.magic_formula_shadow_bridge.v1" as const;
