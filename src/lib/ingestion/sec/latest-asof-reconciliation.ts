@@ -89,6 +89,13 @@ export type Sec2J14Result={
  };
  scenarios:ScenarioRecord[];
  capitalPolicyStatus:"industrial_issuer_pending_operational_liquidity_review"|"software_negative_working_capital_no_generic_roc";
+ softwareTangibleCapitalDiagnostic:null|{
+  cashRetainedMillions:string;
+  cashExcludedMillions:string;
+  cashAndInvestmentsExcludedMillions:string;
+  classifiedAsApprovedCapital:false;
+  warning:string;
+ };
  unresolved:Array<string>;
  controls:{
  asOfDateChecked:true;nonOperatingCashReviewed:false;
@@ -167,6 +174,16 @@ export function getSec2J14Reconciliation(symbol:SecScenarioSymbol):Sec2J14Result
  ]:[
   "no_cash_deduction","liquidity_ceiling_adjusted",
  ];
+ const softwareCapital=isAdobe?
+  currentAssets-currentLiabilities+
+   big(adobe10Q.currentDebt)+operatingCurrent+big(adobe10Q.propertyPlantEquipment):null;
+ const softwareTangibleCapitalDiagnostic=softwareCapital===null?null:{
+  cashRetainedMillions:softwareCapital.toString(),
+  cashExcludedMillions:(softwareCapital-cash).toString(),
+  cashAndInvestmentsExcludedMillions:(softwareCapital-cash-investments).toString(),
+  classifiedAsApprovedCapital:false as const,
+  warning:"Conditional tangible capital excludes unverified finance ROU; intangible/R&D capital and deferred-revenue policies unresolved. No ROC computed.",
+ };
  const scenarios=names.map(assumption=>{
   const proposed=assumption==="no_cash_deduction"?0n:
    assumption==="cash_only_deducted"?cash:
@@ -224,7 +241,7 @@ export function getSec2J14Reconciliation(symbol:SecScenarioSymbol):Sec2J14Result
    shareCountAsOf:meta.sharesAsOf,shareCountFiled:meta.sharesFiled,
    closePriceCents:meta.closeCents,sourceUrl:meta.closeUrl,
    notExactMarketCap:true},
-  scenarios,capitalPolicyStatus:isAdobe?
+  scenarios,softwareTangibleCapitalDiagnostic,capitalPolicyStatus:isAdobe?
    "software_negative_working_capital_no_generic_roc":
    "industrial_issuer_pending_operational_liquidity_review",
   unresolved,
