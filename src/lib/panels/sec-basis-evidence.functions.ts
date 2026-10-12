@@ -45,7 +45,7 @@ export const getSecOriginalBasisEvidence=createServerFn({method:"POST"})
      .order("period_end",{ascending:false})
      .limit(150);
    if(result.error)throw new Error("Original SEC semantic provenance unavailable: "+result.error.message);
-   const rows=(result.data??[] as unknown as DbRow[]).map((r):SecOriginalBasisEvidence=>{
+   const rows=((result.data??[]) as unknown as DbRow[]).map((r):SecOriginalBasisEvidence=>{
      if(r.peer_comparable!==false||r.scoring_eligible!==false||
        r.basis_version!=="sec.original.basis.v1")
        throw new Error("SEC semantic evidence missing conservative gating");
