@@ -1,3 +1,5 @@
+import {assessSecBorrowingSubset, type SecDebtProbe} from "./debt-perimeter-policy.ts";
+
 /**
  * Phase 2J7 - source-only, deterministic SEC CompanyFacts extractor.
  *
@@ -104,25 +106,25 @@ export function extractOriginalSecOperatingPreview(
   const noncurrent=pick(doc,sel,"LongTermDebtNoncurrent","USD");
   const paper=pick(doc,sel,"CommercialPaper","USD");
   const otherShort=pick(doc,sel,"ShortTermBorrowings","USD");
+  const shortDebt=pick(doc,sel,"ShortTermDebtCurrent","USD");
+  const leaseInclusiveLong=pick(doc,sel,"LongTermDebtAndCapitalLeaseObligations","USD");
+  const leaseInclusiveCurrent=pick(doc,sel,"LongTermDebtAndCapitalLeaseObligationsCurrent","USD");
   const parent=pick(doc,sel,"LongTermDebt","USD");
   const principal=pick(doc,sel,
     "LongTermDebtMaturitiesRepaymentsOfPrincipalInNextTwelveMonths","USD");
 
-  const components=[current,noncurrent,paper,otherShort];
-  const componentTags=components.filter(x=>x.status==="found").map(x=>x.tag);
-  const both=current.status==="found"&&noncurrent.status==="found";
-  const extraConflict=paper.status==="found"&&otherShort.status==="found"&&
-    BigInt(paper.value!)>0n&&BigInt(otherShort.value!)>0n;
-  const missingCritical=[current,noncurrent].some(x=>x.status==="missing");
-  const ambiguous=components.some(x=>x.status==="ambiguous")||extraConflict;
-  // LongTermDebt is a parent/aggregate concept. It must NEVER be added
-  // to current or noncurrent components. Principal maturities can differ
-  // from carrying value; they are shown separately but never summed.
-  const status:SecDebtPreview["status"]=ambiguous?"ambiguous":
-    both&&!missingCritical?"components_match":"incomplete";
-  const subtotalUsd=status==="components_match"?
-    components.filter(x=>x.status==="found")
-      .reduce((n,v)=>n+BigInt(v.value!),0n).toString():null;
+  const asProbe=(p:SecFactObservation):SecDebtProbe=>({
+    tag:p.tag,status:p.status,value:p.value,
+  });
+  const decision=assessSecBorrowingSubset(
+    asProbe(current),asProbe(noncurrent),
+    [paper,otherShort,shortDebt].map(asProbe),
+    [leaseInclusiveLong,leaseInclusiveCurrent].map(asProbe),
+  );
+  // Preserve raw observations even if the shared decision refuses a subtotal.
+  const componentTags=decision.componentTags;
+  const status:SecDebtPreview["status"]=decision.status;
+  const subtotalUsd=decision.subtotalUsd;
   const leaseTags=[
     "OperatingLeaseLiabilityCurrent","OperatingLeaseLiabilityNoncurrent",
     "FinanceLeaseLiabilityCurrent","FinanceLeaseLiabilityNoncurrent",
@@ -140,7 +142,7 @@ export function extractOriginalSecOperatingPreview(
     operatingIncome,
     debt:{
       status,subtotalUsd,componentTags,
-      observations:[current,noncurrent,paper,otherShort,parent],
+      observations:[current,noncurrent,paper,otherShort,shortDebt,parent,leaseInclusiveLong,leaseInclusiveCurrent],
       ignoredPrincipalMaturities:principal,
       borrowingScope:"carrying_value_notes_and_separate_short_term_borrowings_excluding_leases",
       modelApproved:false,
