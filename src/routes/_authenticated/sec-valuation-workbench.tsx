@@ -11,6 +11,7 @@ import {
 } from "@/lib/ingestion/sec/valuation-workbench";
 import {SecPriceSensitivity} from "@/components/research/SecPriceSensitivity";
 import {SecLatestAsOfReconciliation} from "@/components/research/SecLatestAsOfReconciliation";
+import {SecEconomicCapitalComparability} from "@/components/research/SecEconomicCapitalComparability";
 
 export const Route=createFileRoute("/_authenticated/sec-valuation-workbench")({
  head:()=>({meta:[{title:"SEC valuation workbench — Research Terminal"},
@@ -193,6 +194,7 @@ function SecValuationWorkbench(){
      • {f}
     </p>)}
    </section>
+   {(symbol==="COST"||symbol==="ADBE")&&<SecEconomicCapitalComparability symbol={symbol}/>}
    {(symbol==="COST"||symbol==="ADBE")&&<SecLatestAsOfReconciliation symbol={symbol}/>}
    {(symbol==="COST"||symbol==="ADBE")&&<SecPriceSensitivity symbol={symbol}/>}
    <section className="mb-5 rounded border border-border/70 bg-card/60 p-4 text-xs">
