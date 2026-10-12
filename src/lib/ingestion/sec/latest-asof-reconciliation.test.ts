@@ -43,6 +43,10 @@ test("Adobe conditional latest-TTM earnings yields reflect updated debt and liqu
  assert.deepEqual(r.scenarios.map(x=>x.operatingEarningsYieldBps),["921","963","976"]);
  assert.deepEqual(r.scenarios.map(x=>x.investmentReturnOnCapitalBps),[null,null,null]);
  assert.equal(r.capitalPolicyStatus,"software_negative_working_capital_no_generic_roc");
+ assert.equal(r.softwareTangibleCapitalDiagnostic?.cashRetainedMillions,"826");
+ assert.equal(r.softwareTangibleCapitalDiagnostic?.cashExcludedMillions,"-3533");
+ assert.equal(r.softwareTangibleCapitalDiagnostic?.cashAndInvestmentsExcludedMillions,"-4813");
+ assert.equal(r.softwareTangibleCapitalDiagnostic?.classifiedAsApprovedCapital,false);
  assert.equal(r.controls.softwareCapitalPolicyApproved,false);
  assert.ok(r.unresolved.some(s=>s.includes("ZERO")||s.includes("zero")||s.includes("hypothetical")));
 });
@@ -51,6 +55,7 @@ test("Costco FY2026 filed October 7 is its latest known original report on the O
  assert.equal(r.financialSource.accession,"0000909832-26-000093");
  assert.equal(r.financialSource.filedDate,"2026-10-07");
  assert.equal(r.financialSource.periodEnd,"2026-08-30");
+ assert.equal(r.softwareTangibleCapitalDiagnostic,null);
  assert.equal(r.earnings.basis,"reported_fy_latest_asof");
  assert.equal(r.earnings.current9MonthsOperatingIncomeMillions,null);
  assert.equal(r.earnings.trailing12MonthsOperatingIncomeMillions,"11685");
