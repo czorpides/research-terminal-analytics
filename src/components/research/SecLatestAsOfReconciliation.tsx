@@ -50,6 +50,17 @@ function Evidence({v}:{v:Sec2J14Result}){
     </tr>)}</tbody>
    </table>
   </div>
+  {v.softwareTangibleCapitalDiagnostic&&<div className="rounded border border-border/60 p-3">
+    <p className="font-semibold">Software-capital suitability: generic ROC blocked</p>
+    <p className="text-muted-foreground mt-1">
+     Conditional tangible capital (USD m): cash retained
+     {' '}{fmt(v.softwareTangibleCapitalDiagnostic.cashRetainedMillions)};
+     cash excluded {fmt(v.softwareTangibleCapitalDiagnostic.cashExcludedMillions)};
+     cash plus short investments excluded
+     {' '}{fmt(v.softwareTangibleCapitalDiagnostic.cashAndInvestmentsExcludedMillions)}.
+    </p>
+    <p className="text-muted-foreground mt-1">{v.softwareTangibleCapitalDiagnostic.warning}</p>
+  </div>}
   <p className="text-muted-foreground">
    These are counterfactual yields on an approximate market-cap proxy, not certified EV
    or investable results. No verified NCI, unrestricted cash, operating liquidity,
