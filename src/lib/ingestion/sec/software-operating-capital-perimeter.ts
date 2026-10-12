@@ -116,6 +116,10 @@ const money=(s:string):bigint=>{
  if(!/^(0|[1-9]\d*)$/.test(s))throw Error("Exact SEC integer USD millions required");
  return BigInt(s);
 };
+const signedMoney=(s:string):bigint=>{
+ if(!/^-?(0|[1-9]\\d*)$/.test(s))throw Error("Invalid signed SEC reconciliation component");
+ return BigInt(s);
+};
 const split=(total:string,current:string|null,longterm:string|null)=>{
  if(current===null||longterm===null)return null;
  return money(current)+money(longterm)===money(total);
@@ -173,7 +177,7 @@ export function evaluateSoftwareOperatingCapitalPerimeter(issuer:SoftwareHoldout
  }
  const check=(name:string,expected:string,items:Array<string|null>):ReconciliationCheck=>{
   const amount=items.some(v=>v===null)?null:
-   items.reduce<bigint>((sum,v)=>sum+money(v!),0n).toString();
+   items.reduce<bigint>((sum,v)=>sum+signedMoney(v!),0n).toString();
   if(amount!==null&&amount!==expected)throw Error("Original SEC balance/notes bridge inconsistent: "+name);
   return {name,expectedMillions:expected,calculatedMillions:amount,
    result:amount===null?"cannot_check" as const:"matched" as const};
