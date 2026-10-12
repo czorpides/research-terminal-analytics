@@ -16,6 +16,7 @@ import { getFundamentalsPipelineHealth } from "@/lib/panels/fundamentals-health.
 import { getSecEvidenceCoverage } from "@/lib/panels/sec-coverage.functions";
 import { getSecSemanticQualityReview } from "@/lib/panels/sec-semantic-quality.functions";
 import {getSecOriginalBasisEvidence} from "@/lib/panels/sec-basis-evidence.functions";
+import {getSecIssuerReconciliationReview} from "@/lib/panels/sec-issuer-reconciliation.functions";
 import type { SecControlPlan, SecControlledMode } from "@/lib/ingestion/sec/controlled-plan";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,7 @@ function DataHealth() {
   const fetchSecEvidence = useServerFn(getSecEvidenceCoverage);
   const fetchSecSemanticAudit = useServerFn(getSecSemanticQualityReview);
   const fetchSecBasis = useServerFn(getSecOriginalBasisEvidence);
+  const fetchIssuerReconciliation = useServerFn(getSecIssuerReconciliationReview);
   const fetchPhase45 = useServerFn(getPhase45Health);
   const fetchCalendar = useServerFn(getReleaseCalendarDashboard);
   const qc = useQueryClient();
@@ -104,6 +106,17 @@ function DataHealth() {
       const accessToken=auth.session?.access_token;
       if(error||!accessToken)throw new Error("Owner sign-in required for SEC semantic quality");
       return fetchSecSemanticAudit({data:{accessToken}});
+    },
+    refetchInterval:5*60_000,retry:1,
+  });
+
+  const {data:issuerEvidence,error:issuerEvidenceError}=useQuery({
+    queryKey:["sec-issuer-reconciliation-evidence"],
+    queryFn:async()=>{
+      const {data:auth,error}=await supabase.auth.getSession();
+      if(error||!auth.session?.access_token)
+        throw new Error("Owner sign-in required for original SEC reconciliation");
+      return fetchIssuerReconciliation({data:{accessToken:auth.session.access_token}});
     },
     refetchInterval:5*60_000,retry:1,
   });
@@ -787,6 +800,80 @@ function DataHealth() {
                 not authorisation to update Radar or valuation models.
               </p>
             )}
+          </div>
+        )}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="Issuer 10-K reconciled evidence"
+        eyebrow="Phase 2J3 · source-checked, not approved for models"
+        description="Explicit original issuer financial statement lines, bank revenue composition and later-filed split-adjusted comparatives. No original SEC facts overwritten."
+        className="mb-6"
+      >
+        {issuerEvidenceError ? (
+          <p className="text-xs text-[var(--negative)]">{issuerEvidenceError.message}</p>
+        ) : !issuerEvidence ? (
+          <p className="text-xs text-muted-foreground">Loading original issuer evidence…</p>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <p className="text-muted-foreground">
+              {issuerEvidence.evidenceCount} issuer-document observations checked
+              under {issuerEvidence.accountingVersion}.
+              None is automatically eligible for investment scoring or model
+              inputs. Later-filed comparatives are distinguished from original
+              year-as-observed values.
+            </p>
+            <div className="overflow-x-auto rounded border border-border/70">
+              <table className="w-full min-w-[720px] text-left">
+                <thead><tr className="text-muted-foreground">
+                  <th className="p-2">Issuer / FY</th>
+                  <th className="p-2">Precisely defined metric</th>
+                  <th className="p-2 text-right">Amount</th>
+                  <th className="p-2">Observation type</th>
+                  <th className="p-2">Evidence</th>
+                </tr></thead>
+                <tbody>
+                  {issuerEvidence.rows.map((r,i)=>
+                    <tr key={r.symbol+r.periodEnd+r.basis+r.accession+i}
+                        className="border-t border-border/50">
+                      <td className="p-2 font-semibold">{r.symbol} · {r.periodEnd}</td>
+                      <td className="p-2">
+                        {r.basis.replaceAll("_"," ")}
+                        <p className="mt-1 text-muted-foreground">{r.label}</p>
+                      </td>
+                      <td className="p-2 text-right tabular-nums whitespace-nowrap">
+                        {(Number(r.value)/1e9).toFixed(3)}bn {r.unit}
+                      </td>
+                      <td className="p-2">
+                        {r.evidenceKind==="later_10k_comparative"?
+                          "Later split-adjusted comparative":"Original annual 10-K"}
+                        <p className="mt-1 text-muted-foreground">{r.caveat}</p>
+                      </td>
+                      <td className="p-2">
+                        {r.sourceUrl?<a href={r.sourceUrl} target="_blank"
+                          rel="noopener noreferrer" className="underline">
+                          SEC filing
+                        </a>:"Link unavailable"}
+                        <p className="font-mono text-[10px]">{r.accession}</p>
+                        {r.evidenceKind==="later_10k_comparative" &&
+                          r.originalPeriodUrl && (
+                            <a href={r.originalPeriodUrl} target="_blank"
+                              rel="noopener noreferrer" className="underline">
+                              Original-year filing
+                            </a>
+                          )}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-muted-foreground">
+              Values are source-observed issuer statements, not automatically
+              approved model inputs. Financial-institution revenue is not
+              equivalent to gross interest income. Raw diluted share counts
+              remain unadjusted in the original SEC fact ledger.
+            </p>
           </div>
         )}
       </DashboardPanel>
