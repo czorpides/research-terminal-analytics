@@ -10,7 +10,7 @@ export const SEC_2J13_SNAPSHOTS = {
   closeCents:"94692",closeAt:"2026-10-09T20:00:00Z",
   closeUrl:"https://investor.costco.com/stock-info/",
   closeCrossCheck:"https://ycharts.com/companies/COST/price",
-  shares:"443129349",sharesAsOf:"2026-09-29",sharesFiled:"2026-10-08",
+  shares:"443129349",sharesAsOf:"2026-09-29",sharesFiled:"2026-10-07",
   sharesUrl:"https://www.sec.gov/Archives/edgar/data/909832/000090983226000093/cost-20260830.htm",
   sharesRounding:"exact" as const,
  },
