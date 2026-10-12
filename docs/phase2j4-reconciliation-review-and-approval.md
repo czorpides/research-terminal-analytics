@@ -17,7 +17,7 @@ Direct original annual 10-K income-statement lines in USD millions:
 | GS | 2024 | 8,056 | 45,456 | 53,512 |
 | GS | 2023 | 6,351 | 39,903 | 46,254 |
 
-These **18 original-year reconciliation rows** join the 17 previously recorded rows, including their issuer-specific period, original SEC accession, source first-observed timestamp and accounting definition. The three named institutions now have verified arithmetic bank revenue bridges for FY2023, FY2024 and FY2025 (9 issuer-years). Current MS original FY2025 top line remains checked, but net-interest and noninterest component validation is incomplete and is not guessed.
+These **18 original-year reconciliation rows** join the 17 previously recorded rows, including their issuer-specific period, original SEC accession, source first-observed timestamp and accounting definition. The three named institutions now have verified arithmetic bank revenue bridges for FY2023, FY2024 and FY2025 (9 issuer-years). Follow-up release: **Morgan Stanley's original FY2023–2025 net revenue components are also now checked in their respective original SEC filings**. Eight additional rows complete its three-year bridge: FY2023 net interest 8,230 / noninterest 45,913 / net revenue 54,143; FY2024 8,611 / 53,150 / 61,761; FY2025 10,046 / 60,599 / 70,645 (USD millions). The existing FY2025 total is reused without duplication. This brings the separate original issuer ledger to **43 observations** and produces six three-year evidence cohorts ready for explicit review.
 
 Official original reports (actual filing-year accessions):
 - PNC 2024: https://www.sec.gov/Archives/edgar/data/713676/000071367625000027/pnc-20241231.htm
@@ -26,6 +26,9 @@ Official original reports (actual filing-year accessions):
 - WFC 2023: https://www.sec.gov/Archives/edgar/data/72971/000007297124000064/wfc-20231231_d2.htm
 - GS 2024: https://www.sec.gov/Archives/edgar/data/886982/000088698225000005/gs-20241231.htm
 - GS 2023: https://www.sec.gov/Archives/edgar/data/886982/000088698224000006/gs-20231231.htm
+- MS 2025: https://www.sec.gov/Archives/edgar/data/895421/000089542126000086/ms-20251231.htm
+- MS 2024: https://www.sec.gov/Archives/edgar/data/895421/000089542125000304/ms-20241231.htm
+- MS 2023: https://www.sec.gov/Archives/edgar/data/895421/000089542124000300/ms-20231231.htm
 
 ## Whole-universe dynamic workbench
 
@@ -59,7 +62,7 @@ Separate `sec_model_review_cases` and append-only `sec_model_review_events`:
 - Security and workflow test: propose/approve/revoke PNC net income, propose Broadcom net income and GS 3-year bank revenue, reject GS net income where original issuer reconciliation is not present. All done inside `BEGIN…ROLLBACK`, **zero resulting production approvals**.
 - CI: TypeScript, SEC original-source tests, Python analytics, Docker container smoke. Merge only green; apply migrations on the production project and assert service-only permissions and no scoring/migration effects.
 - Live owner Data Health table shows source completeness, reconciled years and explicit proposal/review actions. No approvals auto-submitted.
-- Outstanding industry accounting reconciliation: generic issuer revenue for nonbanks, FY2023–25 MS bank net-interest/noninterest bridge, all 97 issuers' net income attribution, assets/cash flow, shares/splits, legal filer changes and missing coverage. Retain these as outstanding work; do not declare all 97 companies numerically audited.
+- Outstanding industry accounting reconciliation: generic issuer revenue for nonbanks, all 97 issuers' net income attribution, assets/cash flow, shares/splits, legal filer changes and missing coverage. Retain these as outstanding work; do not declare all 97 companies numerically audited.
 
 ## Reversibility
 
