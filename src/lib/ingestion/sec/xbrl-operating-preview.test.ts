@@ -53,11 +53,11 @@ const usd=(tag:string,val:string,s:Sample,annual=false,end=s.end)=>{
 function source(s:Sample):SecCompanyFacts{
  const tag=(name:string,value:string|undefined,annual=false,end=s.end)=>
   value===undefined?{}:{[name]:{units:{USD:[usd(name,value,s,annual,end)]}}};
- const shares=(val:string|undefined,date=s.end)=>
+ const shares=(val:string|undefined,date=s.end):Record<string,{units:{shares:Array<{accn:string;end:string;filed:string;form:string;val:number}>}} >=>
   val===undefined?{}:{CommonStockSharesOutstanding:{
    units:{shares:[{accn:s.accn,end:date,filed:"2026-10-01",
    form:"10-K",val:Number(val)}]}}};
- const dei=s.coverShares?{
+ const dei:Record<string,{units:{shares:Array<{accn:string;end:string;filed:string;form:string;val:number}>}}>=s.coverShares?{
   EntityCommonStockSharesOutstanding:{units:{shares:[{
    accn:s.accn,end:s.coverDate!,form:"10-K",
    filed:"2026-10-01",val:Number(s.coverShares)}]}}
