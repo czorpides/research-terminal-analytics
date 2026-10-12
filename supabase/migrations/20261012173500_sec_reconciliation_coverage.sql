@@ -43,10 +43,11 @@ SELECT c.asset_id,c.symbol,c.filing_years,c.three_year_history_available,
    ELSE COALESCE(r.checked_years,0) END AS issuer_document_checked_years,
  CASE
   WHEN NOT c.three_year_history_available THEN 'filing_history_incomplete'
+  WHEN m.eligible_basis IS NOT NULL AND COALESCE(r.checked_years,0)=3
+    THEN 'three_year_evidence_ready_for_owner_review'
   WHEN COALESCE(x.direct_years,0)<3 THEN 'missing_original_tag'
   WHEN m.eligible_basis IS NULL THEN 'basis_policy_not_yet_defined'
-  WHEN COALESCE(r.checked_years,0)<3 THEN 'issuer_statement_review_pending'
-  ELSE 'three_year_evidence_ready_for_owner_review'
+  ELSE 'issuer_statement_review_pending'
  END AS review_stage,
  false AS automatically_model_eligible,
  false AS automatically_score_eligible
