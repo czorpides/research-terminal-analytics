@@ -66,7 +66,7 @@ export type RDRollforward={
  notRestatedGAAP:true;
  onlyAnnualFYNotTTM:true;
  otherEconomicCapitalUnreconciled:true;
- adjustedReturnOnCapital:null;
+ adjustedTTMEarnings:null;adjustedReturnOnCapital:null;
  approvedForIssuerComparisons:false;approvedForScoring:false;storedChanges:0;
 };
 export function annualRDRollforward(issuer:SoftwareHoldout,life:2|3|5):RDRollforward{
@@ -115,7 +115,7 @@ export function annualRDRollforward(issuer:SoftwareHoldout,life:2|3|5):RDRollfor
   illustrativeAdjustedOperatingMarginBps:roundedBps(adjustedMicro,revenue*1000000n),
   revenueMillions:revenue.toString(),identityVerified:true,
   yearEndRecognitionAssumption:true,notRestatedGAAP:true,onlyAnnualFYNotTTM:true,
-  otherEconomicCapitalUnreconciled:true,adjustedReturnOnCapital:null,
+  otherEconomicCapitalUnreconciled:true,adjustedTTMEarnings:null,adjustedReturnOnCapital:null,
   approvedForIssuerComparisons:false,approvedForScoring:false,storedChanges:0,
  };
 }
