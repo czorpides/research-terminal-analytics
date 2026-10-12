@@ -7,6 +7,7 @@
  * Never feed these values to the opportunity engine, model store, or Radar.
  */
 import {evaluateSecEconomicCapitalDraft} from "./economic-capital-comparability-draft.ts";
+import {getSec2J14Reconciliation} from "./latest-asof-reconciliation.ts";
 export const SEC_2J16_VERSION="sec.research.software_holdout_rd_stress.draft.v1.0.0" as const;
 export const SEC_2J16_ASOF="2026-10-09T20:00:00Z" as const;
 const autodesk={
@@ -65,6 +66,7 @@ export function getSoftwareSourceHoldout(symbol:SoftwareIssuer):TtmFinancials{
  const isAdsk=symbol==="ADSK";
  const adobe=evaluateSecEconomicCapitalDraft("ADBE");
  const known=adobe.software;
+ const originalAdobe=getSec2J14Reconciliation("ADBE");
  if(!known)throw Error("Adobe GAAP software baseline unavailable");
  if(autodesk.fy.filed>SEC_2J16_ASOF.slice(0,10)||
     autodesk.interim.filed>SEC_2J16_ASOF.slice(0,10)||
@@ -104,12 +106,12 @@ export function getSoftwareSourceHoldout(symbol:SoftwareIssuer):TtmFinancials{
    operatingLeaseTotalMillions:lease!.toString(),
    cashAndShortInvestmentsMillions:currentLiquid!.toString(),
  }: {
-   currentAssetsMillions:adobe.liquidity.observedLiquidAssetsMillions===undefined?null:"9158",
-   currentLiabilitiesMillions:"11888",
-   deferredRevenueCurrentMillions:"7094",
-   notesAndOtherDebtCarryingMillions:adobe.financing.nonleaseBorrowingCarryingMillions,
+   currentAssetsMillions:originalAdobe.latestBalance.currentAssetsMillions,
+   currentLiabilitiesMillions:originalAdobe.latestBalance.currentLiabilitiesMillions,
+   deferredRevenueCurrentMillions:originalAdobe.latestBalance.deferredRevenueCurrentMillions,
+   notesAndOtherDebtCarryingMillions:originalAdobe.latestBalance.carryingBorrowingsExLeasesMillions,
    operatingLeaseTotalMillions:adobe.financing.operatingLeaseExcludedMillions,
-   cashAndShortInvestmentsMillions:adobe.liquidity.observedLiquidAssetsMillions,
+   cashAndShortInvestmentsMillions:originalAdobe.latestBalance.cashAndInvestmentsMillions,
  };
  if(isAdsk){
   if(d!==3478n||lease!==227n||currentLiquid!==4155n||number(balance!.currentAssets)!==5670n||
