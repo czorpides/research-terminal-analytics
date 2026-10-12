@@ -1,4 +1,5 @@
 import {createServerFn} from "@tanstack/react-start";
+import {verifyBankRevenueBridges} from "@/lib/ingestion/sec/reconciliation-policy";
 
 export interface IssuerReconciliationEvidence {
  symbol:string;periodEnd:string;basis:string;value:string;unit:string;
@@ -25,7 +26,9 @@ export const getSecIssuerReconciliationReview=createServerFn({method:"POST"})
  .inputValidator((data:{accessToken?:string})=>data)
  .handler(async({data}):Promise<{
   rows:IssuerReconciliationEvidence[];
-  evidenceCount:number;accountingVersion:"sec.issuer.reconciliation.v1";
+  evidenceCount:number;
+  bankBridges:ReturnType<typeof verifyBankRevenueBridges>;
+  accountingVersion:"sec.issuer.reconciliation.v1";
   sourceCheckedNotModelReady:true;
  }>=>{
   const {checkOwnerAccess}=await import("@/lib/security/owner-access.server");
@@ -59,6 +62,9 @@ export const getSecIssuerReconciliationReview=createServerFn({method:"POST"})
     eligible:false,
    };
   });
-  return{rows,evidenceCount:rows.length,
+  const bankBridges=verifyBankRevenueBridges(rows.map(r=>({
+   symbol:r.symbol,periodEnd:r.periodEnd,basis:r.basis,value:r.value,
+  })));
+  return{rows,evidenceCount:rows.length,bankBridges,
    accountingVersion:"sec.issuer.reconciliation.v1",sourceCheckedNotModelReady:true};
  });
