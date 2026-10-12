@@ -35,7 +35,7 @@ test("Adobe FY2025 contract acquisition costs and conditional contract assets ca
  assert.equal(v("contract_acquisition_noncurrent"),"464");
  assert.equal(v("contract_assets_total"),"241");
  assert.equal(r.report.contractCostCurrentNoncurrentReconciled,true);
- assert.equal(r.observed.find(f=>f.key==="contract_assets_total")?.classification.includes("do not add"),true);
+ assert.match(r.observed.find(f=>f.key==="contract_assets_total")!.classification,/do not add/i);
  assert.equal(v("deferred_revenue_current"),"6905");
  assert.equal(v("deferred_revenue_noncurrent"),"125");
  assert.equal(v("operating_lease_rou"),"312");
