@@ -23,7 +23,7 @@ const amazon: SecNoteEvidence = {
 };
 const adobe: SecNoteEvidence = {
   cik:796343,accession:"0000796343-26-000003",
-  fiscalEnd:"2025-11-28",filedDate:"2026-01-16",
+  fiscalEnd:"2025-11-28",filedDate:"2026-01-15",
   original10kUrl:"https://www.sec.gov/Archives/edgar/data/796343/000079634326000003/adbe-20251128.htm",
   sector:"nonfinancial",
   operatingIncomeUsd:"8706000000",pretaxIncomeUsd:"8734000000",
