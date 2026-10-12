@@ -10,7 +10,7 @@
 export const LEGACY_SCORED_ANNUAL_PROVIDER_CODES = ["fmp"] as const;
 
 export function eligibleAnnualScoreSourceIds(
-  providers: readonly {id:string;provider_code:string}[],
+  providers: readonly {id:string;provider_code:string|null}[],
 ):string[] {
   const allowed = new Set<string>(LEGACY_SCORED_ANNUAL_PROVIDER_CODES);
   return [...new Set(providers.filter(p=>allowed.has(p.provider_code) &&
