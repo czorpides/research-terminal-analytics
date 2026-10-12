@@ -264,6 +264,20 @@ export const ROUTES: RouteEntry[] = [
     purpose: "Source freshness, ingestion runs, quality gates.",
   },
 
+  {
+    id: "sec-vw",
+    path: "/sec-valuation-workbench",
+    name: "SEC Valuation Workbench",
+    group: "platform",
+    icon: FlaskConical,
+    stage: 4,
+    status: "active",
+    enabled: true,
+    requiredDataSources: ["sec_edgar"],
+    requiredModels: ["sec.magic_formula.operating_capital.draft.v1.0.0"],
+    purpose: "Owner-only original 10-K valuation research, missing-data and policy-sensitivity review. No live scores.",
+  },
+
   // ─── Macro (region × engine matrix, engine-first) ────────────────────────
   {
     id: "ma-ov",
