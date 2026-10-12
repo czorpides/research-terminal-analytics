@@ -41,3 +41,20 @@ test("large dollar integers remain exact and conflicting repeated lines fail",()
  assert.equal(verifyBankRevenueBridges([...rows,
   row("X","bank_net_interest_income","9007199254740994")])[0]?.status,"incomplete");
 });
+
+
+test("MS original 2023–25 net interest plus noninterest equals consolidated net revenue",()=>{
+ const rows=[
+  {symbol:"MS",periodEnd:"2023-12-31",basis:"bank_net_interest_income",value:"8230000000"},
+  {symbol:"MS",periodEnd:"2023-12-31",basis:"bank_noninterest_income",value:"45913000000"},
+  {symbol:"MS",periodEnd:"2023-12-31",basis:"bank_issuer_total_revenue",value:"54143000000"},
+  {symbol:"MS",periodEnd:"2024-12-31",basis:"bank_net_interest_income",value:"8611000000"},
+  {symbol:"MS",periodEnd:"2024-12-31",basis:"bank_noninterest_income",value:"53150000000"},
+  {symbol:"MS",periodEnd:"2024-12-31",basis:"bank_issuer_total_revenue",value:"61761000000"},
+  {symbol:"MS",periodEnd:"2025-12-31",basis:"bank_net_interest_income",value:"10046000000"},
+  {symbol:"MS",periodEnd:"2025-12-31",basis:"bank_noninterest_income",value:"60599000000"},
+  {symbol:"MS",periodEnd:"2025-12-31",basis:"bank_issuer_total_revenue",value:"70645000000"},
+ ];
+ assert.deepEqual(verifyBankRevenueBridges(rows).map(r=>r.status),
+   ["matches","matches","matches"]);
+});
