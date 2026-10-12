@@ -5,7 +5,7 @@ export interface SecOriginalBasisEvidence {
   accession:string;secTag:string|null;
   observedBasis:string;sourceUrl:string|null;
   firstObserved:string;basisVersion:string;
-  originalValue:number|null;unit:string|null;
+  originalValue:string|null;unit:string|null;
   unresolvedNote:string;
   peerComparable:false;scoringEligible:false;
 }
@@ -13,7 +13,7 @@ interface DbRow {
   symbol:string;period_end:string;metric_code:string;
   accession:string;sec_tag:string|null;observed_basis:string;
   source_document_url:string|null;fact_first_observed:string;
-  basis_version:string;original_value:number|null;unit:string|null;
+  basis_version:string;original_value:string|number|null;unit:string|null;
   unresolved_semantic_note:string;
   peer_comparable:boolean;scoring_eligible:boolean;
 }
@@ -52,9 +52,12 @@ export const getSecOriginalBasisEvidence=createServerFn({method:"POST"})
      return{
        symbol:r.symbol,periodEnd:r.period_end,metricCode:r.metric_code,
        accession:r.accession,secTag:r.sec_tag,observedBasis:r.observed_basis,
-       sourceUrl:r.source_document_url,firstObserved:r.fact_first_observed,
+       sourceUrl:typeof r.source_document_url==="string" &&
+         /^https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/\d+\/\d+\/[a-zA-Z0-9_.-]+$/.test(r.source_document_url)
+           ? r.source_document_url : null,
+       firstObserved:r.fact_first_observed,
        basisVersion:"sec.original.basis.v1",
-       originalValue:r.original_value===null?null:Number(r.original_value),
+       originalValue:r.original_value===null?null:String(r.original_value),
        unit:r.unit,unresolvedNote:r.unresolved_semantic_note,
        peerComparable:false,scoringEligible:false,
      };
