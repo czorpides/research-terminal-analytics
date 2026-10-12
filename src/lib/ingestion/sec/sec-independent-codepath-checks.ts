@@ -110,14 +110,14 @@ function amazon():Validation{
  const source="https://www.sec.gov/Archives/edgar/data/1018724/000101872426000004/amzn-20251231.htm";
  const observed=(key:string)=>r.fields.find(f=>f.key===key)?.amountMillions??null;
  const checks=proof([
-  {key:"source.longTermDebtCarryingOnlyUsd",expected:"68396",sourceUrl:source},
-  {key:"source.additionalShortTermCreditFacilitiesUsd",expected:"455",sourceUrl:source},
+  {key:"source.longTermDebtCurrent",expected:"2748",sourceUrl:source},
+  {key:"source.shortTermCreditFacilities",expected:"455",sourceUrl:source},
  ],observed);
  // Explicit note correction must NOT enter as complete combined economic debt.
- const hasTotalBorrowing=observed("financing.borrowingsExcludingAllLeasesUsd");
- checks.push({field:"completeBorrowingNotCertified",expect:"null",
-  actual:hasTotalBorrowing===null?"null":hasTotalBorrowing,
-  pass:hasTotalBorrowing===null,originalUrl:source,independentHumanReviewed:false});
+ const incomplete=r.borrowingPerimeter==="incomplete";
+ checks.push({field:"completeBorrowingNotCertified",expect:"incomplete",
+  actual:r.borrowingPerimeter,pass:incomplete,
+  originalUrl:source,independentHumanReviewed:false});
  const passed=checks.filter(x=>x.pass).length;
  return {subject:"AMZN",version:SEC_2J22_VERSION,checks,passed,
   failed:checks.length-passed,accountSourceConsistency:passed===checks.length,
