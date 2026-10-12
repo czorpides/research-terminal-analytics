@@ -62,11 +62,19 @@ export function SwingOpportunityGapPanel({
        row.progress}</p>
       <p>
        Broad evidence: {row.hasBroadEvidence===null?"Unavailable":row.hasBroadEvidence?"Present":"Missing"}
+       {" · "}Technical screen date: {row.technicalScreenAsOf??"Unavailable"}
+       {" · "}Technical screen freshness: {row.technicalScreenStale===null?"Unverified":row.technicalScreenStale?"Stale / timing inconsistent":"Within 7 calendar days"}
        {" · "}Deep scanned: {row.deepScanned?"Yes":"No"}
        {" · "}Usable OHLC bars: {row.usableBars??"Unknown"}
        {" · "}Setup: {row.shadowSetupName??"Not computed"}
        {" · "}Entry state: {matched?.setup.entryState??row.shadowEntryState??"Not computed"}
       </p>
+      {row.technicalScreenStale===true&&<p className="font-semibold text-amber-600">
+       Dated technical screen is stale relative to this audit. Do not use this score or nomination as a current trade recommendation until the price/technical ingestion pipeline is refreshed.
+      </p>}
+      {matched&&row.shadowSetupScore!==null&&matched.setup.rankingScore!==row.shadowSetupScore&&<p>
+       After evidence-staleness penalties and defensive guards, the surfaced v2.1 ranking is {matched.setup.rankingScore.toFixed(1)} rather than the original pre-guard model score of {row.shadowSetupScore.toFixed(1)}.
+      </p>}
       {row.observedReasons.length>0&&<p>
        <span className="font-semibold">Observed setup evidence:</span>{" "}
        {row.observedReasons.join(" · ")}
