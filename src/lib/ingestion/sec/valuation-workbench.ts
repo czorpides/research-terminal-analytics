@@ -9,7 +9,7 @@ import {
  type Original10KContext,type DraftMagicFormulaEvidence,
  type DraftMagicFormulaAssessment,
 } from "./magic-formula-policy-draft.ts";
-import {MAGIC_FORMULA_CALC_VERSION} from "@/lib/opportunity/fundamental-models";
+import {MAGIC_FORMULA_CALC_VERSION} from "../../opportunity/fundamental-models.ts";
 
 export const SEC_VALUATION_COHORT={
  AMZN:{cik:1018724,accession:"0001018724-26-000004",periodEnd:"2025-12-31",
