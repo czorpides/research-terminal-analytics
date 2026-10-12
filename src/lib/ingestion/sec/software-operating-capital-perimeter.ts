@@ -196,7 +196,7 @@ export function evaluateSoftwareOperatingCapitalPerimeter(issuer:SoftwareHoldout
    money(x.deferredRevenueCurrent)+money(x.deferredRevenueNoncurrent)).toString(),
    [x.deferredRevenueCurrent,x.deferredRevenueNoncurrent]),
  ];
- const lines:Array<{key:string;value:string|null;section:string;disposition:PolicyDisposition;classification:string}>=[
+ const sourceLines:Array<{key:string;value:string|null;section:string;disposition:PolicyDisposition;classification:string}>=[
   {key:"current_assets_reported",value:x.currentAssets,section:"Consolidated balance sheet",disposition:"book_asset_already_in_balance_sheet",classification:"Reported total: includes current contract costs when identified; never add separately"},
   {key:"net_ppe_reported",value:x.netPpe,section:"Consolidated balance sheet",disposition:"book_asset_already_in_balance_sheet",classification:"Net tangible fixed capital; already includes any booked internal-use software within PPE"},
   {key:"goodwill",value:x.goodwill,section:"Consolidated balance sheet and goodwill note",disposition:"book_asset_already_in_balance_sheet",classification:"Acquisition premium; goodwill policy for economic capital not approved"},
@@ -213,7 +213,8 @@ export function evaluateSoftwareOperatingCapitalPerimeter(issuer:SoftwareHoldout
   {key:"operating_lease_noncurrent_liability",value:x.operatingLeaseLiabilityNoncurrent,section:"Consolidated balance sheet",disposition:"book_liability_already_in_balance_sheet",classification:"Excluded EV under draft operating lease rent-income policy"},
   {key:"finance_lease_liability",value:x.financeLeaseLiability,section:issuer==="NOW"?"FY2025 accounting policy Note 1":"FY annual filing lease note",disposition:x.financeLeaseLiability===null?"not_quantified_do_not_impute_zero":"reported_absent",classification:"NOW explicitly discloses NO finance leases; other issuers not cleared to zero"},
   {key:"hypothetical_5y_rd_asset",value:rd.closingAssetMillions,section:"2J17 separate six-year original SEC R&D roll-forward",disposition:"hypothetical_rnd_not_a_gaap_asset",classification:"Counterfactual R&D capital, not automatically additive to already booked development costs"},
- ].map(({key,value,section,disposition,classification})=>({
+ ];
+ const lines:DisclosedFact[]=sourceLines.map(({key,value,section,disposition,classification})=>({
   key,amountMillions:value,sourceSection:section,
   sourceUrl:key==="hypothetical_5y_rd_asset"?rd.sourceOriginalAnnualCohorts[5].original10k:original.sourceUrl,
   disposition,classification,
