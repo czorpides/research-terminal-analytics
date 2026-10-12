@@ -17,6 +17,7 @@ import {SecHistoricalEconomicsReview} from "@/components/research/SecHistoricalE
 import {SecSoftwareCapitalPerimeter} from "@/components/research/SecSoftwareCapitalPerimeter";
 import {SecSoftwareCapitalPolicyMatrix} from "@/components/research/SecSoftwareCapitalPolicyMatrix";
 import {SecSoftwareFYGapReview} from "@/components/research/SecSoftwareFYGapReview";
+import {SecMethodologyReleaseStatus} from "@/components/research/SecMethodologyReleaseStatus";
 
 export const Route=createFileRoute("/_authenticated/sec-valuation-workbench")({
  head:()=>({meta:[{title:"SEC valuation workbench — Research Terminal"},
@@ -199,6 +200,7 @@ function SecValuationWorkbench(){
      • {f}
     </p>)}
    </section>
+   <SecMethodologyReleaseStatus/>
    {symbol==="ADBE"&&<SecSoftwareFYGapReview/>}
    {symbol==="ADBE"&&<SecSoftwareCapitalPolicyMatrix/>}
    {symbol==="ADBE"&&<SecSoftwareCapitalPerimeter/>}
