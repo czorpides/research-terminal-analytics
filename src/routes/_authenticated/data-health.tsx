@@ -61,6 +61,24 @@ function DataHealth() {
   const [ingestResult, setIngestResult] = useState<string | null>(null);
   const [queueAction,setQueueAction]=useState(false);
   const [queueMessage,setQueueMessage]=useState<string|null>(null);
+  const [secXbrlSymbol,setSecXbrlSymbol]=useState("MSFT");
+  const [secXbrlBusy,setSecXbrlBusy]=useState(false);
+  const [secXbrlError,setSecXbrlError]=useState<string|null>(null);
+  const [secXbrlPreview,setSecXbrlPreview]=useState<null|{
+    symbol:string;role:string;originalAccession:string;sourceUrl:string;
+    originalFilingFirstObserved:string;checkedNow:string;
+    preview:{
+      periodEnd:string;operatingIncome:{status:string;value:string|null;tag:string};
+      debt:{status:string;subtotalUsd:string|null;observations:Array<{
+        tag:string;status:string;value:string|null
+      }>;ignoredPrincipalMaturities:{status:string;value:string|null}};
+      yearEndCommonShares:{status:string;value:string|null};
+      coverPageShares:{status:string;value:string|null;end:string|null};
+      coverDateAfterFiscalEnd:boolean;
+      leases:Array<{tag:string;status:string;value:string|null}>;
+      modelEligible:boolean;scoringEligible:boolean;
+    };
+  }>(null);
   const [secReviewNotes,setSecReviewNotes]=useState("");
   const [secReviewBusy,setSecReviewBusy]=useState(false);
   const [secReviewMessage,setSecReviewMessage]=useState<string|null>(null);
@@ -405,6 +423,26 @@ function DataHealth() {
         (e instanceof Error?e.message:"unexpected error")+
         ". Preview again to retry.");
     }finally{setQueueAction(false)}
+  }
+
+  async function previewOriginalSecXbrl(){
+    if(secXbrlBusy)return;
+    setSecXbrlBusy(true);setSecXbrlPreview(null);setSecXbrlError(null);
+    try{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch(
+        "/api/public/ingest/sec-xbrl-preview?symbol="+encodeURIComponent(secXbrlSymbol),
+        {headers,cache:"no-store"},
+      );
+      if(!response.ok)throw new Error("Official SEC source unavailable, issuer accession mismatch or owner session expired");
+      const result=await response.json();
+      if(result?.permittedForScores!==false||result?.permittedForModels!==false||
+         result?.preview?.modelEligible!==false||result?.preview?.scoringEligible!==false)
+        throw new Error("Invalid SEC safety gating");
+      setSecXbrlPreview(result);
+    }catch(e){
+      setSecXbrlError(e instanceof Error?e.message:"SEC preview failed");
+    }finally{setSecXbrlBusy(false)}
   }
 
   async function onSecModelReviewAction(
@@ -905,6 +943,99 @@ function DataHealth() {
             )}
           </div>
         )}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="Official SEC XBRL: live original-filing extraction"
+        eyebrow="Phase 2J7 · explicit single-company manual preview · zero score changes"
+        description="Re-run original SEC XBRL extraction for three verified pilot issuers and three independent holdouts. One bounded official CompanyFacts request per click; no background imports."
+        className="mb-6"
+      >
+        <div className="space-y-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={secXbrlSymbol}
+              className="rounded border border-border bg-background px-3 py-2"
+              onChange={e=>{
+                setSecXbrlSymbol(e.target.value);
+                setSecXbrlPreview(null);setSecXbrlError(null);
+              }}>
+              <optgroup label="Original validated pilot">
+                <option value="MSFT">MSFT · FY2025</option>
+                <option value="GOOGL">GOOGL · FY2025</option>
+                <option value="NVDA">NVDA · FY2026</option>
+              </optgroup>
+              <optgroup label="Independent holdout">
+                <option value="COST">COST · FY2026</option>
+                <option value="ADBE">ADBE · FY2025</option>
+                <option value="TXN">TXN · FY2025</option>
+              </optgroup>
+            </select>
+            <Button variant="outline" size="sm" disabled={secXbrlBusy}
+              onClick={()=>void previewOriginalSecXbrl()}>
+              {secXbrlBusy?"Checking original SEC XBRL…":"Preview original 10-K"}
+            </Button>
+          </div>
+          <p className="text-muted-foreground">
+            This is a source validation workbench, not EBIT/enterprise-value
+            debt normalisation. A status of incomplete or ambiguous is an
+            intentional refusal to guess. Industry and financing/lease policies
+            still require review.
+          </p>
+          {secXbrlError&&<p className="text-[var(--negative)]" role="alert">{secXbrlError}</p>}
+          {secXbrlPreview&&(
+            <div className="rounded border border-border/70 p-3 space-y-2">
+              <p className="font-semibold">
+                {secXbrlPreview.symbol} · {secXbrlPreview.preview.periodEnd} · {
+                  secXbrlPreview.role.replaceAll("_"," ")}
+              </p>
+              <p>Original GAAP operating income (NOT approved EBIT): {
+                secXbrlPreview.preview.operatingIncome.value===null?
+                  secXbrlPreview.preview.operatingIncome.status:
+                  (Number(secXbrlPreview.preview.operatingIncome.value)/1e9).toFixed(3)+"bn USD"}
+              </p>
+              <p>Identified borrowing carrying-value subtotal, excluding leases: {
+                secXbrlPreview.preview.debt.subtotalUsd===null?
+                  secXbrlPreview.preview.debt.status+" — no safe subtotal":
+                  (Number(secXbrlPreview.preview.debt.subtotalUsd)/1e9).toFixed(3)+"bn USD"}
+              </p>
+              <p>Original debt components:</p>
+              <div className="ml-3 text-muted-foreground space-y-1">
+                {secXbrlPreview.preview.debt.observations.map(x=>
+                  <p key={x.tag}>
+                    {x.tag}: {x.value===null?x.status:
+                     (Number(x.value)/1e9).toFixed(3)+"bn USD"}
+                  </p>
+                )}
+                <p>Next-12-month gross principal (not added): {
+                  secXbrlPreview.preview.debt.ignoredPrincipalMaturities.value??"unobserved"}
+                </p>
+              </div>
+              <p>Common stock outstanding at fiscal year-end: {
+                secXbrlPreview.preview.yearEndCommonShares.value??
+                secXbrlPreview.preview.yearEndCommonShares.status} shares
+              </p>
+              <p>DEI cover-page shares: {
+                secXbrlPreview.preview.coverPageShares.value??"unobserved"} · {
+                secXbrlPreview.preview.coverPageShares.end??"no observation"}
+                {secXbrlPreview.preview.coverDateAfterFiscalEnd?
+                  " · AFTER fiscal year-end; not interchangeable":""}
+              </p>
+              <p className="text-muted-foreground">
+                Lease tags are separately reported and excluded from the
+                borrowing subtotal. Missing lease tags are not treated as zero.
+                Split/share-class review remains required.
+              </p>
+              <a href={secXbrlPreview.sourceUrl} target="_blank"
+                rel="noopener noreferrer" className="underline">
+                Open original SEC 10-K
+              </a>
+              <p className="font-mono text-[10px] text-muted-foreground">
+                {secXbrlPreview.originalAccession} · first system observation {
+                  secXbrlPreview.originalFilingFirstObserved}
+              </p>
+            </div>
+          )}
+        </div>
       </DashboardPanel>
 
       <DashboardPanel
