@@ -37,7 +37,7 @@ const adobe10Q={
 const cost10K={
  accession:SEC_VALUATION_COHORT.COST.accession,
  sourceUrl:SEC_VALUATION_COHORT.COST.official10k,
- filedDate:"2026-10-08",
+ filedDate:"2026-10-07",
  periodEnd:"2026-08-30",
  FYoperatingIncome:"11685",
  currentAssets:"46582",currentLiabilities:"43952",
@@ -165,7 +165,7 @@ export function getSec2J14Reconciliation(symbol:SecScenarioSymbol):Sec2J14Result
  const names:ScenarioOption[]=isAdobe?[
   "no_cash_deduction","cash_only_deducted","cash_plus_investments_deducted",
  ]:[
-  "no_cash_deduction","cash_only_deducted","liquidity_ceiling_adjusted",
+  "no_cash_deduction","liquidity_ceiling_adjusted",
  ];
  const scenarios=names.map(assumption=>{
   const proposed=assumption==="no_cash_deduction"?0n:
