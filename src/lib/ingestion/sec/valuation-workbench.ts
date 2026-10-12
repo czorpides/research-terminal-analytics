@@ -10,24 +10,28 @@ import {
  type DraftMagicFormulaAssessment,
 } from "./magic-formula-policy-draft.ts";
 import {MAGIC_FORMULA_CALC_VERSION} from "../../opportunity/fundamental-models.ts";
+import {getIndependentSecReview,type IndependentSecReview} from "./independent-original-10k-review.ts";
 
 export const SEC_VALUATION_COHORT={
  AMZN:{cik:1018724,accession:"0001018724-26-000004",periodEnd:"2025-12-31",
   official10k:"https://www.sec.gov/Archives/edgar/data/1018724/000101872426000004/amzn-20251231.htm",
   operatingIncomeUsd:"79975000000",pretaxIncomeUsd:"97311000000",
   interestExpenseUsd:"2274000000",borrowingUsd:"68396000000",
+  debtScope:"long_term_only_excludes_other_short_facilities",
   sourceSections:"Consolidated Statements of Operations; Note 6 Debt",
  },
  ADBE:{cik:796343,accession:"0000796343-26-000003",periodEnd:"2025-11-28",
   official10k:"https://www.sec.gov/Archives/edgar/data/796343/000079634326000003/adbe-20251128.htm",
   operatingIncomeUsd:"8706000000",pretaxIncomeUsd:"8734000000",
   interestExpenseUsd:"263000000",borrowingUsd:"6210000000",
+  debtScope:"reconciled_carried_debt_subset",
   sourceSections:"Consolidated Statements of Income; Consolidated Balance Sheets; Debt note",
  },
  COST:{cik:909832,accession:"0000909832-26-000093",periodEnd:"2026-08-30",
   official10k:"https://www.sec.gov/Archives/edgar/data/909832/000090983226000093/cost-20260830.htm",
   operatingIncomeUsd:"11685000000",pretaxIncomeUsd:null,
   interestExpenseUsd:null,borrowingUsd:"6162000000",
+  debtScope:"reconciled_carried_debt_subset",
   sourceSections:"Consolidated Statements of Income; Consolidated Balance Sheets and debt note",
  },
 } as const;
@@ -81,6 +85,7 @@ export interface ValuationPreviewResponse {
  originalSourceUrl:string;
  knownAt:string;
  sourceAnchors:Array<{key:string;valueUsd:string|null;section:string;basis:"manual_original_10k_checked"}>;
+ independentSourceReview:IndependentSecReview;
  missingManualFields:SecValuationFieldKey[];
  suppliedManualFields:SecValuationFieldKey[];
  provenanceProblems:string[];
@@ -124,7 +129,7 @@ export function prepareValuationPreview(
  const supplied:SecValuationFieldKey[]=[];
  const balance:Record<string,string|null>={};
  const financing:Record<string,string|null>={
-  borrowingsExcludingAllLeasesUsd:cohort.borrowingUsd,
+  borrowingsExcludingAllLeasesUsd:cohort.debtScope==="reconciled_carried_debt_subset"?cohort.borrowingUsd:null,
  };
  for(const key of Object.keys(supplementary)){
   if(!permitted.has(key))issues.push("Input field not eligible for supplementary transcription: "+key);
@@ -174,7 +179,8 @@ export function prepareValuationPreview(
  const missing=SEC_VALUATION_FIELDS.filter(f=>!supplied.includes(f.key)).map(f=>f.key);
  const known=(key:SecValuationFieldKey)=>supplementary[key]?.valueUsd??null;
  const keys=["balance.currentAssetsUsd","balance.currentLiabilitiesUsd","balance.netPpeUsd"] as const;
- const ready=keys.every(k=>known(k)!==null)&&market!==null&&issues.length===0&&
+ const ready=cohort.debtScope==="reconciled_carried_debt_subset"&&
+  keys.every(k=>known(k)!==null)&&market!==null&&issues.length===0&&
    assessment.problems.length===0;
  let capitalEmployedUsd:string|null=null,enterpriseValueUsd:string|null=null,
     returnOnCapitalBps:string|null=null,earningsYieldBps:string|null=null;
@@ -196,11 +202,22 @@ export function prepareValuationPreview(
   legacyCalculationVersion:MAGIC_FORMULA_CALC_VERSION,
   originalAccession:cohort.accession,originalPeriodEnd:cohort.periodEnd,
   originalSourceUrl:cohort.official10k,knownAt:original.firstObservedAt,
+  independentSourceReview:getIndependentSecReview(symbol),
   sourceAnchors:[
    {key:"earnings.operatingIncomeUsd",valueUsd:cohort.operatingIncomeUsd,section:cohort.sourceSections,basis:"manual_original_10k_checked"},
    {key:"earnings.pretaxIncomeUsd",valueUsd:cohort.pretaxIncomeUsd,section:cohort.sourceSections,basis:"manual_original_10k_checked"},
    {key:"earnings.interestExpenseUsd",valueUsd:cohort.interestExpenseUsd,section:cohort.sourceSections,basis:"manual_original_10k_checked"},
-   {key:"financing.borrowingsExcludingAllLeasesUsd",valueUsd:cohort.borrowingUsd,section:cohort.sourceSections,basis:"manual_original_10k_checked"},
+   {key:cohort.debtScope==="reconciled_carried_debt_subset"?
+       "financing.borrowingsExcludingAllLeasesUsd":"source.longTermDebtCarryingOnlyUsd",
+    valueUsd:cohort.borrowingUsd,section:cohort.sourceSections,basis:"manual_original_10k_checked"},
+   ...(symbol==="AMZN"?[
+     {key:"source.additionalShortTermCreditFacilitiesUsd",
+      valueUsd:"455000000",section:"Note 6 Debt — other short-term credit facilities",
+      basis:"manual_original_10k_checked" as const},
+     {key:"source.identifiedNonleaseBorrowingsMinimumUsd",
+      valueUsd:"68851000000",section:"Note 6 Debt — identifiable borrowing subtotal; other financing obligations unresolved",
+      basis:"manual_original_10k_checked" as const},
+   ]:[]),
   ],
   missingManualFields:missing,suppliedManualFields:supplied,
   provenanceProblems:issues,assessment:{
