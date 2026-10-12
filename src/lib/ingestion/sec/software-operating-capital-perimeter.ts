@@ -117,7 +117,7 @@ const money=(s:string):bigint=>{
  return BigInt(s);
 };
 const signedMoney=(s:string):bigint=>{
- if(!/^-?(0|[1-9]\\d*)$/.test(s))throw Error("Invalid signed SEC reconciliation component");
+ if(!/^-?(0|[1-9]\d*)$/.test(s))throw Error("Invalid signed SEC reconciliation component");
  return BigInt(s);
 };
 const split=(total:string,current:string|null,longterm:string|null)=>{
