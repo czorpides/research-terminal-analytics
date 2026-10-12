@@ -909,12 +909,13 @@ function DataHealth() {
                 </tr></thead>
                 <tbody>
                   {[...secModelReadiness.rows].sort((a,b)=>{
-                    const rank=(v:string)=>({
+                    const rankMap:Record<string,number>={
                       three_year_evidence_ready_for_owner_review:0,
                       filing_history_incomplete:1,missing_original_tag:2,
                       issuer_statement_review_pending:3,
                       basis_policy_not_yet_defined:4,
-                    }[v]??5);
+                    };
+                    const rank=(v:string)=>rankMap[v]??5;
                     return rank(a.review_stage)-rank(b.review_stage)||
                       a.symbol.localeCompare(b.symbol);
                   }).slice(0,35).map(r=>
