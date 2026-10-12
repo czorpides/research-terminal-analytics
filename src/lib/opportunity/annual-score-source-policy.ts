@@ -14,5 +14,5 @@ export function eligibleAnnualScoreSourceIds(
 ):string[] {
   const allowed = new Set<string>(LEGACY_SCORED_ANNUAL_PROVIDER_CODES);
   return [...new Set(providers.filter(p=>allowed.has(p.provider_code) &&
-    /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(p.id)).map(p=>p.id))];
+    /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(p.id)).map(p=>p.id))];
 }
