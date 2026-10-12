@@ -79,6 +79,15 @@ function DataHealth() {
       modelEligible:boolean;scoringEligible:boolean;
     };
   }>(null);
+  const [secLiveSample,setSecLiveSample]=useState("COST");
+  const [secLivePending,setSecLivePending]=useState(false);
+  const [secLiveResult,setSecLiveResult]=useState<null|{
+    symbol:string;sampleKind:string;originalAccession:string;originalPeriod:string;
+    candidates:Array<{kind:string;status:string;amount:string|null;
+      components:Array<{tag:string;value:string}>;caveats:string[]}>;
+    storedChanges:number;modelReady:boolean;scoringEligible:boolean;
+  }>(null);
+  const [secLiveError,setSecLiveError]=useState<string|null>(null);
   const [secReviewNotes,setSecReviewNotes]=useState("");
   const [secReviewBusy,setSecReviewBusy]=useState(false);
   const [secReviewMessage,setSecReviewMessage]=useState<string|null>(null);
@@ -443,6 +452,25 @@ function DataHealth() {
     }catch(e){
       setSecXbrlError(e instanceof Error?e.message:"SEC preview failed");
     }finally{setSecXbrlBusy(false)}
+  }
+
+  async function onPreviewOriginalSecConcepts(){
+    if(secLivePending)return;
+    setSecLivePending(true);setSecLiveResult(null);setSecLiveError(null);
+    try{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-concept-preview",{
+        method:"POST",headers,cache:"no-store",
+        body:JSON.stringify({symbol:secLiveSample}),
+      });
+      const data=await response.json();
+      if(!response.ok)throw new Error(data?.error??"SEC original source unavailable");
+      if(data.modelReady!==false||data.scoringEligible!==false||data.storedChanges!==0)
+        throw new Error("SEC source preview unexpectedly changed permissions");
+      setSecLiveResult(data);
+    }catch(e){
+      setSecLiveError(e instanceof Error?e.message:"SEC preview failed");
+    }finally{setSecLivePending(false)}
   }
 
   async function onSecModelReviewAction(
@@ -1034,6 +1062,74 @@ function DataHealth() {
                   secXbrlPreview.originalFilingFirstObserved}
               </p>
             </div>
+          )}
+        </div>
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="Live SEC original-concept preview"
+        eyebrow="Phase 2J7 · one explicit company · owner-only · no stored changes"
+        description="Fetches one official SEC CompanyFacts document on demand to test candidate extraction. This does not approve EBIT, borrowing totals or shares for investment modelling."
+        className="mb-6"
+      >
+        <div className="space-y-3 text-xs">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="space-y-1">
+              <span className="block text-muted-foreground">Original SEC issuer</span>
+              <select value={secLiveSample} onChange={e=>setSecLiveSample(e.target.value)}
+                className="rounded border border-border bg-background p-2">
+                {["COST","AMZN","ADBE","MSFT","GOOGL","NVDA"].map(t=>
+                  <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <Button size="sm" variant="outline" disabled={secLivePending}
+              onClick={()=>void onPreviewOriginalSecConcepts()}>
+              {secLivePending?"Checking SEC…":"Preview original SEC concepts"}
+            </Button>
+          </div>
+          <p className="text-muted-foreground">
+            COST, AMZN and ADBE are independent candidates; MSFT, GOOGL and
+            NVDA are the original pilot. Exactly one metered SEC request per
+            explicit owner click, no queue or score updates, no automatic jobs.
+          </p>
+          {secLiveError&&<p className="text-[var(--negative)]">{secLiveError}</p>}
+          {secLiveResult&&(
+            <>
+              <p className="font-semibold">{secLiveResult.symbol} · {secLiveResult.originalPeriod}
+                · {secLiveResult.sampleKind.replaceAll("_"," ")}
+              </p>
+              <p className="font-mono text-muted-foreground">
+                Original accession: {secLiveResult.originalAccession}
+              </p>
+              <div className="overflow-x-auto rounded border border-border/70">
+                <table className="w-full min-w-[600px] text-left">
+                  <thead><tr className="text-muted-foreground">
+                    <th className="p-2">Candidate definition</th>
+                    <th className="p-2">Status</th>
+                    <th className="p-2 text-right">Original quantity</th>
+                    <th className="p-2">Exact source tags / caveats</th>
+                  </tr></thead>
+                  <tbody>{secLiveResult.candidates.map(c=>
+                    <tr className="border-t border-border/50" key={c.kind}>
+                      <td className="p-2">{c.kind.replaceAll("_"," ")}</td>
+                      <td className="p-2">{c.status.replaceAll("_"," ")}</td>
+                      <td className="p-2 text-right tabular-nums">
+                        {c.amount??"Not observed"}
+                      </td>
+                      <td className="p-2">
+                        {c.components.map(x=>x.tag+" = "+x.value).join(" · ")}
+                        <p className="text-muted-foreground">{c.caveats.join(" · ")}</p>
+                      </td>
+                    </tr>
+                  )}</tbody>
+                </table>
+              </div>
+              <p className="text-muted-foreground">
+                No automated modelling or scoring is permitted. Compare each
+                candidate with the issuer's actual original 10-K note and
+                accounting statement before accepting it as a reconciled figure.
+              </p>
+            </>
           )}
         </div>
       </DashboardPanel>
