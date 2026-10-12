@@ -41,7 +41,8 @@ test("Adobe FY2025 contract acquisition costs and conditional contract assets ca
  assert.equal(v("operating_lease_rou"),"312");
  assert.equal(v("operating_lease_current_liability"),"77");
  assert.equal(v("operating_lease_noncurrent_liability"),"361");
- assert.equal(v("finance_lease_liability"),null);
+ assert.equal(v("finance_lease_liability"),"0");
+ assert.equal(r.report.separateFinanceLeaseQuantified,true);
  assert.equal(r.report.fiveYearHypotheticalRAndDAssetMillions,"11235.800000");
  assert.equal(r.report.fiveYearHypotheticalAdjustedOperatingIncomeMillions,"9973.600000");
  assert.equal(r.report.auditedBookAssetSubtotalNotAdditionalCapitalMillions,"14385");

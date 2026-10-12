@@ -64,13 +64,13 @@ export const ORIGINAL_SOFTWARE_CAPITAL_EVIDENCE:Record<SoftwareHoldout,IssuerOri
    contractAcquisitionTotal:"721",contractAcquisitionCurrent:"257",contractAcquisitionNoncurrent:"464",
    contractAssets:"241",deferredRevenueCurrent:"6905",deferredRevenueNoncurrent:"125",
    operatingLeaseRou:"312",operatingLeaseLiabilityCurrent:"77",operatingLeaseLiabilityNoncurrent:"361",
-   financeLeaseLiability:null,
+   financeLeaseLiability:"0",
   },
   policy:{
    contractCostDescription:"FY2025 Note 2: costs to obtain customer contracts 721, of which 464 in other assets, remainder embedded in prepaid/current assets; 5-year cost-benefit amortisation.",
    contractAssetDescription:"FY2025 Note 2: conditional customer-contract asset 241, split between prepaid/current and other/long-term assets not separately quantified; do NOT add whole 241 to current assets.",
    developedSoftwareDescription:"Purchased technology net 28 is separately identified within the 495 acquired intangible balance. In-house software development capitalisation is not independently separated.",
-   financeLeaseStatus:"unverified",
+   financeLeaseStatus:"explicit_absence",
   },
  },
  ADSK:{
@@ -211,7 +211,7 @@ export function evaluateSoftwareOperatingCapitalPerimeter(issuer:SoftwareHoldout
   {key:"operating_lease_rou",value:x.operatingLeaseRou,section:"Consolidated balance sheet",disposition:"book_asset_already_in_balance_sheet",classification:"ROU booked outside reported net PPE; baseline GAAP rent-inclusive return policy excludes separate lease financing capital"},
   {key:"operating_lease_current_liability",value:x.operatingLeaseLiabilityCurrent,section:"Consolidated balance sheet",disposition:"book_liability_already_in_balance_sheet",classification:"Already in current liabilities, not additional enterprise value debt under draft rent-inclusive policy"},
   {key:"operating_lease_noncurrent_liability",value:x.operatingLeaseLiabilityNoncurrent,section:"Consolidated balance sheet",disposition:"book_liability_already_in_balance_sheet",classification:"Excluded EV under draft operating lease rent-income policy"},
-  {key:"finance_lease_liability",value:x.financeLeaseLiability,section:issuer==="NOW"?"FY2025 accounting policy Note 1":"FY annual filing lease note",disposition:x.financeLeaseLiability===null?"not_quantified_do_not_impute_zero":"reported_absent",classification:"NOW explicitly discloses NO finance leases; other issuers not cleared to zero"},
+  {key:"finance_lease_liability",value:x.financeLeaseLiability,section:issuer==="NOW"?"FY2025 accounting policy Note 1":"FY annual filing lease note",disposition:x.financeLeaseLiability===null?"not_quantified_do_not_impute_zero":"reported_absent",classification:"Adobe and ServiceNow explicitly disclose no finance leases in original 10-K; Autodesk remains unverified"},
   {key:"hypothetical_5y_rd_asset",value:rd.closingAssetMillions,section:"2J17 separate six-year original SEC R&D roll-forward",disposition:"hypothetical_rnd_not_a_gaap_asset",classification:"Counterfactual R&D capital, not automatically additive to already booked development costs"},
  ];
  const lines:DisclosedFact[]=sourceLines.map(({key,value,section,disposition,classification})=>({
@@ -229,7 +229,7 @@ export function evaluateSoftwareOperatingCapitalPerimeter(issuer:SoftwareHoldout
   original.policy.contractCostDescription,original.policy.contractAssetDescription,
   original.policy.developedSoftwareDescription,
  ];
- if(issuer==="NOW")notes.push("The original 2025 10-K expressly states no financing leases; this issuer-specific absence is not generalised.");
+ if(issuer==="NOW"||issuer==="ADBE")notes.push("The original 10-K explicitly reports no finance leases for this issuer; Autodesk remains unverified.");
  if(issuer==="ADSK")notes.push("A 913m contract-cost asset with unknown current/noncurrent split is not a reason to write either component as zero.");
  const otherAssets=money(x.netPurchasedIntangibles)+money(x.goodwill)+money(x.operatingLeaseRou)+money(x.contractAcquisitionTotal);
  return {
