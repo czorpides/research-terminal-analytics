@@ -45,3 +45,15 @@ Start a **controlled false-negative replay** using the existing `swing_trade_set
 ## CI and rollout
 
 GitHub frontend production build + TypeScript + all `src/lib/swing/*.test.ts` opportunity tests, Python analytics and container smoke must pass before merge. Production deployment, actual current watchlist rows and owner browser verification are **separate** acceptance tasks. This module has no database writes and no SEC dependencies.
+
+## Independent live read-only data observations on 12 October 2026
+
+A read-only query against the connected `research-terminal-analytics` Supabase project confirmed active equity master records for **AAOI, BE, INTC, NBIS and PENG**, while **no asset master row existed with the literal symbol `EOS.AX` or `EOS`**. This does not prove the Australian company is unsupported permanently; exact issuer/exchange mapping would need to be researched and corrected separately.
+
+For each of the five active US equities, `equity_technical_screen.as_of` was **2026-08-07**, not a current October observation. The rows had `bars=295`, but bar count is *historical depth*, not freshness; that 295-session history is not proof of an October daily close. The pipeline must not treat August market prices as October prices or the associated momentum as a live signal.
+
+Phase 3A therefore includes an explicit **dated technical-screen freshness observation** and warns when the screen is older than seven calendar days (or carries an invalid/future source date). Crucially, this does not cause an automatic ticker promotion or change the shadow score. If the technical screen is stale but fresh alternative scored evidence exists, the UI still names the dated technical-screen issue rather than claiming all evidence is necessarily missing.
+
+Read-only SQL alone cannot prove whether the production Swing route refreshed since the last stored technical row or whether the actual full-universe EOD worker ran. Operational acceptance requires reading the existing Swing Runtime Trust Gate, monitor heartbeat and EOD ingestion logs; do not infer an operational engine from these historical rows.
+
+**Next operational task:** Reconcile the scheduler, FMP/EODHD provider access, bulk daily ingestion, backfill and technical screen as-of across all active equities. Never force historical prices to a newer date. A separate issue tracks the stale data rather than hiding the problem with higher model scores.
