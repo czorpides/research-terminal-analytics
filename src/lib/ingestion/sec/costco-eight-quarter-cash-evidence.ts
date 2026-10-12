@@ -51,7 +51,9 @@ export function getCostcoOriginalEightQuarterCash(){
    firstSeenAtExactSECInstant:null,
   };
  });
- const previous=new Map(prior.observedQuarters.map(q=>[q.observedAt,q]));
+ const previous=new Map<string,(typeof prior.observedQuarters)[number]>(
+  prior.observedQuarters.map(q=>[q.observedAt,q]),
+ );
  for(const q of series){
   const prev=previous.get(q.periodEnd);
   if(prev&&(prev.liquidBookAssetsMillions!==q.reportedLiquidAssetsMillions||
