@@ -35,7 +35,7 @@ INSERT INTO public.sec_issuer_reconciliations(
 )
 SELECT a.id,l.period_end::date,l.basis,'USD',
  l.amount_m::numeric*1000000,f.id,f.id,'original_period_10k',
- l.caption,'Original '+l.period_end+' Form 10-K consolidated income statement',
+ l.caption,'Original '||l.period_end||' Form 10-K consolidated income statement',
  'Consolidated issuer bank net revenue components. GAAP net interest income is after interest expense; noninterest income includes other operating lines. Neither equals industrial-company gross sales or total interest income.',
  (SELECT ff.id FROM public.fundamental_facts ff
     WHERE ff.filing_id=f.id
