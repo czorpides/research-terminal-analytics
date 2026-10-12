@@ -186,9 +186,7 @@ export function reconcileSoftwareFiscalEvidence(issuer:SoftwareHoldout){
   leaseFinancingInterest:observed(null,"No separate verified lease interest expense for operating leases",x.sourceUrl),
   reportedRestrictedCashOutsideEquivalents:observed(o.identifiableRestrictedCashOutsideCashAndEquivalents,
    "Original FY operating cash-flow reconciliation; included in prepaid/other assets if observed",x.sourceUrl),
-  contractAssetCurrentSplit:observed(
-   orig.observed.find(y=>y.key==="contract_assets_total")?.amountMillions===null?
-    null:null,
+  contractAssetCurrentSplit:observed(null,
    "Original FY contract asset note; current/long-term split is unavailable",x.sourceUrl),
   contractCostNoncurrentSplit:observed(
    orig.observed.find(y=>y.key==="contract_acquisition_noncurrent")?.amountMillions??null,
