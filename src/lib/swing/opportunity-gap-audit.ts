@@ -26,6 +26,7 @@ export interface SwingGapAuditAsset {
   symbol: string;
   name: string;
   hasBroadEvidence: boolean;
+  technicalScreenAsOf: string | null;
 }
 export interface SwingGapAuditEvaluation {
   usableBars: number;
@@ -44,6 +45,8 @@ export interface SwingOpportunityGapAudit {
   stage: SwingOpportunityGapStage;
   progress: string;
   hasBroadEvidence: boolean | null;
+  technicalScreenAsOf: string | null;
+  technicalScreenStale: boolean | null;
   deepScanned: boolean;
   usableBars: number | null;
   shadowSetupScore: number | null;
@@ -59,6 +62,8 @@ export interface SwingOpportunityGapAudit {
 export interface SwingGapAuditSource {
   /** Fully loaded managed equities; the selected watchlist is NOT force-added. */
   assets: readonly SwingGapAuditAsset[];
+  /** Exact observed query time for freshness testing, never report period-end substitution. */
+  asOf: string;
   selectedAssetIds: ReadonlySet<string>;
   evaluations: ReadonlyMap<string, SwingGapAuditEvaluation>;
   shortlistedAssetIds: ReadonlySet<string>;
@@ -72,12 +77,17 @@ const base=(symbol:SwingGapWatchSymbol,asset:SwingGapAuditAsset|null)=>({
   watchSymbol:symbol,resolvedAssetId:asset?.assetId??null,
   resolvedSymbol:asset?.symbol??null,assetName:asset?.name??null,
   hasBroadEvidence:asset?.hasBroadEvidence??null,
+  technicalScreenAsOf:asset?.technicalScreenAsOf??null,
+  technicalScreenStale:null as boolean|null,
   deepScanned:false,usableBars:null,shadowSetupScore:null,
   shadowSetupName:null,shadowEntryState:null,
   observedReasons:[] as string[],observedRisks:[] as string[],
   screenQualityConclusion:"not_assessable" as const,
 });
 export function buildSwingOpportunityGapAudit(source:SwingGapAuditSource):SwingOpportunityGapAudit[]{
+ const checkedAsOf=Date.parse(source.asOf);
+ if(!Number.isFinite(checkedAsOf)||!source.asOf.includes("T"))
+  throw new Error("Original snapshot audit needs a valid observation instant");
  const watchlist=source.watchlist??SWING_GAP_WATCHLIST;
  if(new Set(watchlist).size!==watchlist.length||
     watchlist.some(s=>!SWING_GAP_WATCHLIST.includes(s)))
@@ -100,14 +110,20 @@ export function buildSwingOpportunityGapAudit(source:SwingGapAuditSource):SwingO
    ...base(symbol,null),stage:"ambiguous_symbol",
    progress:"More than one managed equity maps to this exact ticker. Require an explicit exchange and asset ID before assessing quality.",
   });
-  const asset=matched[0],common=base(symbol,asset);
+  const asset=matched[0];
+  const techAsOf=asset.technicalScreenAsOf===null?null:
+   Date.parse(asset.technicalScreenAsOf+"T21:00:00Z");
+  const techStale=techAsOf===null?null:!
+   Number.isFinite(techAsOf)||techAsOf>checkedAsOf||checkedAsOf-techAsOf>7*86_400_000;
+  const common={...base(symbol,asset),technicalScreenStale:techStale};
   if(!asset.hasBroadEvidence)return finish({
    ...common,stage:"missing_broad_evidence",
    progress:"Managed equity exists, but the broad technical screen/eligible scored evidence is missing. Cannot call this a weak opportunity.",
   });
   if(!source.selectedAssetIds.has(asset.assetId))return finish({
    ...common,stage:"not_nominated_for_deep_scan",
-   progress:"Available in broad screening but not allocated a deep-scan slot. This is a candidate-discovery/selection gap, not an observed low setup score.",
+   progress:"Available in broad screening but not allocated a deep-scan slot. This is a candidate-discovery/selection gap, not an observed low setup score."+
+    (techStale?" The last technical screen date is stale; check ingestion freshness before judging nomination.":""),
   });
   const reviewed=source.evaluations.get(asset.assetId);
   const partial={...common,deepScanned:true,usableBars:reviewed?.usableBars??null};
@@ -139,7 +155,8 @@ export function buildSwingOpportunityGapAudit(source:SwingGapAuditSource):SwingO
    progress:"Setup passed the internal floor but did not make the capped surfaced shortlist. No bonus or forced promotion applied.",
   });
   return finish({...measured,stage:"surfaced",
-   progress:"Ticker appears on the pre-hardening shadow shortlist. Final execution discipline and confirmed catalyst evidence must still be checked.",
+   progress:"Ticker appears on the pre-hardening shadow shortlist. Final execution discipline and confirmed catalyst evidence must still be checked."+
+    (techStale?" Technical screen is stale; the model observation cannot be assumed current.":""),
   });
  });
 }
