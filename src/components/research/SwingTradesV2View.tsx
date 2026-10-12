@@ -25,6 +25,7 @@ import type {
   SwingV2WorkspaceCandidate,
 } from "@/lib/swing/workspace-v2.functions";
 import { cn } from "@/lib/utils";
+import { SwingOpportunityGapPanel } from "@/components/research/SwingOpportunityGapPanel";
 
 type InstrumentFilter = "all" | "equity" | "commodity";
 type EntryFilter = "all" | SwingV2EntryState;
@@ -143,6 +144,8 @@ export function SwingTradesV2View({ workspace }: { workspace: SwingV2Workspace }
           </div>
         </section>
       )}
+
+      <SwingOpportunityGapPanel audit={workspace.opportunityGapAudit} candidates={workspace.candidates} />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
