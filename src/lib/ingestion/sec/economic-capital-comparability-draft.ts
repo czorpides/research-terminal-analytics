@@ -187,10 +187,10 @@ export function evaluateSecEconomicCapitalDraft(symbol:SecScenarioSymbol):SecEco
   const ytd25={revenue:"17575",rnd:"3196",cfo:"6871",sbc:"1453"};
   const ttm={revenue:"25970",rnd:"4694",cfo:"10806",sbc:"2071"};
   const checks=[
-   bridge("GAAP total revenue","23769","19776","17575","25970"),
-   bridge("GAAP research and development","4294","3596","3196","4694"),
-   bridge("GAAP operating cash flow","10031","7646","6871","10806"),
-   bridge("GAAP stock compensation added back in cash-flow statement","1942","1582","1453","2071"),
+   bridge("GAAP total revenue",fiscal.revenue,ytd26.revenue,ytd25.revenue,ttm.revenue),
+   bridge("GAAP research and development",fiscal.rnd,ytd26.rnd,ytd25.rnd,ttm.rnd),
+   bridge("GAAP operating cash flow",fiscal.cfo,ytd26.cfo,ytd25.cfo,ttm.cfo),
+   bridge("GAAP stock compensation added back in cash-flow statement",fiscal.sbc,ytd26.sbc,ytd25.sbc,ttm.sbc),
   ];
   if(checks.some(x=>!x.pass)||old.earnings.trailing12MonthsOperatingIncomeMillions!=="9271")
    throw new Error("Adobe trailing economic quality source cross-foot mismatch");
