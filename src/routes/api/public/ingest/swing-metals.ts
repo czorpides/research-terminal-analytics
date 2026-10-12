@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { authorizedInternalSwingJob } from "@/lib/swing/internal-job-auth";
 
 export const Route = createFileRoute("/api/public/ingest/swing-metals")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const anon = process.env.SUPABASE_PUBLISHABLE_KEY;
-        const apikey = request.headers.get("apikey");
-        if (!anon || apikey !== anon) return new Response("Unauthorized", { status: 401 });
+        if (!authorizedInternalSwingJob(request.headers, process.env.INTERNAL_JOB_TOKEN))
+          return new Response("Unauthorized", { status: 401 });
 
         try {
           const url = new URL(request.url);
