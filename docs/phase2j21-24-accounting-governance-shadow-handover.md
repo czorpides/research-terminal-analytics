@@ -85,3 +85,17 @@ The existing 2J11 API `src/routes/api/public/research/sec-valuation-preview.ts` 
 | 2J22 | Independent automated crosspath source checks with held-out software issuer and AMZN correction | Distinct human accountant source-note review |
 | 2J23 | Real legacy Magic Formula calculator/ranker in-memory shadow, typed crosswalk and immutable no-write guard | Separate audited model promotion, live issuer data capture, feature-flag/rollback approval |
 | 2J24 | CI tests, unit-level release readiness and owner-visible blockers | Verified deployed SHA, owner-browser/auth API, actual production original ledger and external source signoff |
+
+## Phase 2J24 actual read-only environment acceptance investigation (2026-10-12)
+
+**Connected Supabase project:** `research-terminal-analytics` (active). An actual read-only SQL query found **32** historical rows in `public.fundamental_filings`, with last observed data in July 2026. There were **zero** rows matching ANY of the three owner workbench exact original SEC 10-K accession numbers:
+
+- AMZN `0001018724-26-000004`;
+- ADBE `0000796343-26-000003`;
+- COST `0000909832-26-000093`.
+
+A read-only sample of existing rows showed `source_filing_id` keys in the pattern `KO:2025-12-31:FY`, and source `raw` keys `income,balance,cashFlow,symbol` rather than the original 10-K provenance fields `cik, accession, form, primaryDocumentUrl, filedDate`. The owner workbench API intentionally checks those original keys and **will reject** a filing that lacks them. There is currently **no basis to state the owner preview works against the connected database**. Do not relax authentication/provenance or invent rows. This is a genuinely missing source-ingestion/acceptance dependency, tracked in [Issue #119](https://github.com/czorpides/research-terminal-analytics/issues/119).
+
+**Connected Railway project:** `research-terminal-analytics`, service `research-terminal-web` in **staging**. The most recent successful deployment observed on 12 October is **commit `ecce20841a2fe53b7acc9472909d15047d205e20` from `feature/catalyst-intelligence-foundation`**, deployed 9 October 2026. It does **not** contain the newest 2J21–24 implementation and is not a verified deployment of current main. Railway staging uses the existing separate catalyst branch; changing this environment automatically could disturb unrelated catalyst testing. No new deployment was requested or performed by the connector investigation. Deploy current reviewed code to an appropriately authorised staging environment, check the SHA and original ledger, then perform a signed-in browser smoke test.
+
+**Release conclusion:** GitHub CI can validate code integration, and the read-only inspection objectively identified missing ledger and environment prerequisites. They are **not** equivalent to complete Phase 2J24 live acceptance. Leave `productionScoringActivated=false` and `humanSourceReviewerAttested=false`, pending #119 and independent source approval.
