@@ -4,6 +4,7 @@ export function SecPriceSensitivity({symbol}:{symbol:SecScenarioSymbol}){
  const x=getSecValuationScenarios(symbol);
  return <section className="mb-5 rounded border border-border/70 bg-card/60 p-4 text-xs space-y-3">
   <h2 className="font-semibold text-sm">Phase 2J13 · dated SEC price and capital sensitivity</h2>
+  <p className="font-semibold text-[var(--warning)]">Archived annual-FY-only research scenario. Phase 2J14 above supersedes this section for updated Adobe TTM earnings and August 2026 borrowing/cash, and constrains Costco card-receivable liquidity. These older comparisons are retained ONLY for methodology audit.</p>
   <p>Original FY {x.originalFiscalEnd}; price USD {x.priceUsd} on 9 Oct 2026;
    public share count as of {x.sharesAsOf} (published {x.sharesFiled}).
    Approximate equity market capitalisation: USD {x.estimatedMarketCapitalizationBillions}bn.</p>
