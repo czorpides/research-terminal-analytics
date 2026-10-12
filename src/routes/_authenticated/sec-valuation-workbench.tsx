@@ -64,6 +64,17 @@ function SecValuationWorkbench(){
   setFields(old=>({...old,[key]:{millions:old[key]?.millions??"",
    section:old[key]?.section??"",[field]:value}}));
  }
+ function loadOriginalObservedAmounts(){
+  if(!baseline)return;
+  const next={...fields};
+  for(const item of baseline.independentSourceReview.fields){
+   if(!SEC_VALUATION_FIELDS.some(f=>f.key===item.key))continue;
+   const key=item.key as SecValuationFieldKey;
+   if(next[key]?.millions?.trim())continue;
+   next[key]={millions:item.amountMillions,section:item.sourceSection};
+  }
+  setFields(next);setResult(null);
+ }
  async function calculate(){
   if(!baseline||busy)return;
   setError(null);setBusy(true);setResult(null);
@@ -150,6 +161,35 @@ function SecValuationWorkbench(){
       </tr>)}</tbody>
      </table>
     </div>
+   </section>
+   <section className="mb-5 rounded border border-border/70 bg-card/60 p-4 text-xs space-y-3">
+    <h2 className="text-sm font-semibold">Phase 2J12 · original filing independent accounting recheck</h2>
+    <p className="text-muted-foreground">Statement and note amounts are separately cross-footed against the filed 10-K.
+    These checks verify arithmetic, not the economic valuation policy or a second human review.
+    Research-model and score permissions remain disabled.</p>
+    <p>{baseline.independentSourceReview.checks.filter(x=>x.status==="matches").length}
+      /{baseline.independentSourceReview.checks.length} bridges match
+      · Borrowing scope: {baseline.independentSourceReview.borrowingPerimeter.replaceAll("_"," ")}
+      · Reviewer attestation: {baseline.independentSourceReview.reviewerAttestation.replaceAll("_"," ")}</p>
+    <Button variant="outline" onClick={loadOriginalObservedAmounts}>
+      Populate reported 10-K amounts into empty fields
+    </Button>
+    <p className="text-muted-foreground">Only explicitly observed line items are inserted, each with its actual SEC note.
+    No missing nonoperating classification, unrestricted cash, finance lease absence or market price is silently set to zero.
+    Review the values before submitting a provisional calculation.</p>
+    <div className="overflow-x-auto">
+     <table className="w-full min-w-[670px]"><thead><tr className="border-b border-border/60 text-muted-foreground">
+      <th className="text-left py-2">Original 10-K observation</th><th className="text-right py-2">USD m</th>
+      <th className="text-left py-2 pl-3">Section</th></tr></thead>
+     <tbody>{baseline.independentSourceReview.fields.map(f=><tr key={f.key} className="border-b border-border/40">
+      <td className="py-2 font-mono">{f.key}</td><td className="text-right tabular-nums">{f.amountMillions}</td>
+      <td className="pl-3 text-muted-foreground">{f.sourceSection}</td>
+     </tr>)}</tbody></table>
+    </div>
+    <h3 className="font-semibold">Unresolved accounting decisions</h3>
+    {baseline.independentSourceReview.flags.map((f,i)=><p key={i} className="text-muted-foreground">
+     • {f}
+    </p>)}
    </section>
    <section className="mb-5 rounded border border-border/70 bg-card/60 p-4 text-xs">
     <h2 className="text-sm font-semibold">Additional original 10-K figures</h2>
