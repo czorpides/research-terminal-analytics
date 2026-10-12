@@ -1,3 +1,5 @@
+import {assessSecBorrowingSubset, type SecDebtProbe} from "./debt-perimeter-policy.ts";
+
 /**
  * Phase 2J7 read-only direct SEC CompanyFacts candidate extractor.
  *
@@ -25,13 +27,6 @@ export interface SecOriginalContext {
 type PickResult={status:"found"|"missing"|"ambiguous";tag?:string;value?:bigint};
 const USD="USD",SHARES="shares";
 const opTag=["OperatingIncomeLoss"];
-const currentBorrowingTags=[
-  "LongTermDebtCurrent","LongTermDebtAndCapitalLeaseObligationsCurrent",
-  "ShortTermBorrowings","ShortTermDebtCurrent","CommercialPaper",
-];
-const longBorrowingTags=[
-  "LongTermDebtNoncurrent","LongTermDebtAndCapitalLeaseObligations",
-];
 const datedSharesTags=["CommonStockSharesOutstanding"];
 const iso=(s:string)=>/^\d{4}-\d{2}-\d{2}$/.test(s)&&
   !Number.isNaN(Date.parse(s+"T00:00:00Z"))&&
@@ -94,29 +89,33 @@ export function extractSecOperatingModelCandidates(gaap:SecGaap,ctx:SecOriginalC
   :candidate("operating_income","requires_accounting_review",op.value!,USD,ctx,
    [{tag:op.tag!,value:op.value!.toString()}],
    ["Consolidated operating income is not universally EBIT; interest and nonoperating adjustments require original 10-K review"]);
- const current=alternatives(gaap,currentBorrowingTags,USD,ctx,false);
- const long=alternatives(gaap,longBorrowingTags,USD,ctx,false);
- // Some issuers report commercial paper AND a current portion; blindly
- // choosing one loses debt. This conservative mapping intentionally refuses
- // to sum these until a filer-specific classification is documented.
- const components=[current,long].filter(r=>r.status==="found").map(r=>({
-  tag:r.tag!,value:r.value!.toString(),
+ const asProbe=(tag:string):SecDebtProbe=>{
+  const source=directTag(gaap,tag,USD,ctx,false);
+  return {tag,status:source.status,value:source.value?.toString()??null};
+ };
+ const current=asProbe("LongTermDebtCurrent");
+ const long=asProbe("LongTermDebtNoncurrent");
+ // Short-term tags may be aggregates, overlapping concepts, or genuinely
+ // additional borrowings. Never treat them as substitutes for required parts.
+ const extra=[
+  asProbe("CommercialPaper"),
+  asProbe("ShortTermBorrowings"),
+  asProbe("ShortTermDebtCurrent"),
+ ];
+ // Finance-lease-inclusive concepts are *not* lease-excluding debt.
+ const leaseInclusive=[
+  asProbe("LongTermDebtAndCapitalLeaseObligations"),
+  asProbe("LongTermDebtAndCapitalLeaseObligationsCurrent"),
+ ];
+ const decision=assessSecBorrowingSubset(current,long,extra,leaseInclusive);
+ const components=[current,long,...extra].filter(p=>p.status==="found").map(p=>({
+   tag:p.tag,value:p.value!,
  }));
- let debt:ExtractedCandidate;
- if(current.status==="ambiguous"||long.status==="ambiguous")
-  debt=candidate("borrowings_excluding_leases","ambiguous",null,USD,ctx,components,
-    ["Overlapping or conflicting debt concept values; no borrowing total inferred"]);
- else if(long.status!=="found"||current.status!=="found")
-  debt=candidate("borrowings_excluding_leases","unavailable",null,USD,ctx,components,
-    ["Missing an explicit current or noncurrent interest-bearing debt component; absence is not zero"]);
- else {
-  debt=candidate("borrowings_excluding_leases","requires_accounting_review",
-    current.value!+long.value!,USD,ctx,components,[
-    "Candidate is only two nonoverlapping current and noncurrent borrowing concepts",
-    "Commercial paper and other current borrowings might be separately reported; incomplete issuer debt perimeter",
-    "Finance leases, convertible borrowings and classification policies need original debt-note reconciliation before EV",
-   ]);
- }
+ const debt=candidate("borrowings_excluding_leases",
+  decision.status==="components_match"?"requires_accounting_review":
+    decision.status==="ambiguous"?"ambiguous":"unavailable",
+  decision.subtotalUsd===null?null:BigInt(decision.subtotalUsd),
+  USD,ctx,components,decision.caveats);
  const shares=alternatives(gaap,datedSharesTags,SHARES,ctx,false);
  const shareResult=shares.status==="found"?
   candidate("period_end_shares","requires_accounting_review",shares.value!,SHARES,ctx,
