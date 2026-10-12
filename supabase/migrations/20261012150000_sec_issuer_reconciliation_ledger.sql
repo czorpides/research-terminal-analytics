@@ -41,6 +41,7 @@ SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE v_period public.fundamental_filings%ROWTYPE;
 DECLARE v_source public.fundamental_filings%ROWTYPE;
 DECLARE v_tag text;
+DECLARE v_fact public.fundamental_facts%ROWTYPE;
 BEGIN
   IF TG_OP <> 'INSERT' THEN
     RAISE EXCEPTION 'SEC reconciliation evidence is append-only';
@@ -63,7 +64,7 @@ BEGIN
     OR v_source.raw->>'form'<>'10-K' OR v_period.raw->>'form'<>'10-K'
     OR v_source.source_filing_id IS NULL
     OR v_source.raw->>'accession' IS DISTINCT FROM v_source.source_filing_id
-    OR v_source.raw->>'primaryDocumentUrl' NOT LIKE
+    OR coalesce(v_source.raw->>'primaryDocumentUrl','') NOT LIKE
        'https://www.sec.gov/Archives/edgar/data/%'
     OR (NEW.evidence_kind='original_period_10k' AND
        v_period.id IS DISTINCT FROM v_source.id)
@@ -75,17 +76,23 @@ BEGIN
      IS DISTINCT FROM (NEW.unit='shares')
      OR (NEW.unit='shares' AND (NEW.evidence_kind<>'later_10k_comparative'
        OR NEW.reported_value<=0))
-     OR (NEW.unit='USD' AND NEW.reported_value<0)
      OR (NEW.metric_basis IN ('bank_net_interest_income','bank_noninterest_income',
             'bank_issuer_total_revenue') AND NEW.unit<>'USD')
      OR (NEW.metric_basis='consolidated_net_income' AND NEW.unit<>'USD')
   THEN RAISE EXCEPTION 'Invalid financial metric basis, unit or amount';END IF;
   IF NEW.source_fact_id IS NOT NULL THEN
-    SELECT ff.raw->>'tag' INTO v_tag FROM public.fundamental_facts ff
+    SELECT * INTO v_fact FROM public.fundamental_facts ff
      WHERE ff.id=NEW.source_fact_id AND ff.filing_id=v_period.id
        AND ff.asset_id=NEW.asset_id;
-    IF v_tag IS NULL THEN
-      RAISE EXCEPTION 'Source fact not tied to original fiscal filing';
+    v_tag:=v_fact.raw->>'tag';
+    IF v_tag IS NULL OR v_fact.value_num IS DISTINCT FROM NEW.reported_value
+      OR (NEW.metric_basis='consolidated_net_income' AND
+            v_fact.metric_code<>'STMT_NET_INCOME')
+      OR (NEW.metric_basis='bank_issuer_total_revenue' AND
+            v_fact.metric_code<>'STMT_REVENUE')
+      OR (NEW.metric_basis NOT IN
+            ('consolidated_net_income','bank_issuer_total_revenue')) THEN
+      RAISE EXCEPTION 'Incorrect original source fact linkage or amount';
     END IF;
   END IF;
   -- The asserted amount is a documented original statement line, not an
