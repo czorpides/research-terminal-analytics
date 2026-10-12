@@ -12,6 +12,7 @@ import {
 import {SecPriceSensitivity} from "@/components/research/SecPriceSensitivity";
 import {SecLatestAsOfReconciliation} from "@/components/research/SecLatestAsOfReconciliation";
 import {SecEconomicCapitalComparability} from "@/components/research/SecEconomicCapitalComparability";
+import {SecIndependentHoldoutReview} from "@/components/research/SecIndependentHoldoutReview";
 
 export const Route=createFileRoute("/_authenticated/sec-valuation-workbench")({
  head:()=>({meta:[{title:"SEC valuation workbench — Research Terminal"},
@@ -194,6 +195,8 @@ function SecValuationWorkbench(){
      • {f}
     </p>)}
    </section>
+   {symbol==="ADBE"&&<SecIndependentHoldoutReview mode="software"/>}
+   {symbol==="COST"&&<SecIndependentHoldoutReview mode="costco"/>}
    {(symbol==="COST"||symbol==="ADBE")&&<SecEconomicCapitalComparability symbol={symbol}/>}
    {(symbol==="COST"||symbol==="ADBE")&&<SecLatestAsOfReconciliation symbol={symbol}/>}
    {(symbol==="COST"||symbol==="ADBE")&&<SecPriceSensitivity symbol={symbol}/>}
