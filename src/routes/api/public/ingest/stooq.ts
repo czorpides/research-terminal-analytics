@@ -88,10 +88,12 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
               return Response.json({ ...result, technicalScreenRows, fallback: null });
             }
 
-            // Keep the old multi-provider path as a bounded safety net for
-            // transient data failures only. An entitlement/auth/quota failure
-            // is structural and should not burn hundreds of per-symbol calls.
-            if (structuralProviderFailure(result.error)) {
+            // The explicit fallbackLimit=0 recovery probe disables ALL
+            // per-symbol fallback requests; a one-date provider entitlement
+            // test must never silently initiate 250 extra symbol writes.
+            // Structural provider/auth/quota errors always fail closed.
+            if (structuralProviderFailure(result.error) ||
+                integerParam(url,"fallbackLimit") === 0) {
               return Response.json({ ...result, fallback: null });
             }
             const { runEquityIngestBatch } = await import("@/lib/ingestion/equities/ingest.server");
