@@ -47,7 +47,7 @@ export function SecSoftwareFYGapReview(){
     {columns.map(([group,key,label])=><tr key={label} className="border-b border-border/30">
      <td className="py-2">{label}</td>
      {x.cases.map(c=><td key={c.issuer} className="text-right tabular-nums">
-      {amount(c[group][key])}
+      {amount((c[group] as unknown as Record<string,string|null>)[key]??null)}
      </td>)}
     </tr>)}
    </tbody></table></div>
@@ -68,7 +68,7 @@ export function SecSoftwareFYGapReview(){
      className="border-b border-border/30">
      <td className="py-2">{row.name.replaceAll("_"," ")}</td>
      {x.cases.map(c=><td key={c.issuer} className="text-right tabular-nums">
-      {amount(c.liquidity.scenarios[i].conditionalUnapprovedCapitalSubsetMillions)}
+      {amount(c.liquidity.scenarios[i]?.conditionalUnapprovedCapitalSubsetMillions??null)}
      </td>)}
     </tr>)}
    </tbody></table></div>
