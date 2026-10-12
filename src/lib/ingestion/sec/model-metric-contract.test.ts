@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {STATEMENT_METRICS,computePiotroski,computeMagicFormulaRaw} from "@/lib/opportunity/fundamental-models";
+import {STATEMENT_METRICS,computePiotroski,computeMagicFormulaRaw} from "../../opportunity/fundamental-models.ts";
 
 test("SEC source audit only requests statement codes actually consumed by existing financial models",()=>{
  const required=[
