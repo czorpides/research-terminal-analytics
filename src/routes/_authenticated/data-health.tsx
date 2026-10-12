@@ -61,6 +61,10 @@ function DataHealth() {
   const [ingestResult, setIngestResult] = useState<string | null>(null);
   const [queueAction,setQueueAction]=useState(false);
   const [queueMessage,setQueueMessage]=useState<string|null>(null);
+  const [secReviewNotes,setSecReviewNotes]=useState("");
+  const [secReviewBusy,setSecReviewBusy]=useState(false);
+  const [secReviewMessage,setSecReviewMessage]=useState<string|null>(null);
+
   const [finitePreview,setFinitePreview]=useState<{
     candidates:Array<{assetId:string;symbol:string}>;
     eligible:number;verifiedIdentities:number;curatedPoolSize:number;
@@ -106,6 +110,29 @@ function DataHealth() {
       const accessToken=auth.session?.access_token;
       if(error||!accessToken)throw new Error("Owner sign-in required for SEC semantic quality");
       return fetchSecSemanticAudit({data:{accessToken}});
+    },
+    refetchInterval:5*60_000,retry:1,
+  });
+
+  const {data:secModelReadiness,error:secModelReadinessError}=useQuery({
+    queryKey:["sec-model-readiness-coverage"],
+    queryFn:async()=>{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-model-review",{
+        headers,cache:"no-store",
+      });
+      if(!response.ok)throw new Error("SEC model review unavailable");
+      return await response.json() as {
+        issuerCount:number;approvalScope:string;
+        modelConsumersEnabled:boolean;scoreConsumersEnabled:boolean;
+        rows:Array<{asset_id:string;symbol:string;metric_code:string;display_label:string;
+          eligible_basis:string|null;direct_original_years:number;
+          issuer_document_checked_years:number;review_stage:string}>;
+        cases:Array<{id:string;asset_id:string;symbol:string;
+          metric_basis:string;latest_annual_period:string;state:string;
+          submitted_at:string;reviewed_at:string|null;
+          research_model_approval_current:boolean}>;
+      };
     },
     refetchInterval:5*60_000,retry:1,
   });
@@ -334,6 +361,38 @@ function DataHealth() {
         (e instanceof Error?e.message:"unexpected error")+
         ". Preview again to retry.");
     }finally{setQueueAction(false)}
+  }
+
+  async function onSecModelReviewAction(
+    action:"propose"|"research_approved"|"rejected"|"revoked",
+    target:{assetId?:string;metricBasis?:string;caseId?:string},
+  ){
+    if(secReviewBusy || !secModelReadiness ||
+      secModelReadiness.scoreConsumersEnabled ||
+      secModelReadiness.modelConsumersEnabled)return;
+    const min=action==="propose"?40:80;
+    if(secReviewNotes.trim().length<min){
+      setSecReviewMessage("Write a specific original-filing review explanation of at least "+
+        min+" characters before submitting.");
+      return;
+    }
+    setSecReviewBusy(true);setSecReviewMessage(null);
+    try{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-model-review",{
+        method:"POST",headers,
+        body:JSON.stringify({action,...target,notes:secReviewNotes.trim()}),
+      });
+      const result=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(result?.error??"Source review rejected");
+      setSecReviewMessage("SEC research review "+(result.state??action)+
+        " saved. This does not enable investment scoring or automatic models.");
+      setSecReviewNotes("");
+      await qc.invalidateQueries({queryKey:["sec-model-readiness-coverage"]});
+    }catch(e){
+      setSecReviewMessage("SEC review not accepted: "+
+        (e instanceof Error?e.message:"unknown failure"));
+    }finally{setSecReviewBusy(false)}
   }
 
   async function onCreateSecQueue() {
@@ -800,6 +859,139 @@ function DataHealth() {
                 not authorisation to update Radar or valuation models.
               </p>
             )}
+          </div>
+        )}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="Three-year SEC reconciliation coverage and model review"
+        eyebrow="Phase 2J4 · owner review workflow · Radar scoring stays excluded"
+        description="Full SEC pilot reconciliation coverage by issuer and metric. Evidence checked does not imply model permission; approval requires a separate documented action."
+        className="mb-6"
+      >
+        {secModelReadinessError ? (
+          <p className="text-xs text-[var(--negative)]">
+            Reconciliation coverage unavailable: {secModelReadinessError.message}
+          </p>
+        ) : !secModelReadiness ? (
+          <p className="text-xs text-muted-foreground">Loading issuer reconciliation coverage…</p>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                ["SEC issuers",secModelReadiness.issuerCount],
+                ["Issuer / metric cohorts",secModelReadiness.rows.length],
+                ["Three-year evidence cohorts",secModelReadiness.rows.filter(
+                  r=>r.review_stage==="three_year_evidence_ready_for_owner_review").length],
+                ["Research approvals currently valid",secModelReadiness.cases.filter(
+                  c=>c.research_model_approval_current).length],
+              ].map(([label,value])=>
+                <div key={String(label)} className="rounded border border-border/70 p-2">
+                  <div className="text-muted-foreground">{label}</div>
+                  <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+                </div>
+              )}
+            </div>
+            <p className="text-muted-foreground">
+              All collected issuer-years are inventoried. A reviewable cohort must
+              have three original SEC 10-Ks plus three separate issuer-document
+              reconciliations. Research-only approval never modifies the raw facts
+              or permits Radar, Piotroski or automated valuation consumption.
+            </p>
+            <div className="overflow-x-auto rounded border border-border/70">
+              <table className="w-full min-w-[640px] text-left">
+                <thead><tr className="text-muted-foreground">
+                  <th className="p-2">Issuer</th>
+                  <th className="p-2">Reported metric</th>
+                  <th className="p-2">Direct FYs</th>
+                  <th className="p-2">Checked FYs</th>
+                  <th className="p-2">Next control</th>
+                </tr></thead>
+                <tbody>
+                  {[...secModelReadiness.rows].sort((a,b)=>{
+                    const rank=(v:string)=>({
+                      three_year_evidence_ready_for_owner_review:0,
+                      filing_history_incomplete:1,missing_original_tag:2,
+                      issuer_statement_review_pending:3,
+                      basis_policy_not_yet_defined:4,
+                    }[v]??5);
+                    return rank(a.review_stage)-rank(b.review_stage)||
+                      a.symbol.localeCompare(b.symbol);
+                  }).slice(0,35).map(r=>
+                    <tr key={r.asset_id+r.metric_code} className="border-t border-border/50">
+                      <td className="p-2 font-semibold">{r.symbol}</td>
+                      <td className="p-2">{r.display_label}</td>
+                      <td className="p-2 tabular-nums">{r.direct_original_years}/3</td>
+                      <td className="p-2 tabular-nums">{r.issuer_document_checked_years}/3</td>
+                      <td className="p-2">
+                        {r.review_stage==="three_year_evidence_ready_for_owner_review" &&
+                         r.eligible_basis &&
+                         !secModelReadiness.cases.some(c=>
+                           c.asset_id===r.asset_id && c.metric_basis===r.eligible_basis)
+                          ? <Button size="sm" variant="outline"
+                              disabled={secReviewBusy}
+                              onClick={()=>void onSecModelReviewAction("propose",{
+                                assetId:r.asset_id,metricBasis:r.eligible_basis!,
+                              })}>Propose for review</Button>
+                          : r.review_stage.replaceAll("_"," ")}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-muted-foreground">
+              Showing 35 highest-priority cohorts out of {secModelReadiness.rows.length}.
+              No automatic reconciliation or approvals were generated.
+            </p>
+            <label className="block font-semibold" htmlFor="sec-model-review-notes">
+              Required human source-review evidence and justification
+            </label>
+            <textarea id="sec-model-review-notes" rows={3}
+              className="w-full rounded border border-border bg-background p-2"
+              placeholder="Which original 10-Ks, specific accounting definitions and comparability limitations did you verify?"
+              value={secReviewNotes}
+              onChange={e=>setSecReviewNotes(e.target.value)}/>
+            <p className="text-muted-foreground">
+              At least 40 characters for a proposal and 80 for an approval,
+              rejection or revocation. Do not certify evidence you have not checked.
+            </p>
+            {secModelReadiness.cases.length>0 && (
+              <div className="space-y-2">
+                <p className="font-semibold">Explicit owner review decisions</p>
+                {secModelReadiness.cases.slice(0,12).map(c=>
+                  <div key={c.id} className="rounded border border-border/50 p-2">
+                    <p className="font-semibold">
+                      {c.symbol} · {c.metric_basis.replaceAll("_"," ")} · {c.state}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Last original FY: {c.latest_annual_period}.
+                      Research eligibility currently active: {
+                        c.research_model_approval_current?"yes":"no"}.
+                      Automated scoring remains disabled.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {c.state==="proposed" && <>
+                        <Button size="sm" disabled={secReviewBusy}
+                          onClick={()=>void onSecModelReviewAction("research_approved",{
+                            caseId:c.id,
+                          })}>Approve for research only</Button>
+                        <Button size="sm" variant="outline" disabled={secReviewBusy}
+                          onClick={()=>void onSecModelReviewAction("rejected",{
+                            caseId:c.id,
+                          })}>Reject</Button>
+                      </>}
+                      {c.state==="research_approved" &&
+                        <Button size="sm" variant="outline" disabled={secReviewBusy}
+                          onClick={()=>void onSecModelReviewAction("revoked",{
+                            caseId:c.id,
+                          })}>Revoke research approval</Button>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {secReviewMessage&&<p role="status">{secReviewMessage}</p>}
           </div>
         )}
       </DashboardPanel>
