@@ -823,6 +823,13 @@ function DataHealth() {
               inputs. Later-filed comparatives are distinguished from original
               year-as-observed values.
             </p>
+            <p className="text-muted-foreground">
+              Verified bank revenue bridges: {
+                issuerEvidence.bankBridges.filter(x=>x.status==="matches").length
+              } / {issuerEvidence.bankBridges.length} issuer-periods.
+              {issuerEvidence.bankBridges.filter(x=>x.status!=="matches")
+                .map(x=>" "+x.symbol+": "+x.status+" ("+x.explanation+")").join(" · ")}
+            </p>
             <div className="overflow-x-auto rounded border border-border/70">
               <table className="w-full min-w-[720px] text-left">
                 <thead><tr className="text-muted-foreground">
