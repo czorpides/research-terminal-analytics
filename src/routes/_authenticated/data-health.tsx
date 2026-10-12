@@ -114,6 +114,26 @@ function DataHealth() {
     refetchInterval:5*60_000,retry:1,
   });
 
+  const {data:secOperatingPilot,error:secOperatingPilotError}=useQuery({
+    queryKey:["sec-operating-issuer-pilot-v1"],
+    queryFn:async()=>{
+      const {headers}=await secOwnerHeaders();
+      const response=await fetch("/api/public/ingest/sec-operating-pilot",{
+        headers,cache:"no-store",
+      });
+      if(!response.ok)throw new Error("SEC original operating/debt validation unavailable");
+      return await response.json() as {
+        version:string;ebitApproved:boolean;enterpriseValueDebtApproved:boolean;
+        radarEnabled:boolean;modelUseEnabled:boolean;shareIssuanceBasis:string;
+        rows:Array<{symbol:string;period_end:string;observed_basis:string;
+          reported_usd:number|string;original_accession:string;original_10k_url:string;
+          accounting_caveat:string;source_section:string;components:Array<{
+            line:string;amount_usd:string;
+          }>;}>;
+      };
+    },refetchInterval:10*60_000,retry:1,
+  });
+
   const {data:secModelPriorities,error:secModelPrioritiesError}=useQuery({
     queryKey:["sec-model-metric-priorities-v1"],
     queryFn:async()=>{
@@ -883,6 +903,73 @@ function DataHealth() {
                 not authorisation to update Radar or valuation models.
               </p>
             )}
+          </div>
+        )}
+      </DashboardPanel>
+
+      <DashboardPanel
+        title="Original SEC operating income and debt validation"
+        eyebrow="Phase 2J6 · three issuer pilot · original 10-K source evidence only"
+        description="Reported operating income is not universally EBIT; issuer borrowing composition excludes leases. Neither is yet authorised for any valuation or scoring model."
+        className="mb-6"
+      >
+        {secOperatingPilotError ? (
+          <p className="text-xs text-[var(--negative)]">
+            Pilot evidence unavailable: {secOperatingPilotError.message}
+          </p>
+        ) : !secOperatingPilot ? (
+          <p className="text-xs text-muted-foreground">Loading original SEC pilot evidence…</p>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <p className="text-muted-foreground">
+              {secOperatingPilot.rows.length} independently source-checked
+              accounting observations, version {secOperatingPilot.version}.
+              EBIT substitution: blocked. Generic EV debt substitution: blocked.
+              Radar and automated modelling: disabled.
+            </p>
+            <div className="overflow-x-auto rounded border border-border/70">
+              <table className="w-full min-w-[740px] text-left">
+                <thead><tr className="text-muted-foreground">
+                  <th className="p-2">Issuer / FY</th>
+                  <th className="p-2">Reported basis</th>
+                  <th className="p-2 text-right">USD bn</th>
+                  <th className="p-2">Original debt components / caveat</th>
+                  <th className="p-2">SEC provenance</th>
+                </tr></thead>
+                <tbody>{secOperatingPilot.rows.map(r=>
+                  <tr key={r.symbol+r.observed_basis} className="border-t border-border/50">
+                    <td className="p-2 font-semibold">{r.symbol} · {r.period_end}</td>
+                    <td className="p-2">
+                      {r.observed_basis==="gaap_consolidated_operating_income"?
+                        "GAAP operating income (NOT approved EBIT)":
+                        "Borrowings, excluding leases (NOT approved EV debt)"}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">
+                      {(Number(r.reported_usd)/1e9).toFixed(3)}
+                    </td>
+                    <td className="p-2">
+                      {r.observed_basis==="borrowings_excluding_leases"&&
+                       r.components.map((c,i)=><p key={i}>
+                        {c.line}: {(Number(c.amount_usd)/1e9).toFixed(3)}bn
+                       </p>)}
+                      <p className="text-muted-foreground">{r.accounting_caveat}</p>
+                    </td>
+                    <td className="p-2">
+                      {/^https:\/\/www\.sec\.gov\/Archives\/edgar\/data\//.test(r.original_10k_url)?
+                        <a href={r.original_10k_url} target="_blank"
+                           rel="noopener noreferrer" className="underline">
+                           Original 10-K
+                        </a>:"Official link unavailable"}
+                      <p className="font-mono text-[10px]">{r.original_accession}</p>
+                    </td>
+                  </tr>
+                )}</tbody>
+              </table>
+            </div>
+            <p className="text-muted-foreground">
+              {secOperatingPilot.shareIssuanceBasis} End-of-period common shares
+              outstanding and stock-split timing must be reconciled separately.
+            </p>
           </div>
         )}
       </DashboardPanel>
