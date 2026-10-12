@@ -401,9 +401,11 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     );
     const surfaced = surfaceWithPermanentPriority(candidates, 140);
     const opportunityGapAudit=buildSwingOpportunityGapAudit({
+      asOf:now.toISOString(),
       assets:watchedEquities.map(asset=>({
         assetId:asset.id,symbol:asset.symbol,name:asset.name,
         hasBroadEvidence:technicalScreen.has(asset.id)||hasTechnicalScore(scores.get(asset.id)),
+        technicalScreenAsOf:technicalScreen.get(asset.id)?.as_of??null,
       })),
       selectedAssetIds:selectedIds,
       evaluations:gapEvaluations,
