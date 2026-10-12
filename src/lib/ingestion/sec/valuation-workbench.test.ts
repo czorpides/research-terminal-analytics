@@ -51,7 +51,7 @@ test("source-checked AMZN / ADBE / COST anchors are immutable and absent values 
   const c=SEC_VALUATION_COHORT[symbol];
   assert.equal(p.originalAccession,c.accession);
   assert.equal(p.assessment.gaapOperatingIncomeUsd,c.operatingIncomeUsd);
-  assert.equal(p.assessment.financialBorrowingsExLeasesUsd,c.borrowingUsd);
+  assert.equal(p.assessment.financialBorrowingsExLeasesUsd,symbol==="AMZN"?null:c.borrowingUsd);
   assert.equal(p.assessment.status,"incomplete");
   assert.equal(p.assessment.returnOnCapitalBps,null);
   assert.equal(p.assessment.enterpriseValueUsd,null);
@@ -76,18 +76,18 @@ test("ADBE hedge-adjusted debt persists only as a separate borrowing source anch
  assert.equal(p.assessment.pretaxPlusInterestUsd,"8997000000");
  assert.equal(p.assessment.ebitDefinitionDifferenceUsd,"291000000");
 });
-test("synthetic AMZN manual transcription proves arithmetic not accounting accuracy or scoring",()=>{
- const p=prepareValuationPreview("AMZN",context("AMZN"),manual("AMZN"),market);
+test("synthetic COST manual transcription proves arithmetic not accounting accuracy or scoring",()=>{
+ const p=prepareValuationPreview("COST",context("COST"),manual("COST"),market);
  assert.equal(p.assessment.status,"arithmetic_only");
  assert.equal(p.assessment.operatingCapitalEmployedUsd,m(4850));
  assert.equal(p.assessment.operatingWorkingCapitalUsd,m(1600));
  assert.equal(p.assessment.financeLeaseLiabilityUsd,m(500));
  assert.equal(p.assessment.operatingLeaseLiabilityExcludedUsd,m(700));
- assert.equal(p.assessment.enterpriseValueUsd,m(76446));
+ assert.equal(p.assessment.enterpriseValueUsd,m(14212));
  assert.equal(p.legacyStyle.status,"arithmetic_only");
  assert.equal(p.legacyStyle.capitalEmployedUsd,m(4800));
- assert.equal(p.legacyStyle.enterpriseValueUsd,m(75896));
- assert.equal(p.assessment.returnOnCapitalBps,"164897");
+ assert.equal(p.legacyStyle.enterpriseValueUsd,m(13662));
+ assert.equal(p.assessment.returnOnCapitalBps,"24093");
  assert.equal(p.inputReviewStatus,"manual_transcription_not_independently_rechecked");
  assert.equal(p.permittedForModels,false);
  assert.equal(p.permittedForScoring,false);
@@ -119,7 +119,7 @@ test("reject overridden original debt, unknown fields and wrong original source"
  let result=prepareValuationPreview("AMZN",context("AMZN"),s,market);
  assert.equal(result.assessment.status,"rejected");
  assert.equal(result.assessment.enterpriseValueUsd,null);
- assert.equal(result.assessment.financialBorrowingsExLeasesUsd,SEC_VALUATION_COHORT.AMZN.borrowingUsd);
+ assert.equal(result.assessment.financialBorrowingsExLeasesUsd,null);
  delete s["financing.borrowingsExcludingAllLeasesUsd"];
  s["balance.netPpeUsd"]={valueUsd:m(3000),sourceSection:"Note 2 - PP&E",
   sourceUrl:"https://www.sec.gov/Archives/edgar/data/9999/not-the-source.htm"};
@@ -163,4 +163,23 @@ test("market cap requires an actual HTTPS reference, provenance description and 
   assert.equal(p.assessment.status,"rejected");
   assert.equal(p.assessment.returnOnCapitalBps,null);
  }
+});
+
+test("Amazon non-lease long-term debt is explicitly incomplete under independent Note 6 recheck",()=>{
+ const p=prepareValuationPreview("AMZN",context("AMZN"),manual("AMZN"),market);
+ assert.equal(p.independentSourceReview.borrowingPerimeter,"incomplete");
+ assert.equal(p.independentSourceReview.arithmeticPass,true);
+ assert.equal(p.assessment.financialBorrowingsExLeasesUsd,null);
+ assert.equal(p.assessment.enterpriseValueUsd,null);
+ assert.equal(p.assessment.status,"incomplete");
+ assert.equal(p.legacyStyle.status,"not_comparable");
+ const minimum=p.sourceAnchors.find(x=>x.key==="source.identifiedNonleaseBorrowingsMinimumUsd");
+ assert.equal(minimum?.valueUsd,"68851000000");
+ assert.equal(p.permittedForScoring,false);
+});
+test("Costco original profit plus interest is a diagnostic, not GAAP operating income",()=>{
+ const p=prepareValuationPreview("COST",context("COST"));
+ assert.equal(p.assessment.gaapOperatingIncomeUsd,"11685000000");
+ assert.equal(p.assessment.pretaxPlusInterestUsd,"12396000000");
+ assert.equal(p.assessment.ebitDefinitionDifferenceUsd,"711000000");
 });
