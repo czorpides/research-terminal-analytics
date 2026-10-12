@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { authorizedInternalSwingJob } from "@/lib/swing/internal-job-auth";
 
 import type {
   EquityUniverseSyncOptions,
@@ -18,9 +19,8 @@ export const Route = createFileRoute("/api/public/ingest/stooq")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const anon = process.env.SUPABASE_PUBLISHABLE_KEY;
-        const apikey = request.headers.get("apikey");
-        if (!anon || apikey !== anon) return new Response("Unauthorized", { status: 401 });
+        if (!authorizedInternalSwingJob(request.headers, process.env.INTERNAL_JOB_TOKEN))
+          return new Response("Unauthorized", { status: 401 });
 
         const url = new URL(request.url);
         const ticker = url.searchParams.get("ticker");
