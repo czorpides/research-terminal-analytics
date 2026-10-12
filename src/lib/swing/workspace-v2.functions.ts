@@ -15,6 +15,7 @@ import {
   type SwingV2CatalystContext,
 } from "./model-v21";
 import type { SwingBar } from "./model";
+import { getSwingPricePagesWithTimeoutSplit } from "./deep-scan-price-reads";
 import {buildSwingOpportunityGapAudit,SWING_GAP_WATCHLIST,type SwingOpportunityGapAudit,type SwingGapAuditEvaluation} from "./opportunity-gap-audit";
 import type { SwingExpectationSignal } from "./expectations";
 import {
@@ -208,27 +209,22 @@ async function loadSwingV2Workspace(): Promise<SwingV2Workspace> {
     const newsStart = new Date(now.getTime() - 14 * 86_400_000).toISOString();
 
     const [pricePages, earningsPages, newsPages, countryResult, industryResult] = await Promise.all([
-      // Indexed 20-asset groups in two-request waves avoid exceeding
-      // the database's per-statement budget under concurrent deep scans.
-      // Every instrument retains up to 300 bars; the model is unchanged.
-      (async () => {
-        const priceBatches = chunk(selectedIdsAll, 20);
-        const resultPages: Array<{ data: PriceRow[] | null; error: { message: string; code?: string } | null }> = [];
-        for (let i = 0; i < priceBatches.length; i += 2) {
-          const wave = await Promise.all(
-            priceBatches.slice(i, i + 2).map((batch) =>
-              db.rpc("get_swing_recent_price_bars", {
-                p_asset_ids: batch,
-                p_from_date: priceStart,
-                p_bars_per_asset: 300,
-              }),
-            ),
-          );
-          resultPages.push(...wave);
-          if (wave.some((page) => page.error)) break;
-        }
-        return resultPages;
-      })(),
+      // Read-only adaptive RPC: 8 securities/page, max 2 concurrent,
+      // split Postgres 57014 timeouts without re-running successful pages.
+      getSwingPricePagesWithTimeoutSplit<PriceRow>(
+        selectedIdsAll,
+        async (batch) => {
+          const { data, error } = await db.rpc("get_swing_recent_price_bars", {
+            p_asset_ids: batch,
+            p_from_date: priceStart,
+            p_bars_per_asset: 300,
+          });
+          return {
+            data: (data ?? null) as PriceRow[] | null,
+            error: error ? {message:String(error.message),code:error.code?String(error.code):undefined} : null,
+          };
+        },
+      ),
       Promise.all(
         chunk(selectedIdsAll, 75).map((batch) =>
           db
