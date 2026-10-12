@@ -54,6 +54,8 @@ For each of the five active US equities, `equity_technical_screen.as_of` was **2
 
 Phase 3A therefore includes an explicit **dated technical-screen freshness observation** and warns when the screen is older than seven calendar days (or carries an invalid/future source date). Crucially, this does not cause an automatic ticker promotion or change the shadow score. If the technical screen is stale but fresh alternative scored evidence exists, the UI still names the dated technical-screen issue rather than claiming all evidence is necessarily missing.
 
+A broader **full-population** read-only SQL check then confirmed **3,004 of 3,004 technical screen rows** with dates between **2026-08-04 and 2026-08-07**, and **zero** rows within the most recent seven calendar days (on/after **2026-10-05**). This is systemic stale technical-screen data, not simply a watchlist sampling issue; the immediate priority is a verified EOD-to-screen refresh, not retuning the swing score. Tracked in [Issue #121](https://github.com/czorpides/research-terminal-analytics/issues/121).
+
 Read-only SQL alone cannot prove whether the production Swing route refreshed since the last stored technical row or whether the actual full-universe EOD worker ran. Operational acceptance requires reading the existing Swing Runtime Trust Gate, monitor heartbeat and EOD ingestion logs; do not infer an operational engine from these historical rows.
 
 **Next operational task:** Reconcile the scheduler, FMP/EODHD provider access, bulk daily ingestion, backfill and technical screen as-of across all active equities. Never force historical prices to a newer date. A separate issue tracks the stale data rather than hiding the problem with higher model scores.
