@@ -1,6 +1,4 @@
 import {createFileRoute} from "@tanstack/react-router";
-import {checkOwnerAccess} from "@/lib/security/owner-access.server";
-import {supabaseAdmin} from "@/integrations/supabase/client.server";
 import {
   SEC_VALUATION_COHORT,prepareValuationPreview,
   type SecValuationSymbol,type ManualFactMap,type MarketTranscription,
@@ -9,6 +7,10 @@ import type {Original10KContext} from "@/lib/ingestion/sec/magic-formula-policy-
 
 const responseHeaders={"Cache-Control":"no-store"};
 const permitted=(s:string):s is SecValuationSymbol=>Object.prototype.hasOwnProperty.call(SEC_VALUATION_COHORT,s);
+async function ownerAccess(request:Request){
+ const {checkOwnerAccess}=await import("@/lib/security/owner-access.server");
+ return checkOwnerAccess(request);
+}
 
 /**
  * All server-origin context, including first-observed-at, is reconstructed from
@@ -17,6 +19,7 @@ const permitted=(s:string):s is SecValuationSymbol=>Object.prototype.hasOwnPrope
  */
 async function lookupOriginal(symbol:SecValuationSymbol):Promise<Original10KContext>{
  const expected=SEC_VALUATION_COHORT[symbol];
+ const {supabaseAdmin}=await import("@/integrations/supabase/client.server");
  const db=supabaseAdmin as any;
  const [a,source]=await Promise.all([
   db.from("assets").select("id,symbol,exchange").eq("symbol",symbol)
@@ -51,7 +54,7 @@ async function lookupOriginal(symbol:SecValuationSymbol):Promise<Original10KCont
 }
 async function ownerPreview(request:Request, symbol:SecValuationSymbol,
  supplements:ManualFactMap={},market:MarketTranscription|null=null){
- const owner=await checkOwnerAccess(request);
+ const owner=await ownerAccess(request);
  if(!owner.ok)return Response.json({error:owner.error},{status:owner.status,headers:responseHeaders});
  try{
   const original=await lookupOriginal(symbol);
@@ -65,7 +68,7 @@ async function ownerPreview(request:Request, symbol:SecValuationSymbol,
 export const Route=createFileRoute("/api/public/research/sec-valuation-preview")({
  server:{handlers:{
   GET:async({request})=>{
-   const owner=await checkOwnerAccess(request);
+   const owner=await ownerAccess(request);
    if(!owner.ok)return Response.json({error:owner.error},{status:owner.status,headers:responseHeaders});
    const symbol=new URL(request.url).searchParams.get("symbol")??"";
    if(!permitted(symbol))return Response.json({error:"Choose AMZN, ADBE or COST"},
@@ -73,7 +76,7 @@ export const Route=createFileRoute("/api/public/research/sec-valuation-preview")
    return ownerPreview(request,symbol);
   },
   POST:async({request})=>{
-   const owner=await checkOwnerAccess(request);
+   const owner=await ownerAccess(request);
    if(!owner.ok)return Response.json({error:owner.error},{status:owner.status,headers:responseHeaders});
    if(Number(request.headers.get("content-length")??0)>32000)
     return Response.json({error:"Excessive preview payload"},{status:413,headers:responseHeaders});
