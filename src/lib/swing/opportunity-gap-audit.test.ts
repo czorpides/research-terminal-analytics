@@ -7,6 +7,7 @@ import {
 
 const a=(symbol:string,screen=true):SwingGapAuditAsset=>({
  assetId:"ID-"+symbol,symbol,name:"Test company "+symbol,hasBroadEvidence:screen,
+ technicalScreenAsOf:"2026-10-10",
 });
 const evaluated=(score:number|null,entry="developing",bars=120):SwingGapAuditEvaluation=>({
  usableBars:bars,modelComputed:score!==null,modelScore:score,
@@ -19,7 +20,7 @@ const make=(asset:SwingGapAuditAsset|undefined,selected=false,e?:SwingGapAuditEv
  surfaced=false,other:SwingGapAuditAsset[]=[])=>{
  const list=asset?[asset,...other]:other;
  return buildSwingOpportunityGapAudit({
-  assets:list,selectedAssetIds:selected&&asset?new Set([asset.assetId]):new Set(),
+  assets:list,asOf:"2026-10-12T12:00:00Z",selectedAssetIds:selected&&asset?new Set([asset.assetId]):new Set(),
   evaluations:e&&asset?new Map([[asset.assetId,e]]):new Map(),
   shortlistedAssetIds:surfaced&&asset?new Set([asset.assetId]):new Set(),
  });
@@ -77,7 +78,7 @@ test("EOS.AX does NOT resolve EOS US; no fake cross-listing mapping, no duplicat
  assert.equal(trueMatch.stage,"surfaced");
  assert.equal(trueMatch.resolvedSymbol,"EOS.AX");
  const duplicate=stage("EOS.AX",make(a("EOS.AX"),true,evaluated(64),true,[
-  {assetId:"ANOTHER-ID",symbol:"EOS.AX",name:"Ambiguous",hasBroadEvidence:true},
+  {assetId:"ANOTHER-ID",symbol:"EOS.AX",name:"Ambiguous",hasBroadEvidence:true,technicalScreenAsOf:"2026-10-10"},
  ]));
  assert.equal(duplicate.stage,"ambiguous_symbol");
  assert.equal(duplicate.resolvedAssetId,null);
@@ -87,7 +88,7 @@ test("a watched stock is observational only, never forced into nomination, surfa
  const before=structuredClone(all);
  const selected=new Set(["ID-AAOI","ID-INTC"]);
  const observed=buildSwingOpportunityGapAudit({
-  assets:all,selectedAssetIds:selected,
+  assets:all,asOf:"2026-10-12T12:00:00Z",selectedAssetIds:selected,
   evaluations:new Map([["ID-AAOI",evaluated(83)],["ID-INTC",evaluated(38)]]),
   shortlistedAssetIds:new Set(["ID-AAOI"]),
  });
@@ -96,11 +97,11 @@ test("a watched stock is observational only, never forced into nomination, surfa
  assert.deepEqual([...selected],["ID-AAOI","ID-INTC"]);
  assert.equal(observed.filter(x=>x.changesScores||x.eligibleForTradeExecution).length,0);
  assert.throws(()=>buildSwingOpportunityGapAudit({
-  assets:all,selectedAssetIds:selected,evaluations:new Map(),
+  assets:all,asOf:"2026-10-12T12:00:00Z",selectedAssetIds:selected,evaluations:new Map(),
   shortlistedAssetIds:new Set(),watchlist:["AAOI","AAOI"],
  }),/Unsupported or duplicated/);
  assert.throws(()=>buildSwingOpportunityGapAudit({
-  assets:all,selectedAssetIds:selected,evaluations:new Map(),
+  assets:all,asOf:"2026-10-12T12:00:00Z",selectedAssetIds:selected,evaluations:new Map(),
   shortlistedAssetIds:new Set(),watchlist:["ZZZZ" as never],
  }),/Unsupported or duplicated/);
 });
@@ -108,4 +109,18 @@ test("non-finite or out-of-range setup scores are rejected instead of shown as v
  for(const invalid of [-1,101,NaN,Infinity]){
   assert.throws(()=>make(a("AAOI"),true,evaluated(invalid),true),/Invalid swing raw setup score/);
  }
+});
+
+test("live Aug 7 technical screen observation is stale at Oct 12, not current evidence",()=>{
+ const old={...a("AAOI"),technicalScreenAsOf:"2026-08-07"};
+ const r=stage("AAOI",make(old,false));
+ assert.equal(r.stage,"not_nominated_for_deep_scan");
+ assert.equal(r.technicalScreenAsOf,"2026-08-07");
+ assert.equal(r.technicalScreenStale,true);
+ assert.match(r.progress,/stale/i);
+ const current=stage("AAOI",make(a("AAOI"),true,evaluated(60),true));
+ assert.equal(current.technicalScreenStale,false);
+ assert.equal(current.stage,"surfaced");
+ const unknown=stage("AAOI",make({...a("AAOI"),technicalScreenAsOf:null},false));
+ assert.equal(unknown.technicalScreenStale,null);
 });
