@@ -148,7 +148,7 @@ export type BridgeCheck={
 export type IndependentSecReview=Omit<SourceReview,"bridges"> & {
  checks:BridgeCheck[];
  arithmeticPass:boolean;
- unverifiedResearch:false;
+ independentHumanAttestation:false;
 };
 export function getIndependentSecReview(symbol:EvidenceIssuer):IndependentSecReview{
  const s=reviews[symbol];if(!s)throw new Error("Unapproved original SEC issuer");
@@ -165,5 +165,5 @@ export function getIndependentSecReview(symbol:EvidenceIssuer):IndependentSecRev
   borrowingPerimeter:s.borrowingPerimeter,marketCap:s.marketCap,
   reviewerAttestation:s.reviewerAttestation,checks,
   arithmeticPass:checks.every(x=>x.status==="matches"),
-  unverifiedResearch:false,modelEligible:false,scoringEligible:false};
+  independentHumanAttestation:false,modelEligible:false,scoringEligible:false};
 }
