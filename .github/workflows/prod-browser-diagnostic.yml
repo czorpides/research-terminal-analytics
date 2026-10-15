@@ -1,0 +1,49 @@
+name: Production browser rendering diagnostic
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/prod-browser-diagnostic.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - name: Independently render live terminal
+        run: |
+          node --input-type=module <<'JS'
+          import {chromium} from 'playwright';
+          const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+          for(const base of ['https://research-terminal-analytics.lovable.app','https://research-terminal-web-staging.up.railway.app']){
+            for(const path of ['/auth','/catalysts','/swing-trades','/radar']){
+              const page=await browser.newPage({viewport:{width:1280,height:860}});
+              const errs=[],bad=[],notes=[];
+              page.on('pageerror',e=>errs.push(String(e).slice(0,400)));
+              page.on('console',m=>{if(m.type()==='error')errs.push('console:'+m.text().slice(0,300));});
+              page.on('response',r=>{if(r.status()>=400)bad.push({status:r.status(),url:r.url().replace(/([?&](?:token|key|access_token|apikey)=[^&]*)/gi,'$1[redacted]').slice(0,200)});});
+              try{
+                const response=await page.goto(base+path,{waitUntil:'domcontentloaded',timeout:40000});
+                await page.waitForTimeout(6000);
+                const text=(await page.locator('body').innerText().catch(()=>'')).replace(/\s+/g,' ').slice(0,500);
+                const html=(await page.locator('body').innerHTML().catch(()=>''));
+                const title=await page.title();
+                const location=page.url();
+                const fields=await page.locator('input').count();
+                const main=await page.locator('main').count();
+                const links=await page.locator('a').allTextContents().catch(()=>[]);
+                console.log('BROWSER_PROBE',JSON.stringify({site:base.includes('railway')?'staging':'production',path,status:response?.status(),title,location,bodyText:text,htmlLength:html.length,inputCount:fields,mainCount:main,links:links.slice(0,12),bad:bad.slice(0,10),errors:errs.slice(0,10)}));
+              }catch(e){console.log('BROWSER_PROBE',JSON.stringify({site:base.includes('railway')?'staging':'production',path,error:String(e).slice(0,350),bad:bad.slice(0,10),errors:errs.slice(0,10)}));}
+              await page.close();
+            }
+          }
+          await browser.close();
+          JS
