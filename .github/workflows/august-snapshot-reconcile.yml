@@ -1,0 +1,25 @@
+name: August snapshot reconciliation tests
+
+on:
+  push:
+    branches: [fix/august-database-incremental-reconcile]
+  pull_request:
+    paths:
+      - "scripts/reconcile_august_snapshot.py"
+      - "scripts/tests/test_reconcile_august_snapshot.py"
+      - ".github/workflows/august-snapshot-reconcile.yml"
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile reconciliation module
+        run: python -m py_compile scripts/reconcile_august_snapshot.py
+      - name: Test pure compare and safety guards
+        run: python -m unittest discover -s scripts/tests -p 'test_reconcile_august_snapshot.py' -v
